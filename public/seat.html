@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NaviSpace — Seat</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; text-align: center; }
+  h1 { font-size: 1.4rem; }
+  #status { font-size: 1.1rem; font-weight: 600; margin: 16px 0; padding: 12px; border-radius: 8px; }
+  .AVAILABLE { background: #e6f7ec; color: #1a7f37; }
+  .OCCUPIED { background: #fdecea; color: #b3261e; }
+  .STEPPED_AWAY { background: #fff8e1; color: #a56a00; }
+  button { display: block; width: 100%; padding: 12px; margin: 8px 0; font-size: 1rem; border-radius: 8px; border: 1px solid #ccc; background: white; cursor: pointer; }
+  button.primary { background: #1a1a1a; color: white; border: none; }
+  #toast { margin-top: 12px; font-size: 0.9rem; color: #555; min-height: 1.2em; }
+  #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+  #modal .box { background: white; padding: 20px; border-radius: 10px; max-width: 320px; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>Seat <span id="seatId">…</span></h1>
+  <div id="status" class="AVAILABLE">Loading…</div>
+  <div id="actions"></div>
+  <div id="toast"></div>
+
+  <div id="modal">
+    <div class="box">
+      <p id="modalMessage"></p>
+      <button class="primary" id="modalKeepGoing">Keep going</button>
+      <button id="modalDone">I'm done</button>
+    </div>
+  </div>
+
+  <script src="/client.js"></script>
+  <script>
+    const seatId = new URLSearchParams(window.location.search).get("seat") || "A1";
+    document.getElementById("seatId").textContent = seatId;
+
+    const identity = getOrCreateIdentity();
+    let promptTimer = null;
+
+    const ENCOURAGEMENT = [
+      "Keep going — you've got this!",
+      "Nice focus. Stay with it!",
+      "One more stretch. You're doing great.",
+      "Still here? Good. Keep the momentum.",
+    ];
+    function randomEncouragement() {
+      return ENCOURAGEMENT[Math.floor(Math.random() * ENCOURAGEMENT.length)];
+    }
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+    }
+
+    function render(seat) {
+      const statusEl = document.getElementById("status");
+      statusEl.className = seat.state;
+      statusEl.textContent =
+        seat.state === "AVAILABLE" ? "AVAILABLE" :
+        seat.state === "OCCUPIED" ? (seat.holderToken === identity.token ? "You're checked in" : "OCCUPIED") :
+        "Stepped away (holding seat)";
+
+      const actions = document.getElementById("actions");
+      actions.innerHTML = "";
+
+      const isHolder = seat.holderToken === identity.token;
+
+      if (seat.state === "AVAILABLE") {
+        actions.appendChild(makeButton("Check in", true, () => act("checkIn")));
+      } else if (seat.state === "OCCUPIED" && isHolder) {
+        actions.appendChild(makeButton("Step away (hold my seat)", false, () => act("stepAway")));
+        actions.appendChild(makeButton("I'm done — check out", false, () => act("leaving")));
+      } else if (seat.state === "STEPPED_AWAY" && isHolder) {
+        actions.appendChild(makeButton("I'm back", true, () => act("imBack")));
+        actions.appendChild(makeButton("I'm done — check out", false, () => act("leaving")));
+      } else {
+        actions.appendChild(makeButton("Refresh", false, refresh));
+      }
+    }
+
+    function makeButton(label, primary, onClick) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      if (primary) b.classList.add("primary");
+      b.onclick = onClick;
+      return b;
+    }
+
+    async function refresh() {
+      const seat = await getSeat(seatId);
+      render(seat);
+      return seat;
+    }
+
+    async function act(action) {
+      const result = await postScan(seatId, action, identity);
+      if (!result.ok) {
+        toast("Couldn't do that — refreshing status.");
+      }
+      render(result.seat);
+
+      if (action === "checkIn" || action === "imBack") {
+        scheduleNextPrompt();
+      }
+      if (action === "leaving") {
+        clearTimeout(promptTimer);
+      }
+    }
+
+    function scheduleNextPrompt() {
+      clearTimeout(promptTimer);
+      // 15 min in config.js; kept short here isn't necessary since this
+      // is just the client timer — server owns the real expiry.
+      promptTimer = setTimeout(showStillStudyingPrompt, 15 * 60 * 1000);
+    }
+
+    function showStillStudyingPrompt() {
+      document.getElementById("modalMessage").textContent = "Still studying? " + randomEncouragement();
+      document.getElementById("modal").style.display = "flex";
+    }
+
+    document.getElementById("modalKeepGoing").onclick = async () => {
+      document.getElementById("modal").style.display = "none";
+      const result = await postScan(seatId, "stillHere", identity);
+      render(result.seat);
+      if (result.ok) {
+        toast(randomEncouragement());
+        scheduleNextPrompt();
+      }
+    };
+    document.getElementById("modalDone").onclick = async () => {
+      document.getElementById("modal").style.display = "none";
+      await act("leaving");
+    };
+
+    refresh();
+  </script>
+</body>
+</html>

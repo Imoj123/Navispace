@@ -1,0 +1,17 @@
+{
+  "name": "navispace",
+  "version": "0.1.0",
+  "description": "NaviSpace — QR-based seat check-in/check-out for a shared study space",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "qr": "node scripts/generate-qr.js"
+  },
+  "author": "Imo Ume <imoume99@gmail.com>",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3"
+  }
+}
