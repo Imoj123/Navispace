@@ -53,8 +53,23 @@ class MemoryStore {
   }
 }
 
-// Singleton store for the running process. Swap this line for a real
-// KV client constructor when moving off the in-memory version.
-const store = new MemoryStore();
+const { tryCreateUpstashStore } = require("./store-upstash");
+
+// Singleton store for the running process. If UPSTASH_REDIS_REST_URL
+// and UPSTASH_REDIS_REST_TOKEN are set (see store-upstash.js), use
+// that for real persistence across restarts/sleeps; otherwise fall
+// back to the in-memory store (fine for local dev, but data is lost
+// on every restart — see the deployment notes).
+const upstashStore = tryCreateUpstashStore();
+const store = upstashStore || new MemoryStore();
+
+if (upstashStore) {
+  console.log("[store] Using Upstash Redis (persistent).");
+} else {
+  console.log(
+    "[store] Using in-memory store (NOT persistent — data resets on every restart). " +
+      "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for persistence."
+  );
+}
 
 module.exports = { store, MemoryStore };
