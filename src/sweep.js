@@ -42,13 +42,26 @@ async function sweepExpiredSeats(seatIds, now = Date.now()) {
 /**
  * Starts the recurring sweep. Returns a stop function (clearInterval
  * wrapper) so tests and graceful shutdown can turn it off cleanly.
+ *
+ * Runs one sweep immediately on startup, in addition to the regular
+ * interval — without this, a cold start (e.g. Render waking a
+ * sleeping free-tier instance after it's been asleep for hours or
+ * days) has a window of up to intervalMs where an already-expired
+ * seat still reads as occupied to anyone checking right then, purely
+ * because the recurring timer hasn't ticked yet. An immediate first
+ * pass closes that gap so "wake up" and "reconcile stale seats"
+ * happen together.
  */
 function startSweepLoop(getSeatIds, intervalMs, onSweep) {
-  const handle = setInterval(async () => {
+  const runSweep = async () => {
     const seatIds = await getSeatIds();
     const reclaimed = await sweepExpiredSeats(seatIds);
     if (reclaimed.length && onSweep) onSweep(reclaimed);
-  }, intervalMs);
+  };
+
+  runSweep(); // immediate pass — closes the cold-start gap described above
+
+  const handle = setInterval(runSweep, intervalMs);
 
   // Don't hold the process open just for the sweep timer in tests/CLI use.
   if (handle.unref) handle.unref();
