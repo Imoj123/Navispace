@@ -16,12 +16,23 @@
   #toast { margin-top: 12px; font-size: 0.9rem; color: #555; min-height: 1.2em; }
   #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
   #modal .box { background: white; padding: 20px; border-radius: 10px; max-width: 320px; text-align: center; }
+  #nicknameBar { display: flex; gap: 6px; margin-bottom: 12px; font-size: 0.85rem; }
+  #nicknameBar input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
+  #nicknameBar button { width: auto; margin: 0; padding: 8px 12px; }
+  #reportLink { background: none; border: none; color: #888; font-size: 0.8rem; text-decoration: underline; cursor: pointer; margin-top: 10px; padding: 4px; }
 </style>
 </head>
 <body>
   <h1>Seat <span id="seatId">…</span></h1>
+
+  <div id="nicknameBar">
+    <input type="text" id="nicknameInput" placeholder="Your leaderboard nickname" maxlength="24" />
+    <button id="nicknameSave">Save</button>
+  </div>
+
   <div id="status" class="AVAILABLE">Loading…</div>
   <div id="actions"></div>
+  <button id="reportLink" style="display:none;">This looks wrong — report it</button>
   <div id="toast"></div>
 
   <div id="modal">
@@ -39,6 +50,14 @@
 
     const identity = getOrCreateIdentity();
     let promptTimer = null;
+
+    const nicknameInput = document.getElementById("nicknameInput");
+    nicknameInput.value = identity.nickname === "Anonymous" ? "" : identity.nickname;
+    document.getElementById("nicknameSave").onclick = () => {
+      identity.nickname = setNickname(nicknameInput.value);
+      nicknameInput.value = identity.nickname;
+      toast("Nickname saved.");
+    };
 
     const ENCOURAGEMENT = [
       "Keep going — you've got this!",
@@ -80,6 +99,12 @@
       } else {
         actions.appendChild(makeButton("Refresh", false, refresh));
       }
+
+      // Crowdsourced correction: only meaningful when the seat claims
+      // to be held by someone — reporting an already-AVAILABLE seat
+      // has nothing to correct.
+      const reportBtn = document.getElementById("reportLink");
+      reportBtn.style.display = seat.state === "AVAILABLE" ? "none" : "inline-block";
     }
 
     function makeButton(label, primary, onClick) {
@@ -135,6 +160,16 @@
     document.getElementById("modalDone").onclick = async () => {
       document.getElementById("modal").style.display = "none";
       await act("leaving");
+    };
+
+    document.getElementById("reportLink").onclick = async () => {
+      const result = await reportSeatWrong(seatId, identity);
+      if (result.corrected) {
+        toast("Thanks — enough reports came in, seat corrected to AVAILABLE.");
+        refresh();
+      } else {
+        toast(`Report recorded (${result.reportCount}/${result.threshold} needed).`);
+      }
     };
 
     refresh();
