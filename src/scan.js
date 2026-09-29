@@ -99,22 +99,60 @@ async function creditSessionDay(token, nickname, seatId, now = Date.now()) {
 }
 
 /**
+ * Looks across every other seat for one already held (OCCUPIED or
+ * STEPPED_AWAY) by this same identity token — the one-seat-per-user
+ * rule. excludeSeatId is the seat being checked into, so a holder
+ * re-confirming/re-entering their own seat is never mistaken for
+ * holding "another" seat.
+ */
+async function findHeldSeat(token, seatIds, excludeSeatId = null) {
+  for (const id of seatIds) {
+    if (id === excludeSeatId) continue;
+    const seat = await getSeat(id);
+    if (
+      seat.holderToken === token &&
+      (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY)
+    ) {
+      return seat;
+    }
+  }
+  return null;
+}
+
+/**
  * Central scan handler. action is one of:
  *   "checkIn" | "stillHere" | "stepAway" | "imBack" | "leaving"
  *
  * identity: { token, nickname } — device-local, unverified (see design notes).
  *
+ * allSeatIds (optional): every configured seat ID, used only by the
+ * "checkIn" case to enforce one-seat-per-user — pass it in from the
+ * caller (server.js) so this module doesn't need to know how seat IDs
+ * are resolved. Omitting it (e.g. in older tests) simply skips that
+ * cross-seat check.
+ *
  * Returns { ok: boolean, seat, reason? }. Invalid transitions are
  * no-ops that report ok:false with a reason, rather than throwing —
  * a stale client (e.g. two tabs) shouldn't crash the request.
  */
-async function handleScan(seatId, action, identity, now = Date.now()) {
+async function handleScan(seatId, action, identity, now = Date.now(), allSeatIds = null) {
   const seat = await getSeat(seatId);
 
   switch (action) {
     case "checkIn": {
       if (seat.state !== SeatState.AVAILABLE) {
         return { ok: false, seat, reason: "seat_not_available" };
+      }
+      if (allSeatIds) {
+        const heldSeat = await findHeldSeat(identity.token, allSeatIds, seatId);
+        if (heldSeat) {
+          return {
+            ok: false,
+            seat,
+            reason: "already_holding_seat",
+            heldSeatId: heldSeat.id,
+          };
+        }
       }
       seat.state = SeatState.OCCUPIED;
       seat.checkInExpiry = now + currentCheckInDurationMs(now);
@@ -210,5 +248,6 @@ module.exports = {
   saveSeat,
   creditSessionDay,
   handleScan,
+  findHeldSeat,
   resetToAvailable,
 };

@@ -124,7 +124,11 @@
     async function act(action) {
       const result = await postScan(seatId, action, identity);
       if (!result.ok) {
-        toast("Couldn't do that — refreshing status.");
+        if (result.reason === "already_holding_seat") {
+          toast(`You're already checked into seat ${result.heldSeatId}. Check out there first.`);
+        } else {
+          toast("Couldn't do that — refreshing status.");
+        }
       }
       render(result.seat);
 

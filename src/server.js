@@ -42,10 +42,13 @@ function createApp() {
       return res.status(400).json({ ok: false, reason: "missing_identity" });
     }
 
-    const result = await handleScan(req.params.id, action, {
-      token,
-      nickname,
-    });
+    const result = await handleScan(
+      req.params.id,
+      action,
+      { token, nickname },
+      Date.now(),
+      SEAT_IDS
+    );
 
     res.status(result.ok ? 200 : 409).json(result);
   });

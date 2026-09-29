@@ -133,6 +133,44 @@ test("leaving mid-session still credits today's session-day", async () => {
   assert.equal(board[0].sessionDays, 1);
 });
 
+test("one-seat-per-user: can't check into a second seat while already holding one", async () => {
+  const seatIds = ["SEAT-A", "SEAT-B"];
+
+  let result = await handleScan("SEAT-A", "checkIn", alice, Date.now(), seatIds);
+  assert.equal(result.ok, true);
+
+  // Alice tries to also check into SEAT-B while still holding SEAT-A.
+  result = await handleScan("SEAT-B", "checkIn", alice, Date.now(), seatIds);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "already_holding_seat");
+  assert.equal(result.heldSeatId, "SEAT-A");
+
+  // SEAT-B must remain untouched/AVAILABLE.
+  const seatB = await getSeat("SEAT-B");
+  assert.equal(seatB.state, SeatState.AVAILABLE);
+
+  // Bob (a different identity) is unaffected and can still check into SEAT-B.
+  result = await handleScan("SEAT-B", "checkIn", bob, Date.now(), seatIds);
+  assert.equal(result.ok, true);
+
+  // Once Alice checks out of SEAT-A, she's free to check into a seat again.
+  await handleScan("SEAT-A", "leaving", alice);
+  result = await handleScan("SEAT-A", "checkIn", alice, Date.now(), seatIds);
+  assert.equal(result.ok, true);
+});
+
+test("one-seat-per-user: re-confirming your own seat is not blocked by the rule", async () => {
+  const seatIds = ["SEAT-A"];
+  await handleScan("SEAT-A", "checkIn", alice, Date.now(), seatIds);
+
+  // stillHere doesn't go through the checkIn cross-seat check at all,
+  // but this also exercises that checking into the SAME seat you
+  // already hold isn't misidentified as "another" seat.
+  const result = await handleScan("SEAT-A", "checkIn", alice, Date.now(), seatIds);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "seat_not_available"); // already occupied by self, not the cross-seat rule
+});
+
 test("two different students on two seats both score independently", async () => {
   await handleScan("SEAT-A", "checkIn", alice);
   await handleScan("SEAT-A", "stillHere", alice);

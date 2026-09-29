@@ -80,15 +80,10 @@
             justify-content: center;
             font-size: 0.75rem;
             font-weight: 700;
-            cursor: pointer;
             border: 3px solid transparent;
             color: white;
             text-decoration: none;
-            transition: transform 0.1s;
-        }
-
-        .seat-tile:active {
-            transform: scale(0.95);
+            user-select: none;
         }
 
         .seat-tile .staleness-dot {
@@ -145,7 +140,7 @@
 
 <body>
     <h1>Study Space Map</h1>
-    <div class="subtitle">Tap a seat to check in, step away, or check out</div>
+    <div class="subtitle">Live status only — scan a seat's QR code in person to check in</div>
 
     <div class="legend">
         <span><span class="swatch state-AVAILABLE"></span>Available</span>
@@ -210,16 +205,20 @@
         }
 
         function renderTile(seat, config) {
-            const a = document.createElement("a");
-            a.href = `/seat.html?seat=${encodeURIComponent(seat.id)}`;
-            a.className = `seat-tile state-${seat.state}`;
+            // A plain, non-interactive div on purpose: the map is a status
+            // display only. Reserving a seat happens by scanning its actual
+            // physical QR code (which links to seat.html) — there's no
+            // click-through from here, so this tile never becomes a second,
+            // unscanned way to "reserve" a seat.
+            const div = document.createElement("div");
+            div.className = `seat-tile state-${seat.state}`;
 
             const level = confidenceLevel(seat, config);
-            if (level) a.classList.add(`staleness-${level}`);
+            if (level) div.classList.add(`staleness-${level}`);
 
             const idEl = document.createElement("div");
             idEl.textContent = seat.id;
-            a.appendChild(idEl);
+            div.appendChild(idEl);
 
             if (level) {
                 const dot = document.createElement("div");
@@ -228,10 +227,10 @@
                     level === "high" ? "rgba(255,255,255,0.9)" :
                         level === "medium" ? "rgba(255,255,255,0.6)" :
                             "rgba(0,0,0,0.4)";
-                a.appendChild(dot);
+                div.appendChild(dot);
             }
 
-            return a;
+            return div;
         }
 
         render();
