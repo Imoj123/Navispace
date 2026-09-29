@@ -8,6 +8,7 @@ const { SEAT_IDS } = require("./seats");
 const { getSeat, handleScan } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
+const { reportSeat } = require("./reports");
 
 const PORT = process.env.PORT || 3000;
 
@@ -47,6 +48,38 @@ function createApp() {
     });
 
     res.status(result.ok ? 200 : 409).json(result);
+  });
+
+  // --- Crowdsourced correction ------------------------------------------
+  // Body: { token } — same device identity used for scans.
+
+  app.post("/api/report/:id", async (req, res) => {
+    const { token } = req.body || {};
+
+    if (!SEAT_IDS.includes(req.params.id)) {
+      return res.status(404).json({ ok: false, reason: "unknown_seat" });
+    }
+    if (!token) {
+      return res.status(400).json({ ok: false, reason: "missing_identity" });
+    }
+
+    const result = await reportSeat(req.params.id, token);
+    res.json({ ok: true, ...result });
+  });
+
+  // --- Client-facing config (kept in sync with config.js so the UI ----
+  // --- never hardcodes a second copy of these numbers) -----------------
+
+  app.get("/api/config", (_req, res) => {
+    res.json({
+      STALENESS_HIGH_MAX: config.STALENESS_HIGH_MAX,
+      STALENESS_MEDIUM_MAX: config.STALENESS_MEDIUM_MAX,
+      REPORT_THRESHOLD: config.REPORT_THRESHOLD,
+      CHECK_IN_DURATION_MS: config.CHECK_IN_DURATION_MS,
+      PEAK_CHECK_IN_DURATION_MS: config.PEAK_CHECK_IN_DURATION_MS,
+      PEAK_HOURS_START: config.PEAK_HOURS_START,
+      PEAK_HOURS_END: config.PEAK_HOURS_END,
+    });
   });
 
   // --- Leaderboard -----------------------------------------------------
