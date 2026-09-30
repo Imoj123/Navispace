@@ -65,6 +65,24 @@ function resolveSeatIds() {
     return ["A1", "A2", "A3", "B1", "B2", "B3"];
 }
 
-const SEAT_IDS = resolveSeatIds();
+/**
+ * Optional left-to-right column order for the bird's-eye map, e.g.
+ *   SEAT_ZONE_ORDER=C,A,B
+ * to lay the study space out as C | A | B rather than the default
+ * alphabetical A | B | C. Any zone actually present in SEAT_IDS but
+ * left out of this list is appended afterward (alphabetically), so a
+ * new zone added later never silently disappears from the map just
+ * because this var wasn't updated.
+ */
+function resolveZoneOrder() {
+    if (!process.env.SEAT_ZONE_ORDER) return null;
+    const zones = parseExplicitList(process.env.SEAT_ZONE_ORDER).map((z) =>
+        z.toUpperCase()
+    );
+    return zones.length ? zones : null;
+}
 
-module.exports = { SEAT_IDS, resolveSeatIds };
+const SEAT_IDS = resolveSeatIds();
+const SEAT_ZONE_ORDER = resolveZoneOrder();
+
+module.exports = { SEAT_IDS, resolveSeatIds, SEAT_ZONE_ORDER, resolveZoneOrder };

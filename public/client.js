@@ -10,6 +10,81 @@
  * ever becomes valuable enough to be worth gaming.
  */
 
+/**
+ * Registers the service worker (app-shell caching + push support).
+ * Safe to call on every page — no-ops quietly if the browser doesn't
+ * support service workers at all (e.g. some in-app/embedded webviews).
+ */
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return Promise.resolve(null);
+  return navigator.serviceWorker.register("/sw.js").catch((err) => {
+    console.warn("Service worker registration failed:", err);
+    return null;
+  });
+}
+registerServiceWorker();
+
+/**
+ * Converts a URL-safe base64 VAPID public key (as returned by
+ * /api/config) into the Uint8Array PushManager.subscribe expects.
+ */
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+/**
+ * Requests notification permission (must be called from a user
+ * gesture, e.g. a button click — browsers block silent auto-prompts)
+ * and subscribes this device to Web Push, then registers the
+ * subscription with the server against this identity's token.
+ *
+ * Returns { ok, reason? } — reason is one of "unsupported",
+ * "permission_denied", "no_vapid_key", or an error message.
+ */
+async function enablePushReminders(identity) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { ok: false, reason: "unsupported" };
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    return { ok: false, reason: "permission_denied" };
+  }
+
+  const cfg = await getServerConfig();
+  if (!cfg.VAPID_PUBLIC_KEY) {
+    return { ok: false, reason: "no_vapid_key" };
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(cfg.VAPID_PUBLIC_KEY),
+      });
+    }
+
+    const res = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: identity.token, subscription }),
+    });
+    const body = await res.json();
+    return { ok: !!body.ok };
+  } catch (err) {
+    return { ok: false, reason: String((err && err.message) || err) };
+  }
+}
+
 function getOrCreateIdentity() {
   let token = localStorage.getItem("navispace_token");
   let nickname = localStorage.getItem("navispace_nickname");
@@ -109,7 +184,7 @@ function parseSeatId(seatId) {
 function computeStaleness(seat, now = Date.now()) {
   const expiry = seat.state === "OCCUPIED" ? seat.checkInExpiry
     : seat.state === "STEPPED_AWAY" ? seat.stepAwayExpiry
-      : null;
+    : null;
   if (!expiry || !seat.lastConfirmTime) return null;
 
   const totalWindow = expiry - seat.lastConfirmTime;

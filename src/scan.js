@@ -53,6 +53,7 @@ async function getSeat(seatId) {
       confirmStreak: 0,
       holderToken: null,
       holderNickname: null,
+      reminderSent: false,
     }
   );
 }
@@ -161,6 +162,7 @@ async function handleScan(seatId, action, identity, now = Date.now(), allSeatIds
       seat.confirmStreak = 0;
       seat.holderToken = identity.token;
       seat.holderNickname = identity.nickname;
+      seat.reminderSent = false;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -176,6 +178,7 @@ async function handleScan(seatId, action, identity, now = Date.now(), allSeatIds
       seat.checkInExpiry = now + currentCheckInDurationMs(now);
       seat.lastConfirmTime = now;
       seat.confirmStreak = (seat.confirmStreak ?? 0) + 1;
+      seat.reminderSent = false;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -189,6 +192,7 @@ async function handleScan(seatId, action, identity, now = Date.now(), allSeatIds
       }
       seat.state = SeatState.STEPPED_AWAY;
       seat.stepAwayExpiry = now + config.STEP_AWAY_DURATION_MS;
+      seat.reminderSent = false;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -204,6 +208,7 @@ async function handleScan(seatId, action, identity, now = Date.now(), allSeatIds
       seat.checkInExpiry = now + currentCheckInDurationMs(now);
       seat.stepAwayExpiry = null;
       seat.lastConfirmTime = now;
+      seat.reminderSent = false;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -236,6 +241,7 @@ function resetToAvailable(seat) {
   seat.confirmStreak = 0;
   seat.holderToken = null;
   seat.holderNickname = null;
+  seat.reminderSent = false;
 }
 
 module.exports = {

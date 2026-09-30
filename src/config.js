@@ -49,4 +49,14 @@ module.exports = {
   // fraction of the time until a seat's current expiry.
   STALENESS_HIGH_MAX: 0.5,
   STALENESS_MEDIUM_MAX: 1.0,
+
+  // Web Push reminders (extension #5): send a "your seat is about to
+  // free up" push this long before checkInExpiry/stepAwayExpiry hits,
+  // and check for seats needing one this often. One reminder per
+  // expiry window (see seat.reminderSent in scan.js), so nobody gets
+  // spammed while sitting there.
+  // Real deployment: lead time around 10 min is probably more useful
+  // than this short testing default.
+  REMINDER_LEAD_MS: 5 * 60 * 1000, // 5 min
+  REMINDER_CHECK_INTERVAL_MS: 60 * 1000, // 1 min
 };

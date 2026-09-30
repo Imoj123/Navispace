@@ -6,12 +6,15 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",
-    "qr": "node scripts/generate-qr.js"
+    "qr": "node scripts/generate-qr.js",
+    "vapid-keys": "node scripts/generate-vapid-keys.js"
   },
   "author": "Imo Ume <imoume99@gmail.com>",
   "license": "UNLICENSED",
   "dependencies": {
     "express": "^4.19.2",
-    "qrcode": "^1.5.3"
+    "qrcode": "^1.5.3",
+    "web-push": "^3.6.7"
   }
 }
+

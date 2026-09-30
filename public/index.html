@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a1a1a" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icons/icon-192.png" />
     <title>NaviSpace — Map</title>
     <style>
         body {
@@ -49,25 +52,30 @@
             display: inline-block;
         }
 
-        .zone-row {
+        #map {
             display: flex;
+            justify-content: center;
+            gap: 28px;
+            flex-wrap: wrap;
+        }
+
+        .zone-column {
+            display: flex;
+            flex-direction: column;
             align-items: center;
             gap: 10px;
-            margin-bottom: 10px;
         }
 
         .zone-label {
-            width: 22px;
             font-weight: 700;
             color: #888;
-            text-align: center;
-            flex-shrink: 0;
+            margin-bottom: 2px;
         }
 
         .seats {
             display: flex;
+            flex-direction: column;
             gap: 8px;
-            flex-wrap: wrap;
         }
 
         .seat-tile {
@@ -170,8 +178,8 @@
             }
             emptyEl.style.display = "none";
 
-            // Group seats into rows by zone (the letters in the seat ID),
-            // sorted by their trailing number within each row — a simple
+            // Group seats into columns by zone (the letters in the seat ID),
+            // sorted by their trailing number within each column — a simple
             // bird's-eye layout that works for any SEAT_IDS/SEAT_ZONES
             // configuration without needing hand-placed coordinates.
             const byZone = new Map();
@@ -181,15 +189,28 @@
                 byZone.get(zone).push({ ...seat, _number: number });
             }
 
-            const zones = [...byZone.keys()].sort();
+            // Left-to-right column order: SEAT_ZONE_ORDER (e.g. "C,A,B") if
+            // configured, else alphabetical. Any zone present in the data
+            // but missing from that list is appended afterward, so it never
+            // just vanishes from the map because the env var is stale.
+            const allZones = [...byZone.keys()].sort();
+            let zones;
+            if (Array.isArray(config.ZONE_ORDER) && config.ZONE_ORDER.length) {
+                const ordered = config.ZONE_ORDER.filter((z) => byZone.has(z));
+                const rest = allZones.filter((z) => !ordered.includes(z));
+                zones = [...ordered, ...rest];
+            } else {
+                zones = allZones;
+            }
+
             for (const zone of zones) {
-                const row = document.createElement("div");
-                row.className = "zone-row";
+                const column = document.createElement("div");
+                column.className = "zone-column";
 
                 const label = document.createElement("div");
                 label.className = "zone-label";
                 label.textContent = zone;
-                row.appendChild(label);
+                column.appendChild(label);
 
                 const seatsEl = document.createElement("div");
                 seatsEl.className = "seats";
@@ -199,8 +220,8 @@
                     seatsEl.appendChild(renderTile(seat, config));
                 }
 
-                row.appendChild(seatsEl);
-                mapEl.appendChild(row);
+                column.appendChild(seatsEl);
+                mapEl.appendChild(column);
             }
         }
 

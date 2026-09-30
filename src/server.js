@@ -4,11 +4,13 @@ const path = require("path");
 const express = require("express");
 
 const config = require("./config");
-const { SEAT_IDS } = require("./seats");
+const { SEAT_IDS, SEAT_ZONE_ORDER } = require("./seats");
 const { getSeat, handleScan } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
 const { reportSeat } = require("./reports");
+const { saveSubscription, removeSubscription } = require("./push");
+const { startReminderLoop } = require("./reminders");
 
 const PORT = process.env.PORT || 3000;
 
@@ -70,6 +72,28 @@ function createApp() {
     res.json({ ok: true, ...result });
   });
 
+  // --- Web Push subscriptions ------------------------------------------
+  // Body: { token, subscription } — subscription is the PushSubscription
+  // object the browser's PushManager.subscribe() returns.
+
+  app.post("/api/push/subscribe", async (req, res) => {
+    const { token, subscription } = req.body || {};
+    if (!token || !subscription) {
+      return res.status(400).json({ ok: false, reason: "missing_fields" });
+    }
+    await saveSubscription(token, subscription);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/push/unsubscribe", async (req, res) => {
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ ok: false, reason: "missing_token" });
+    }
+    await removeSubscription(token);
+    res.json({ ok: true });
+  });
+
   // --- Client-facing config (kept in sync with config.js so the UI ----
   // --- never hardcodes a second copy of these numbers) -----------------
 
@@ -82,6 +106,8 @@ function createApp() {
       PEAK_CHECK_IN_DURATION_MS: config.PEAK_CHECK_IN_DURATION_MS,
       PEAK_HOURS_START: config.PEAK_HOURS_START,
       PEAK_HOURS_END: config.PEAK_HOURS_END,
+      ZONE_ORDER: SEAT_ZONE_ORDER,
+      VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || null,
     });
   });
 
@@ -113,12 +139,21 @@ function start() {
     }
   );
 
+  const stopReminders = startReminderLoop(
+    () => Promise.resolve(SEAT_IDS),
+    config.REMINDER_CHECK_INTERVAL_MS,
+    (reminded) => {
+      console.log(`[reminders] sent: ${reminded.join(", ")}`);
+    }
+  );
+
   const server = app.listen(PORT, () => {
     console.log(`NaviSpace listening on http://localhost:${PORT}`);
   });
 
   const shutdown = () => {
     stopSweep();
+    stopReminders();
     server.close(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);
