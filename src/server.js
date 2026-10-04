@@ -4,40 +4,79 @@ const path = require("path");
 const express = require("express");
 
 const config = require("./config");
-const { SEAT_IDS, SEAT_ZONE_ORDER } = require("./seats");
+const { LIBRARIES, getLibrary, isActiveLibrary } = require("./libraries");
+const { getSeatIds, getZoneOrder } = require("./seats");
 const { getSeat, handleScan } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
 const { reportSeat } = require("./reports");
 const { saveSubscription, removeSubscription } = require("./push");
 const { startReminderLoop } = require("./reminders");
+const { reportItem, listItems, claimItem, resolveItem } = require("./lostfound");
 
 const PORT = process.env.PORT || 3000;
 
+/** Every active library's { libraryId, seatIds } — what the sweep and
+ * reminder loops need to check every library in one pass. */
+function activeLibrarySeatGroups() {
+  return LIBRARIES.filter((lib) => lib.status === "active").map((lib) => ({
+    libraryId: lib.id,
+    seatIds: getSeatIds(lib.id),
+  }));
+}
+
 function createApp() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "3mb" })); // lost & found photos ride in the JSON body
   app.use(express.static(path.join(__dirname, "..", "public")));
 
-  // --- Seat state -----------------------------------------------------
+  // --- Libraries ---------------------------------------------------------
 
-  app.get("/api/seat/:id", async (req, res) => {
-    const seat = await getSeat(req.params.id);
+  app.get("/api/libraries", (_req, res) => {
+    res.json(
+      LIBRARIES.map((lib) => ({
+        id: lib.id,
+        name: lib.name,
+        status: lib.status,
+        seatCount: lib.status === "active" ? getSeatIds(lib.id).length : 0,
+        zoneOrder: lib.status === "active" ? getZoneOrder(lib.id) : null,
+      }))
+    );
+  });
+
+  // --- Seat state ----------------------------------------------------------
+
+  app.get("/api/library/:libId/seat/:id", async (req, res) => {
+    const { libId } = req.params;
+    if (!getLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "unknown_library" });
+    }
+    const seat = await getSeat(libId, req.params.id);
     res.json(seat);
   });
 
-  app.get("/api/seats", async (_req, res) => {
-    const seats = await Promise.all(SEAT_IDS.map((id) => getSeat(id)));
+  app.get("/api/library/:libId/seats", async (req, res) => {
+    const { libId } = req.params;
+    if (!getLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "unknown_library" });
+    }
+    const seatIds = getSeatIds(libId);
+    const seats = await Promise.all(seatIds.map((id) => getSeat(libId, id)));
     res.json(seats);
   });
 
-  // --- Scan actions -----------------------------------------------------
+  // --- Scan actions ----------------------------------------------------------
   // Body: { action, token, nickname }
 
-  app.post("/api/scan/:id", async (req, res) => {
+  app.post("/api/library/:libId/scan/:id", async (req, res) => {
+    const { libId } = req.params;
     const { action, token, nickname } = req.body || {};
 
-    if (!SEAT_IDS.includes(req.params.id)) {
+    if (!isActiveLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "library_not_active" });
+    }
+    const seatIds = getSeatIds(libId);
+    if (!seatIds.includes(req.params.id)) {
       return res.status(404).json({ ok: false, reason: "unknown_seat" });
     }
     if (!token || !nickname) {
@@ -45,34 +84,109 @@ function createApp() {
     }
 
     const result = await handleScan(
+      libId,
       req.params.id,
       action,
       { token, nickname },
       Date.now(),
-      SEAT_IDS
+      seatIds
     );
 
     res.status(result.ok ? 200 : 409).json(result);
   });
 
-  // --- Crowdsourced correction ------------------------------------------
+  // --- Crowdsourced correction -----------------------------------------------
   // Body: { token } — same device identity used for scans.
 
-  app.post("/api/report/:id", async (req, res) => {
+  app.post("/api/library/:libId/report/:id", async (req, res) => {
+    const { libId } = req.params;
     const { token } = req.body || {};
 
-    if (!SEAT_IDS.includes(req.params.id)) {
+    if (!isActiveLibrary(libId) || !getSeatIds(libId).includes(req.params.id)) {
       return res.status(404).json({ ok: false, reason: "unknown_seat" });
     }
     if (!token) {
       return res.status(400).json({ ok: false, reason: "missing_identity" });
     }
 
-    const result = await reportSeat(req.params.id, token);
+    const result = await reportSeat(libId, req.params.id, token);
     res.json({ ok: true, ...result });
   });
 
-  // --- Web Push subscriptions ------------------------------------------
+  // --- Leaderboard -------------------------------------------------------
+
+  app.get("/api/library/:libId/leaderboard", async (req, res) => {
+    const { libId } = req.params;
+    if (!getLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "unknown_library" });
+    }
+    const entries = await getLeaderboard(libId, 10);
+    res.json(entries);
+  });
+
+  // --- Manual sweep trigger (handy for testing without waiting) -------------
+
+  app.post("/api/library/:libId/sweep", async (req, res) => {
+    const { libId } = req.params;
+    const reclaimed = await sweepExpiredSeats(libId, getSeatIds(libId));
+    res.json({ reclaimed });
+  });
+
+  // --- Lost & Found --------------------------------------------------------
+  // Body (report): { description, location, photoDataUrl, token, nickname }
+
+  app.get("/api/library/:libId/lostfound", async (req, res) => {
+    const { libId } = req.params;
+    if (!getLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "unknown_library" });
+    }
+    const items = await listItems(libId);
+    res.json(items);
+  });
+
+  app.post("/api/library/:libId/lostfound", async (req, res) => {
+    const { libId } = req.params;
+    if (!isActiveLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "library_not_active" });
+    }
+    const { description, location, photoDataUrl, token, nickname } = req.body || {};
+    const result = await reportItem(libId, {
+      description,
+      location,
+      photoDataUrl,
+      reporterToken: token,
+      reporterNickname: nickname,
+    });
+    res.status(result.ok ? 200 : 400).json(result);
+  });
+
+  // Body: { token, nickname, note }
+  app.post("/api/library/:libId/lostfound/:itemId/claim", async (req, res) => {
+    const { libId, itemId } = req.params;
+    const { token, nickname, note } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ ok: false, reason: "missing_identity" });
+    }
+    const result = await claimItem(libId, itemId, {
+      claimantToken: token,
+      claimantNickname: nickname,
+      note,
+    });
+    res.status(result.ok ? 200 : 409).json(result);
+  });
+
+  // Body: { token } — must be the original reporter's device.
+  app.post("/api/library/:libId/lostfound/:itemId/resolve", async (req, res) => {
+    const { libId, itemId } = req.params;
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ ok: false, reason: "missing_identity" });
+    }
+    const result = await resolveItem(libId, itemId, token);
+    res.status(result.ok ? 200 : 403).json(result);
+  });
+
+  // --- Web Push subscriptions ------------------------------------------------
   // Body: { token, subscription } — subscription is the PushSubscription
   // object the browser's PushManager.subscribe() returns.
 
@@ -106,23 +220,8 @@ function createApp() {
       PEAK_CHECK_IN_DURATION_MS: config.PEAK_CHECK_IN_DURATION_MS,
       PEAK_HOURS_START: config.PEAK_HOURS_START,
       PEAK_HOURS_END: config.PEAK_HOURS_END,
-      ZONE_ORDER: SEAT_ZONE_ORDER,
       VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || null,
     });
-  });
-
-  // --- Leaderboard -----------------------------------------------------
-
-  app.get("/api/leaderboard", async (_req, res) => {
-    const entries = await getLeaderboard(10);
-    res.json(entries);
-  });
-
-  // --- Manual sweep trigger (handy for testing without waiting) -------
-
-  app.post("/api/sweep", async (_req, res) => {
-    const reclaimed = await sweepExpiredSeats(SEAT_IDS);
-    res.json({ reclaimed });
   });
 
   return app;
@@ -132,18 +231,18 @@ function start() {
   const app = createApp();
 
   const stopSweep = startSweepLoop(
-    () => Promise.resolve(SEAT_IDS),
+    () => Promise.resolve(activeLibrarySeatGroups()),
     config.SWEEP_INTERVAL_MS,
-    (reclaimed) => {
-      console.log(`[sweep] reclaimed: ${reclaimed.join(", ")}`);
+    (libraryId, reclaimed) => {
+      console.log(`[sweep] ${libraryId} reclaimed: ${reclaimed.join(", ")}`);
     }
   );
 
   const stopReminders = startReminderLoop(
-    () => Promise.resolve(SEAT_IDS),
+    () => Promise.resolve(activeLibrarySeatGroups()),
     config.REMINDER_CHECK_INTERVAL_MS,
-    (reminded) => {
-      console.log(`[reminders] sent: ${reminded.join(", ")}`);
+    (libraryId, reminded) => {
+      console.log(`[reminders] ${libraryId} sent: ${reminded.join(", ")}`);
     }
   );
 

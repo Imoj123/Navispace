@@ -137,8 +137,29 @@ function setNickname(nickname) {
   return clean;
 }
 
-async function postScan(seatId, action, identity) {
-  const res = await fetch(`/api/scan/${encodeURIComponent(seatId)}`, {
+/**
+ * The library a page is showing, read from its own URL (?lib=...).
+ * Defaults to "engineering" — NaviSpace's very first QR codes were
+ * printed before multi-library support existed and encode URLs with
+ * no lib param at all, so this default is what keeps every
+ * already-printed Engineering Library code working untouched.
+ */
+function getLibraryIdFromUrl() {
+  return new URLSearchParams(window.location.search).get("lib") || "engineering";
+}
+
+/** Builds a page URL that carries the given library id along. */
+function libraryUrl(path, libraryId) {
+  return `${path}?lib=${encodeURIComponent(libraryId)}`;
+}
+
+async function getLibraries() {
+  const res = await fetch(`/api/libraries`);
+  return res.json();
+}
+
+async function postScan(libraryId, seatId, action, identity) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/scan/${encodeURIComponent(seatId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, token: identity.token, nickname: identity.nickname }),
@@ -147,18 +168,18 @@ async function postScan(seatId, action, identity) {
   return { httpOk: res.ok, ...body };
 }
 
-async function getSeat(seatId) {
-  const res = await fetch(`/api/seat/${encodeURIComponent(seatId)}`);
+async function getSeat(libraryId, seatId) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/seat/${encodeURIComponent(seatId)}`);
   return res.json();
 }
 
-async function getLeaderboard() {
-  const res = await fetch(`/api/leaderboard`);
+async function getLeaderboard(libraryId) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/leaderboard`);
   return res.json();
 }
 
-async function getAllSeats() {
-  const res = await fetch(`/api/seats`);
+async function getAllSeats(libraryId) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/seats`);
   return res.json();
 }
 
@@ -171,13 +192,81 @@ async function getServerConfig() {
   return _configCache;
 }
 
-async function reportSeatWrong(seatId, identity) {
-  const res = await fetch(`/api/report/${encodeURIComponent(seatId)}`, {
+async function reportSeatWrong(libraryId, seatId, identity) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/report/${encodeURIComponent(seatId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token: identity.token }),
   });
   return res.json();
+}
+
+/* --- Lost & Found ------------------------------------------------------- */
+
+async function getLostFoundItems(libraryId) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/lostfound`);
+  return res.json();
+}
+
+async function reportLostFoundItem(libraryId, { description, location, photoDataUrl, identity }) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/lostfound`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      description,
+      location,
+      photoDataUrl,
+      token: identity.token,
+      nickname: identity.nickname,
+    }),
+  });
+  return res.json();
+}
+
+async function claimLostFoundItem(libraryId, itemId, { identity, note }) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/lostfound/${encodeURIComponent(itemId)}/claim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: identity.token, nickname: identity.nickname, note }),
+  });
+  return res.json();
+}
+
+async function resolveLostFoundItem(libraryId, itemId, identity) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/lostfound/${encodeURIComponent(itemId)}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: identity.token }),
+  });
+  return res.json();
+}
+
+/**
+ * Downscales and compresses an image file in the browser before
+ * upload, so a phone's multi-megabyte camera photo becomes a small
+ * enough base64 string to store as one Redis value (see
+ * LOST_FOUND_MAX_PHOTO_CHARS server-side). Returns a JPEG data URL.
+ */
+function downscaleImageFile(file, maxDimension = 900, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.onload = () => {
+      img.onerror = () => reject(new Error("Couldn't read that image."));
+      img.onload = () => {
+        const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 /**

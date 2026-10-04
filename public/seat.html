@@ -3,55 +3,133 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#1a1a1a" />
+<meta name="theme-color" content="#10182b" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="icon" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="NaviSpace" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
 <title>NaviSpace — Seat</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; text-align: center; }
-  h1 { font-size: 1.4rem; }
-  #status { font-size: 1.1rem; font-weight: 600; margin: 16px 0; padding: 12px; border-radius: 8px; }
-  .AVAILABLE { background: #e6f7ec; color: #1a7f37; }
-  .OCCUPIED { background: #fdecea; color: #b3261e; }
-  .STEPPED_AWAY { background: #fff8e1; color: #a56a00; }
-  button { display: block; width: 100%; padding: 12px; margin: 8px 0; font-size: 1rem; border-radius: 8px; border: 1px solid #ccc; background: white; cursor: pointer; }
-  button.primary { background: #1a1a1a; color: white; border: none; }
-  #toast { margin-top: 12px; font-size: 0.9rem; color: #555; min-height: 1.2em; }
-  #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
-  #modal .box { background: white; padding: 20px; border-radius: 10px; max-width: 320px; text-align: center; }
-  #nicknameBar { display: flex; gap: 6px; margin-bottom: 12px; font-size: 0.85rem; }
-  #nicknameBar input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
-  #nicknameBar button { width: auto; margin: 0; padding: 8px 12px; }
-  #reportLink { background: none; border: none; color: #888; font-size: 0.8rem; text-decoration: underline; cursor: pointer; margin-top: 10px; padding: 4px; }
-  #enableReminders { background: #eef6ff; color: #1a5fb4; border: 1px solid #cfe3fb; font-size: 0.85rem; padding: 10px; }
+  main { display: flex; justify-content: center; }
+
+  .seat-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 24px 24px;
+  }
+
+  .seat-card-label {
+    font-size: 0.8rem;
+    color: var(--slate);
+    margin-bottom: 2px;
+  }
+
+  .seat-card-id {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 3rem;
+    line-height: 1.05;
+    margin-bottom: 18px;
+  }
+
+  .status-band {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 600;
+    font-size: 0.98rem;
+    padding: 12px 14px;
+    border-radius: 9px;
+    margin-bottom: 18px;
+  }
+
+  .status-band.AVAILABLE { background: var(--green-dim); color: var(--green); }
+  .status-band.OCCUPIED { background: var(--vermilion-dim); color: #ff8a73; }
+  .status-band.STEPPED_AWAY { background: var(--amber-dim); color: var(--amber); }
+
+  .actions { margin-bottom: 4px; }
+
+  #enableReminders { margin-top: 10px; }
+  #reportLink { display: block; text-align: left; margin-top: 4px; }
+
+  .nickname-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+  .nickname-row input { flex: 1; min-width: 0; }
+  .nickname-row button { width: auto; margin: 0; padding: 9px 14px; font-size: 0.85rem; }
+
+  .modal-box { text-align: center; }
+  .modal-box p { margin: 0 0 16px; font-size: 0.95rem; }
 </style>
 </head>
 <body>
-  <h1>Seat <span id="seatId">…</span></h1>
-
-  <div id="nicknameBar">
-    <input type="text" id="nicknameInput" placeholder="Your leaderboard nickname" maxlength="24" />
-    <button id="nicknameSave">Save</button>
+  <header class="topbar">
+    <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+    <nav class="topnav" id="topnav"></nav>
+  </header>
+  <div class="context-bar">
+    <span class="library-name" id="libraryName">&nbsp;</span>
+    <a href="/">Change library</a>
   </div>
 
-  <div id="status" class="AVAILABLE">Loading…</div>
-  <div id="actions"></div>
-  <button id="enableReminders" style="display:none;">🔔 Enable seat reminders</button>
-  <button id="reportLink" style="display:none;">This looks wrong — report it</button>
-  <div id="toast"></div>
+  <main>
+    <div class="seat-card">
+      <div class="seat-card-label">Seat</div>
+      <div class="seat-card-id" id="seatId">…</div>
 
-  <div id="modal">
-    <div class="box">
+      <div id="status" class="status-band AVAILABLE">Loading…</div>
+      <div id="actions" class="actions"></div>
+
+      <button id="enableReminders" class="btn btn-tinted" style="display:none;">🔔 Enable seat reminders</button>
+      <button id="reportLink" class="btn-quiet" style="display:none;">This looks wrong — report it</button>
+      <div id="toast" class="toast"></div>
+
+      <div class="nickname-row">
+        <input type="text" id="nicknameInput" placeholder="Your leaderboard nickname" maxlength="24" />
+        <button id="nicknameSave" class="btn">Save</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="modal" class="modal-overlay">
+    <div class="modal-box">
       <p id="modalMessage"></p>
-      <button class="primary" id="modalKeepGoing">Keep going</button>
-      <button id="modalDone">I'm done</button>
+      <button class="btn btn-primary" id="modalKeepGoing">Keep going</button>
+      <button class="btn" id="modalDone">I'm done</button>
     </div>
   </div>
 
   <script src="/client.js"></script>
   <script>
     const seatId = new URLSearchParams(window.location.search).get("seat") || "A1";
+    // Defaults to "engineering" — see getLibraryIdFromUrl in client.js:
+    // this keeps every QR code printed before multi-library support
+    // existed working untouched.
+    const libraryId = getLibraryIdFromUrl();
     document.getElementById("seatId").textContent = seatId;
+
+    document.getElementById("topnav").innerHTML = `
+      <a href="${libraryUrl("/library.html", libraryId)}">Map</a>
+      <a href="${libraryUrl("/leaderboard.html", libraryId)}">Leaderboard</a>
+      <a href="${libraryUrl("/lost-found.html", libraryId)}">Lost &amp; Found</a>
+    `;
+    getLibraries().then((libs) => {
+      const lib = libs.find((l) => l.id === libraryId);
+      document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
+    });
 
     const identity = getOrCreateIdentity();
     let promptTimer = null;
@@ -78,16 +156,22 @@
     function toast(msg) {
       const el = document.getElementById("toast");
       el.textContent = msg;
-      setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+      setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 6000);
     }
 
     function render(seat) {
       const statusEl = document.getElementById("status");
-      statusEl.className = seat.state;
-      statusEl.textContent =
-        seat.state === "AVAILABLE" ? "AVAILABLE" :
-        seat.state === "OCCUPIED" ? (seat.holderToken === identity.token ? "You're checked in" : "OCCUPIED") :
+      statusEl.className = "status-band " + seat.state;
+      statusEl.innerHTML = "";
+      const dot = document.createElement("span");
+      dot.className = "signal-dot signal-" + seat.state;
+      statusEl.appendChild(dot);
+      const label = document.createElement("span");
+      label.textContent =
+        seat.state === "AVAILABLE" ? "Available" :
+        seat.state === "OCCUPIED" ? (seat.holderToken === identity.token ? "You're checked in" : "Occupied") :
         "Stepped away (holding seat)";
+      statusEl.appendChild(label);
 
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
@@ -124,19 +208,19 @@
     function makeButton(label, primary, onClick) {
       const b = document.createElement("button");
       b.textContent = label;
-      if (primary) b.classList.add("primary");
+      b.className = "btn" + (primary ? " btn-primary" : "");
       b.onclick = onClick;
       return b;
     }
 
     async function refresh() {
-      const seat = await getSeat(seatId);
+      const seat = await getSeat(libraryId, seatId);
       render(seat);
       return seat;
     }
 
     async function act(action) {
-      const result = await postScan(seatId, action, identity);
+      const result = await postScan(libraryId, seatId, action, identity);
       if (!result.ok) {
         if (result.reason === "already_holding_seat") {
           toast(`You're already checked into seat ${result.heldSeatId}. Check out there first.`);
@@ -168,7 +252,7 @@
 
     document.getElementById("modalKeepGoing").onclick = async () => {
       document.getElementById("modal").style.display = "none";
-      const result = await postScan(seatId, "stillHere", identity);
+      const result = await postScan(libraryId, seatId, "stillHere", identity);
       render(result.seat);
       if (result.ok) {
         toast(randomEncouragement());
@@ -186,6 +270,8 @@
         reminderEnabled = true;
         toast("Reminders on — we'll ping you before your seat frees up.");
         refresh();
+      } else if (result.reason === "ios_not_installed") {
+        toast("On iPhone: tap Share, then \"Add to Home Screen\" — reopen NaviSpace from there to enable reminders.");
       } else if (result.reason === "unsupported") {
         toast("Reminders aren't supported in this browser.");
       } else if (result.reason === "permission_denied") {
@@ -198,7 +284,7 @@
     };
 
     document.getElementById("reportLink").onclick = async () => {
-      const result = await reportSeatWrong(seatId, identity);
+      const result = await reportSeatWrong(libraryId, seatId, identity);
       if (result.corrected) {
         toast("Thanks — enough reports came in, seat corrected to AVAILABLE.");
         refresh();

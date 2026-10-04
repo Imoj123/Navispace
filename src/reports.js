@@ -1,11 +1,11 @@
 "use strict";
 
 const { store } = require("./store");
-const { seatKey, getSeat, saveSeat, resetToAvailable } = require("./scan");
+const { getSeat, saveSeat, resetToAvailable } = require("./scan");
 const config = require("./config");
 
-function reportKey(seatId) {
-    return `reports:${seatId}`;
+function reportKey(libraryId, seatId) {
+    return `reports:${libraryId}:${seatId}`;
 }
 
 /**
@@ -21,8 +21,8 @@ function reportKey(seatId) {
  * Returns { corrected, reportCount, threshold } so the client can show
  * "2 of 3 reports needed" type feedback.
  */
-async function reportSeat(seatId, reporterToken, now = Date.now()) {
-    const key = reportKey(seatId);
+async function reportSeat(libraryId, seatId, reporterToken, now = Date.now()) {
+    const key = reportKey(libraryId, seatId);
     const existing = (await store.get(key)) || [];
 
     // Drop expired reports and any earlier report from this same
@@ -36,7 +36,7 @@ async function reportSeat(seatId, reporterToken, now = Date.now()) {
     let corrected = false;
 
     if (active.length >= threshold) {
-        const seat = await getSeat(seatId);
+        const seat = await getSeat(libraryId, seatId);
         resetToAvailable(seat);
         await saveSeat(seat);
         await store.delete(key);

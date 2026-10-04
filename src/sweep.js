@@ -9,14 +9,16 @@ const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
  * out" / "forgot to return" cases), independent of whether the
  * client-side "still here" prompt ever fires.
  *
- * Registered seat IDs are needed since a plain Map has no native
- * "scan all seat keys" — pass the known seat ID list in.
+ * Scoped to one library per call (registered seat IDs are needed
+ * since a plain Map has no native "scan all seat keys" — pass the
+ * known seat ID list in). Returns the reclaimed seat IDs for that
+ * library; startSweepLoop below calls this once per library.
  */
-async function sweepExpiredSeats(seatIds, now = Date.now()) {
+async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
   const reclaimed = [];
 
   for (const seatId of seatIds) {
-    const seat = await store.get(seatKey(seatId));
+    const seat = await store.get(seatKey(libraryId, seatId));
     if (!seat) continue;
 
     const occupiedExpired =
@@ -40,8 +42,12 @@ async function sweepExpiredSeats(seatIds, now = Date.now()) {
 }
 
 /**
- * Starts the recurring sweep. Returns a stop function (clearInterval
- * wrapper) so tests and graceful shutdown can turn it off cleanly.
+ * Starts the recurring sweep across every active library. Returns a
+ * stop function (clearInterval wrapper) so tests and graceful
+ * shutdown can turn it off cleanly.
+ *
+ * getLibrarySeatGroups should resolve to an array of
+ * { libraryId, seatIds } — one entry per library worth sweeping.
  *
  * Runs one sweep immediately on startup, in addition to the regular
  * interval — without this, a cold start (e.g. Render waking a
@@ -52,11 +58,13 @@ async function sweepExpiredSeats(seatIds, now = Date.now()) {
  * pass closes that gap so "wake up" and "reconcile stale seats"
  * happen together.
  */
-function startSweepLoop(getSeatIds, intervalMs, onSweep) {
+function startSweepLoop(getLibrarySeatGroups, intervalMs, onSweep) {
   const runSweep = async () => {
-    const seatIds = await getSeatIds();
-    const reclaimed = await sweepExpiredSeats(seatIds);
-    if (reclaimed.length && onSweep) onSweep(reclaimed);
+    const groups = await getLibrarySeatGroups();
+    for (const { libraryId, seatIds } of groups) {
+      const reclaimed = await sweepExpiredSeats(libraryId, seatIds);
+      if (reclaimed.length && onSweep) onSweep(libraryId, reclaimed);
+    }
   };
 
   runSweep(); // immediate pass — closes the cold-start gap described above

@@ -70,11 +70,12 @@
 <body>
   <header class="topbar">
     <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
-    <nav class="topnav">
-      <a href="/">Map</a>
-      <a href="/leaderboard.html" class="current">Leaderboard</a>
-    </nav>
+    <nav class="topnav" id="topnav"></nav>
   </header>
+  <div class="context-bar">
+    <span class="library-name" id="libraryName">&nbsp;</span>
+    <a href="/">Change library</a>
+  </div>
 
   <main>
     <h1 class="page-title">Study leaderboard</h1>
@@ -86,8 +87,20 @@
 
   <script src="/client.js"></script>
   <script>
+    const libraryId = getLibraryIdFromUrl();
+
+    document.getElementById("topnav").innerHTML = `
+      <a href="${libraryUrl("/library.html", libraryId)}">Map</a>
+      <a href="${libraryUrl("/leaderboard.html", libraryId)}" class="current">Leaderboard</a>
+      <a href="${libraryUrl("/lost-found.html", libraryId)}">Lost &amp; Found</a>
+    `;
+    getLibraries().then((libs) => {
+      const lib = libs.find((l) => l.id === libraryId);
+      document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
+    });
+
     async function render() {
-      const entries = await getLeaderboard();
+      const entries = await getLeaderboard(libraryId);
       const list = document.getElementById("list");
       const empty = document.getElementById("empty");
       list.innerHTML = "";

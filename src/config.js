@@ -59,4 +59,13 @@ module.exports = {
   // than this short testing default.
   REMINDER_LEAD_MS: 5 * 60 * 1000, // 5 min
   REMINDER_CHECK_INTERVAL_MS: 60 * 1000, // 1 min
+
+  // Lost & Found: items auto-expire after this long so a forgotten
+  // board doesn't grow unbounded on a free-tier store (items carry a
+  // photo, which is the heaviest thing NaviSpace stores). Photos are
+  // capped in base64-character length — client-side downscaling
+  // should comfortably stay well under this; the server check is the
+  // backstop against a browser that can't downscale.
+  LOST_FOUND_TTL_DAYS: 30,
+  LOST_FOUND_MAX_PHOTO_CHARS: 1_500_000, // ~1.1MB binary
 };

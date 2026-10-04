@@ -18,12 +18,14 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v2";
+const CACHE_NAME = "navispace-shell-v3";
 const SHELL_FILES = [
     "/",
     "/index.html",
+    "/library.html",
     "/seat.html",
     "/leaderboard.html",
+    "/lost-found.html",
     "/client.js",
     "/styles.css",
     "/manifest.json",
@@ -96,17 +98,17 @@ self.addEventListener("push", (event) => {
             body: payload.body,
             icon: "/icons/icon-192.png",
             badge: "/icons/icon-192.png",
-            data: { seatId: payload.seatId || null },
-            tag: payload.seatId ? `navispace-${payload.seatId}` : "navispace",
+            data: { seatId: payload.seatId || null, libraryId: payload.libraryId || null },
+            tag: payload.seatId ? `navispace-${payload.libraryId}-${payload.seatId}` : "navispace",
         })
     );
 });
 
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
-    const seatId = event.notification.data && event.notification.data.seatId;
+    const { seatId, libraryId } = event.notification.data || {};
     const targetUrl = seatId
-        ? `/seat.html?seat=${encodeURIComponent(seatId)}`
+        ? `/seat.html?lib=${encodeURIComponent(libraryId || "engineering")}&seat=${encodeURIComponent(seatId)}`
         : "/";
 
     event.waitUntil(

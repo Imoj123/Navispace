@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10182b" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NaviSpace" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>NaviSpace — Lost &amp; Found</title>
+    <style>
+        .lf-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .lf-toolbar .btn {
+            width: auto;
+            margin: 0;
+            padding: 10px 16px;
+            font-size: 0.88rem;
+        }
+
+        .lf-resolve {
+            margin-top: 2px;
+        }
+
+        .lf-claim-note {
+            font-size: 0.78rem;
+            color: var(--slate);
+        }
+    </style>
+</head>
+
+<body>
+    <header class="topbar">
+        <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+        <nav class="topnav" id="topnav"></nav>
+    </header>
+    <div class="context-bar">
+        <span class="library-name" id="libraryName">&nbsp;</span>
+        <a href="/">Change library</a>
+    </div>
+
+    <main>
+        <div class="lf-toolbar">
+            <div>
+                <h1 class="page-title">Lost &amp; found</h1>
+                <p class="page-subtitle" style="margin-bottom:0;">Found something? Post it here. Missing something?
+                    Check below.</p>
+            </div>
+            <button class="btn btn-primary" id="reportToggle">+ Report item</button>
+        </div>
+
+        <form class="lf-form" id="reportForm" style="display:none;">
+            <label for="lfPhoto">Photo</label>
+            <input type="file" accept="image/*" capture="environment" id="lfPhoto" required />
+            <img class="lf-photo-preview" id="lfPreview" alt="" />
+
+            <label for="lfDescription">What is it?</label>
+            <input type="text" id="lfDescription" placeholder="e.g. Blue water bottle" maxlength="200" required />
+
+            <label for="lfLocation">Where was it found? (optional)</label>
+            <input type="text" id="lfLocation" placeholder="e.g. Desk near B2" maxlength="120" />
+
+            <button type="submit" class="btn btn-primary" style="margin-top:16px;">Post to board</button>
+            <div class="toast" id="reportToast"></div>
+        </form>
+
+        <div class="lf-grid" id="grid"></div>
+        <p class="lf-empty" id="empty" style="display:none;">Nothing posted yet.</p>
+    </main>
+
+    <div id="claimModal" class="modal-overlay">
+        <div class="modal-box">
+            <p>I think this is mine. Leave a note so the finder can tell it's really yours (a hidden mark, what's
+                inside, etc.) — they'll hold onto it until you two arrange a handoff.</p>
+            <input type="text" id="claimNote" placeholder="e.g. Has a dent on the bottom-left corner" maxlength="200"
+                style="width:100%; margin-bottom: 14px;" />
+            <button class="btn btn-primary" id="claimSubmit">Send</button>
+            <button class="btn" id="claimCancel">Cancel</button>
+        </div>
+    </div>
+
+    <script src="/client.js"></script>
+    <script>
+        const libraryId = getLibraryIdFromUrl();
+        const identity = getOrCreateIdentity();
+        let claimTargetId = null;
+
+        document.getElementById("topnav").innerHTML = `
+      <a href="${libraryUrl("/library.html", libraryId)}">Map</a>
+      <a href="${libraryUrl("/leaderboard.html", libraryId)}">Leaderboard</a>
+      <a href="${libraryUrl("/lost-found.html", libraryId)}" class="current">Lost &amp; Found</a>
+    `;
+        getLibraries().then((libs) => {
+            const lib = libs.find((l) => l.id === libraryId);
+            document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
+        });
+
+        function timeAgo(ms) {
+            const mins = Math.round((Date.now() - ms) / 60000);
+            if (mins < 1) return "just now";
+            if (mins < 60) return `${mins}m ago`;
+            const hours = Math.round(mins / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return `${Math.round(hours / 24)}d ago`;
+        }
+
+        async function render() {
+            const items = await getLostFoundItems(libraryId);
+            const grid = document.getElementById("grid");
+            const empty = document.getElementById("empty");
+            grid.innerHTML = "";
+
+            if (!items.length) {
+                empty.style.display = "block";
+                return;
+            }
+            empty.style.display = "none";
+
+            for (const item of items) {
+                grid.appendChild(renderCard(item));
+            }
+        }
+
+        function renderCard(item) {
+            const card = document.createElement("div");
+            card.className = "lf-card" + (item.status === "claimed" ? " is-claimed" : "");
+
+            const img = document.createElement("img");
+            img.src = item.photoDataUrl;
+            img.alt = item.description;
+            card.appendChild(img);
+
+            const body = document.createElement("div");
+            body.className = "lf-card-body";
+
+            const desc = document.createElement("div");
+            desc.className = "lf-card-desc";
+            desc.textContent = item.description;
+            body.appendChild(desc);
+
+            const meta = document.createElement("div");
+            meta.className = "lf-card-meta";
+            meta.textContent = [item.location, timeAgo(item.createdAt)].filter(Boolean).join(" · ");
+            body.appendChild(meta);
+
+            const isMine = item.reporterToken === identity.token;
+
+            if (item.status === "claimed") {
+                const chip = document.createElement("div");
+                chip.className = "lf-chip";
+                chip.textContent = `Claimed by ${item.claim.claimantNickname}`;
+                body.appendChild(chip);
+
+                if (item.claim.note) {
+                    const note = document.createElement("div");
+                    note.className = "lf-claim-note";
+                    note.textContent = `“${item.claim.note}”`;
+                    body.appendChild(note);
+                }
+
+                if (isMine) {
+                    const resolveBtn = document.createElement("button");
+                    resolveBtn.className = "btn btn-tinted lf-resolve";
+                    resolveBtn.textContent = "Mark returned";
+                    resolveBtn.onclick = async () => {
+                        await resolveLostFoundItem(libraryId, item.id, identity);
+                        render();
+                    };
+                    body.appendChild(resolveBtn);
+                }
+            } else if (isMine) {
+                const youChip = document.createElement("div");
+                youChip.className = "lf-card-meta";
+                youChip.textContent = "Posted by you";
+                body.appendChild(youChip);
+
+                const resolveBtn = document.createElement("button");
+                resolveBtn.className = "btn btn-tinted lf-resolve";
+                resolveBtn.textContent = "Remove (already handled)";
+                resolveBtn.onclick = async () => {
+                    await resolveLostFoundItem(libraryId, item.id, identity);
+                    render();
+                };
+                body.appendChild(resolveBtn);
+            } else {
+                const claimBtn = document.createElement("button");
+                claimBtn.className = "btn btn-tinted lf-resolve";
+                claimBtn.textContent = "I think this is mine";
+                claimBtn.onclick = () => openClaimModal(item.id);
+                body.appendChild(claimBtn);
+            }
+
+            card.appendChild(body);
+            return card;
+        }
+
+        function openClaimModal(itemId) {
+            claimTargetId = itemId;
+            document.getElementById("claimNote").value = "";
+            document.getElementById("claimModal").style.display = "flex";
+        }
+
+        document.getElementById("claimCancel").onclick = () => {
+            document.getElementById("claimModal").style.display = "none";
+        };
+
+        document.getElementById("claimSubmit").onclick = async () => {
+            const note = document.getElementById("claimNote").value;
+            document.getElementById("claimModal").style.display = "none";
+            const result = await claimLostFoundItem(libraryId, claimTargetId, { identity, note });
+            if (!result.ok) {
+                alert("That item was just claimed by someone else.");
+            }
+            render();
+        };
+
+        // --- Report form -----------------------------------------------------
+
+        const reportForm = document.getElementById("reportForm");
+        document.getElementById("reportToggle").onclick = () => {
+            reportForm.style.display = reportForm.style.display === "none" ? "block" : "none";
+        };
+
+        let pendingPhoto = null;
+        document.getElementById("lfPhoto").onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const preview = document.getElementById("lfPreview");
+            try {
+                pendingPhoto = await downscaleImageFile(file);
+                preview.src = pendingPhoto;
+                preview.style.display = "block";
+            } catch (err) {
+                alert("Couldn't read that photo — try a different one.");
+            }
+        };
+
+        reportForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const toast = document.getElementById("reportToast");
+            const description = document.getElementById("lfDescription").value.trim();
+            const location = document.getElementById("lfLocation").value.trim();
+
+            if (!pendingPhoto) {
+                toast.textContent = "Add a photo first.";
+                return;
+            }
+
+            const result = await reportLostFoundItem(libraryId, {
+                description,
+                location,
+                photoDataUrl: pendingPhoto,
+                identity,
+            });
+
+            if (result.ok) {
+                reportForm.reset();
+                document.getElementById("lfPreview").style.display = "none";
+                pendingPhoto = null;
+                reportForm.style.display = "none";
+                toast.textContent = "";
+                render();
+            } else if (result.reason === "photo_too_large") {
+                toast.textContent = "That photo is too large even after compressing — try a different one.";
+            } else {
+                toast.textContent = "Couldn't post that — try again.";
+            }
+        };
+
+        render();
+        setInterval(render, 20000);
+    </script>
+</body>
+
+</html>

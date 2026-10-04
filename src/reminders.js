@@ -18,13 +18,14 @@ const config = require("./config");
  *
  * A holder with no push subscription, or no VAPID keys configured at
  * all, is a silent no-op via sendPush — this loop never throws on a
- * missing subscription.
+ * missing subscription. Scoped to one library per call, same shape as
+ * sweep.js's sweepExpiredSeats.
  */
-async function sendExpiryReminders(seatIds, now = Date.now()) {
+async function sendExpiryReminders(libraryId, seatIds, now = Date.now()) {
     const reminded = [];
 
     for (const seatId of seatIds) {
-        const seat = await getSeat(seatId);
+        const seat = await getSeat(libraryId, seatId);
         if (!seat.holderToken || seat.reminderSent) continue;
 
         const expiry =
@@ -47,6 +48,7 @@ async function sendExpiryReminders(seatIds, now = Date.now()) {
             title: "NaviSpace",
             body,
             seatId: seat.id,
+            libraryId,
         });
 
         if (result.sent) {
@@ -60,16 +62,19 @@ async function sendExpiryReminders(seatIds, now = Date.now()) {
 }
 
 /**
- * Starts the recurring reminder check. Mirrors sweep.js's
- * startSweepLoop shape (immediate first pass + interval, unref'd so
- * it never holds the process open on its own) so the two background
- * loops behave consistently.
+ * Starts the recurring reminder check across every active library.
+ * Mirrors sweep.js's startSweepLoop shape (immediate first pass +
+ * interval, unref'd so it never holds the process open on its own,
+ * getLibrarySeatGroups resolving to [{ libraryId, seatIds }, ...]) so
+ * the two background loops behave consistently.
  */
-function startReminderLoop(getSeatIds, intervalMs, onReminder) {
+function startReminderLoop(getLibrarySeatGroups, intervalMs, onReminder) {
     const run = async () => {
-        const seatIds = await getSeatIds();
-        const reminded = await sendExpiryReminders(seatIds);
-        if (reminded.length && onReminder) onReminder(reminded);
+        const groups = await getLibrarySeatGroups();
+        for (const { libraryId, seatIds } of groups) {
+            const reminded = await sendExpiryReminders(libraryId, seatIds);
+            if (reminded.length && onReminder) onReminder(libraryId, reminded);
+        }
     };
 
     run();

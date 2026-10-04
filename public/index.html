@@ -17,108 +17,10 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
         rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
-    <title>NaviSpace — Map</title>
+    <title>NaviSpace</title>
     <style>
-        .legend {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px 20px;
-            font-size: 0.82rem;
-            color: var(--slate);
-            margin-bottom: 32px;
-        }
-
-        .legend span {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-        }
-
-        #map {
-            display: flex;
-            justify-content: center;
-            gap: 36px;
-            flex-wrap: wrap;
-        }
-
-        .zone-column {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .zone-label {
-            font-family: var(--font-display);
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: var(--slate);
-            margin-bottom: 4px;
-        }
-
-        .seats {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .seat-tile {
-            width: 58px;
-            height: 58px;
-            border-radius: 9px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: var(--font-display);
-            font-weight: 600;
-            font-size: 0.85rem;
-            border: 2px solid transparent;
-            user-select: none;
-        }
-
-        .seat-tile .staleness-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            margin-top: 4px;
-        }
-
-        .state-AVAILABLE {
-            background: var(--green-dim);
-            color: var(--green);
-        }
-
-        .state-OCCUPIED {
-            background: var(--vermilion-dim);
-            color: #ff8a73;
-        }
-
-        .state-STEPPED_AWAY {
-            background: var(--amber-dim);
-            color: var(--amber);
-        }
-
-        .staleness-high {
-            border-color: currentColor;
-        }
-
-        .staleness-medium {
-            border-color: currentColor;
-            border-style: dashed;
-            opacity: 0.85;
-        }
-
-        .staleness-low {
-            border-color: var(--slate-dim);
-            border-style: dashed;
-            opacity: 0.7;
-        }
-
-        #empty {
-            text-align: center;
-            color: var(--slate);
-            margin-top: 40px;
+        main {
+            max-width: 560px;
         }
     </style>
 </head>
@@ -126,116 +28,51 @@
 <body>
     <header class="topbar">
         <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
-        <nav class="topnav">
-            <a href="/" class="current">Map</a>
-            <a href="/leaderboard.html">Leaderboard</a>
-        </nav>
     </header>
 
     <main>
-        <h1 class="page-title">Study space map</h1>
-        <p class="page-subtitle">Live status only — scan a seat's QR code in person to check in</p>
+        <h1 class="page-title">Choose a library</h1>
+        <p class="page-subtitle">Live seat status, study leaderboards, and lost &amp; found — one per library.</p>
 
-        <div class="legend">
-            <span><span class="signal-dot signal-AVAILABLE"></span>Available</span>
-            <span><span class="signal-dot signal-OCCUPIED"></span>Occupied</span>
-            <span><span class="signal-dot signal-STEPPED_AWAY"></span>Stepped away</span>
-            <span>Solid border = confirmed recently, dashed = getting stale</span>
-        </div>
-
-        <div id="map"></div>
-        <p id="empty" style="display:none;">No seats configured yet.</p>
+        <div class="library-grid" id="libraryGrid"></div>
     </main>
 
     <script src="/client.js"></script>
     <script>
         async function render() {
-            const [seats, config] = await Promise.all([getAllSeats(), getServerConfig()]);
-            const mapEl = document.getElementById("map");
-            const emptyEl = document.getElementById("empty");
-            mapEl.innerHTML = "";
+            const libraries = await getLibraries();
+            const grid = document.getElementById("libraryGrid");
+            grid.innerHTML = "";
 
-            if (!seats.length) {
-                emptyEl.style.display = "block";
-                return;
+            for (const lib of libraries) {
+                const isActive = lib.status === "active";
+                const el = document.createElement(isActive ? "a" : "div");
+                el.className = "library-card" + (isActive ? "" : " is-soon");
+                if (isActive) el.href = libraryUrl("/library.html", lib.id);
+
+                const left = document.createElement("div");
+                const name = document.createElement("div");
+                name.className = "library-card-name";
+                name.textContent = lib.name;
+                left.appendChild(name);
+
+                const meta = document.createElement("div");
+                meta.className = "library-card-meta";
+                meta.textContent = isActive
+                    ? `${lib.seatCount} seat${lib.seatCount === 1 ? "" : "s"} tracked`
+                    : "Not open for check-in yet";
+                left.appendChild(meta);
+
+                const status = document.createElement("div");
+                status.className = "library-card-status " + (isActive ? "active" : "soon");
+                status.textContent = isActive ? "Open" : "Coming soon";
+
+                el.append(left, status);
+                grid.appendChild(el);
             }
-            emptyEl.style.display = "none";
-
-            // Group seats into columns by zone (the letters in the seat ID),
-            // sorted by their trailing number within each column — a simple
-            // bird's-eye layout that works for any SEAT_IDS/SEAT_ZONES
-            // configuration without needing hand-placed coordinates.
-            const byZone = new Map();
-            for (const seat of seats) {
-                const { zone, number } = parseSeatId(seat.id);
-                if (!byZone.has(zone)) byZone.set(zone, []);
-                byZone.get(zone).push({ ...seat, _number: number });
-            }
-
-            // Left-to-right column order: SEAT_ZONE_ORDER (e.g. "C,A,B") if
-            // configured, else alphabetical. Any zone present in the data
-            // but missing from that list is appended afterward, so it never
-            // just vanishes from the map because the env var is stale.
-            const allZones = [...byZone.keys()].sort();
-            let zones;
-            if (Array.isArray(config.ZONE_ORDER) && config.ZONE_ORDER.length) {
-                const ordered = config.ZONE_ORDER.filter((z) => byZone.has(z));
-                const rest = allZones.filter((z) => !ordered.includes(z));
-                zones = [...ordered, ...rest];
-            } else {
-                zones = allZones;
-            }
-
-            for (const zone of zones) {
-                const column = document.createElement("div");
-                column.className = "zone-column";
-
-                const label = document.createElement("div");
-                label.className = "zone-label";
-                label.textContent = zone;
-                column.appendChild(label);
-
-                const seatsEl = document.createElement("div");
-                seatsEl.className = "seats";
-
-                const seatsInZone = byZone.get(zone).sort((a, b) => a._number - b._number);
-                for (const seat of seatsInZone) {
-                    seatsEl.appendChild(renderTile(seat, config));
-                }
-
-                column.appendChild(seatsEl);
-                mapEl.appendChild(column);
-            }
-        }
-
-        function renderTile(seat, config) {
-            // A plain, non-interactive div on purpose: the map is a status
-            // display only. Reserving a seat happens by scanning its actual
-            // physical QR code (which links to seat.html) — there's no
-            // click-through from here, so this tile never becomes a second,
-            // unscanned way to "reserve" a seat.
-            const div = document.createElement("div");
-            div.className = `seat-tile state-${seat.state}`;
-
-            const level = confidenceLevel(seat, config);
-            if (level) div.classList.add(`staleness-${level}`);
-
-            const idEl = document.createElement("div");
-            idEl.textContent = seat.id;
-            div.appendChild(idEl);
-
-            if (level) {
-                const dot = document.createElement("div");
-                dot.className = "staleness-dot";
-                dot.style.background = "currentColor";
-                div.appendChild(dot);
-            }
-
-            return div;
         }
 
         render();
-        setInterval(render, 10000); // keep the map reasonably live
     </script>
 </body>
 
