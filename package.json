@@ -12,9 +12,9 @@
   "author": "Imo Ume <imoume99@gmail.com>",
   "license": "UNLICENSED",
   "dependencies": {
+    "compression": "^1.8.2",
     "express": "^4.19.2",
     "qrcode": "^1.5.3",
     "web-push": "^3.6.7"
   }
 }
-
