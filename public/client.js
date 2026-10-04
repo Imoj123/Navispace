@@ -40,16 +40,36 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 /**
+ * iOS Safari only exposes the Push API to a site that's been added to
+ * the Home Screen and reopened from there — it's absent from an
+ * ordinary browser tab (and from the in-app browser a QR/camera scan
+ * opens into) regardless of iOS version. Detecting that case lets the
+ * UI point at the actual fix ("Add to Home Screen") instead of a flat
+ * "not supported", which reads as a dead end when it isn't one.
+ */
+function isIosNotInstalled() {
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone =
+    window.navigator.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches;
+  return isIos && !isStandalone;
+}
+
+/**
  * Requests notification permission (must be called from a user
  * gesture, e.g. a button click — browsers block silent auto-prompts)
  * and subscribes this device to Web Push, then registers the
  * subscription with the server against this identity's token.
  *
- * Returns { ok, reason? } — reason is one of "unsupported",
- * "permission_denied", "no_vapid_key", or an error message.
+ * Returns { ok, reason? } — reason is one of "ios_not_installed",
+ * "unsupported", "permission_denied", "no_vapid_key", or an error
+ * message.
  */
 async function enablePushReminders(identity) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (isIosNotInstalled()) {
+      return { ok: false, reason: "ios_not_installed" };
+    }
     return { ok: false, reason: "unsupported" };
   }
 

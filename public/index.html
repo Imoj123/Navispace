@@ -4,58 +4,40 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="theme-color" content="#10182b" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NaviSpace" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
     <title>NaviSpace — Map</title>
     <style>
-        body {
-            font-family: system-ui, sans-serif;
-            max-width: 720px;
-            margin: 24px auto;
-            padding: 0 16px;
-        }
-
-        h1 {
-            font-size: 1.4rem;
-            text-align: center;
-            margin-bottom: 4px;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #888;
-            font-size: 0.85rem;
-            margin-bottom: 20px;
-        }
-
         .legend {
             display: flex;
-            justify-content: center;
-            gap: 16px;
-            font-size: 0.8rem;
-            color: #555;
-            margin-bottom: 20px;
             flex-wrap: wrap;
+            gap: 10px 20px;
+            font-size: 0.82rem;
+            color: var(--slate);
+            margin-bottom: 32px;
         }
 
         .legend span {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-        }
-
-        .swatch {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
-            display: inline-block;
+            gap: 7px;
         }
 
         #map {
             display: flex;
             justify-content: center;
-            gap: 28px;
+            gap: 36px;
             flex-wrap: wrap;
         }
 
@@ -67,30 +49,31 @@
         }
 
         .zone-label {
-            font-weight: 700;
-            color: #888;
-            margin-bottom: 2px;
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--slate);
+            margin-bottom: 4px;
         }
 
         .seats {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
 
         .seat-tile {
-            width: 56px;
-            height: 56px;
-            border-radius: 10px;
+            width: 58px;
+            height: 58px;
+            border-radius: 9px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 0.75rem;
-            font-weight: 700;
-            border: 3px solid transparent;
-            color: white;
-            text-decoration: none;
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 0.85rem;
+            border: 2px solid transparent;
             user-select: none;
         }
 
@@ -98,71 +81,71 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            margin-top: 3px;
+            margin-top: 4px;
         }
 
         .state-AVAILABLE {
-            background: #2e9e50;
+            background: var(--green-dim);
+            color: var(--green);
         }
 
         .state-OCCUPIED {
-            background: #d1453b;
+            background: var(--vermilion-dim);
+            color: #ff8a73;
         }
 
         .state-STEPPED_AWAY {
-            background: #c98a1a;
+            background: var(--amber-dim);
+            color: var(--amber);
         }
 
         .staleness-high {
-            border-color: rgba(255, 255, 255, 0.9);
+            border-color: currentColor;
         }
 
         .staleness-medium {
-            border-color: rgba(255, 255, 255, 0.5);
+            border-color: currentColor;
             border-style: dashed;
+            opacity: 0.85;
         }
 
         .staleness-low {
-            border-color: rgba(0, 0, 0, 0.35);
+            border-color: var(--slate-dim);
             border-style: dashed;
+            opacity: 0.7;
         }
 
         #empty {
             text-align: center;
-            color: #888;
+            color: var(--slate);
             margin-top: 40px;
-        }
-
-        .footer-links {
-            text-align: center;
-            margin-top: 28px;
-            font-size: 0.85rem;
-        }
-
-        .footer-links a {
-            color: #555;
-            margin: 0 8px;
         }
     </style>
 </head>
 
 <body>
-    <h1>Study Space Map</h1>
-    <div class="subtitle">Live status only — scan a seat's QR code in person to check in</div>
+    <header class="topbar">
+        <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+        <nav class="topnav">
+            <a href="/" class="current">Map</a>
+            <a href="/leaderboard.html">Leaderboard</a>
+        </nav>
+    </header>
 
-    <div class="legend">
-        <span><span class="swatch state-AVAILABLE"></span>Available</span>
-        <span><span class="swatch state-OCCUPIED"></span>Occupied</span>
-        <span><span class="swatch state-STEPPED_AWAY"></span>Stepped away</span>
-        <span>Solid border = confirmed recently · dashed = getting stale</span>
-    </div>
+    <main>
+        <h1 class="page-title">Study space map</h1>
+        <p class="page-subtitle">Live status only — scan a seat's QR code in person to check in</p>
 
-    <div id="map"></div>
-    <p id="empty" style="display:none;">No seats configured yet.</p>
+        <div class="legend">
+            <span><span class="signal-dot signal-AVAILABLE"></span>Available</span>
+            <span><span class="signal-dot signal-OCCUPIED"></span>Occupied</span>
+            <span><span class="signal-dot signal-STEPPED_AWAY"></span>Stepped away</span>
+            <span>Solid border = confirmed recently, dashed = getting stale</span>
+        </div>
 
-    <div class="footer-links">
-        <a href="/leaderboard.html">Leaderboard</a>
-    </div>
+        <div id="map"></div>
+        <p id="empty" style="display:none;">No seats configured yet.</p>
+    </main>
 
     <script src="/client.js"></script>
     <script>
@@ -244,10 +227,7 @@
             if (level) {
                 const dot = document.createElement("div");
                 dot.className = "staleness-dot";
-                dot.style.background =
-                    level === "high" ? "rgba(255,255,255,0.9)" :
-                        level === "medium" ? "rgba(255,255,255,0.6)" :
-                            "rgba(0,0,0,0.4)";
+                dot.style.background = "currentColor";
                 div.appendChild(dot);
             }
 

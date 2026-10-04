@@ -3,28 +3,86 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#1a1a1a" />
+<meta name="theme-color" content="#10182b" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="icon" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="NaviSpace" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
 <title>NaviSpace — Leaderboard</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
-  h1 { font-size: 1.4rem; text-align: center; }
-  ol { list-style: none; padding: 0; }
-  li { display: flex; justify-content: space-between; padding: 10px 14px; border-radius: 8px; margin: 6px 0; background: #f5f5f5; }
-  li:nth-child(1) { background: #fff3cd; font-weight: 700; }
-  li:nth-child(2) { background: #f0f0f0; font-weight: 600; }
-  .rank { color: #888; margin-right: 10px; }
-  #empty { text-align: center; color: #888; margin-top: 30px; }
+  main { max-width: 480px; }
+
+  .board {
+    border-top: 1px solid var(--line);
+  }
+  .board-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .board-row.top3 {
+    background: var(--panel);
+    margin: 0 -12px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 8px;
+    border-bottom-color: transparent;
+  }
+  .board-row + .board-row.top3 { margin-top: 2px; }
+
+  .rank {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--slate);
+    width: 1.6em;
+    flex-shrink: 0;
+  }
+  .top3 .rank { color: var(--amber); }
+
+  .name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .points {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--slate);
+  }
+  .top3 .points { color: var(--paper); }
+
+  #empty { text-align: center; color: var(--slate); margin-top: 40px; }
 </style>
 </head>
 <body>
-  <h1>Study Leaderboard</h1>
-  <p style="text-align:center; color:#888; font-size:0.85rem;">
-    One point per seat per day — this week
-  </p>
-  <ol id="list"></ol>
-  <p id="empty" style="display:none;">No sessions yet this week — check in to get on the board!</p>
+  <header class="topbar">
+    <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+    <nav class="topnav">
+      <a href="/">Map</a>
+      <a href="/leaderboard.html" class="current">Leaderboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1 class="page-title">Study leaderboard</h1>
+    <p class="page-subtitle">One point per seat per day — this week</p>
+
+    <div class="board" id="list"></div>
+    <p id="empty" style="display:none;">No sessions yet this week — check in to get on the board.</p>
+  </main>
 
   <script src="/client.js"></script>
   <script>
@@ -41,16 +99,24 @@
       empty.style.display = "none";
 
       entries.forEach((e, i) => {
-        const li = document.createElement("li");
-        li.innerHTML = `<span><span class="rank">#${i + 1}</span>${escapeHtml(e.nickname)}</span><span>${e.sessionDays} pt${e.sessionDays === 1 ? "" : "s"}</span>`;
-        list.appendChild(li);
-      });
-    }
+        const row = document.createElement("div");
+        row.className = "board-row" + (i < 3 ? " top3" : "");
 
-    function escapeHtml(s) {
-      const div = document.createElement("div");
-      div.textContent = s;
-      return div.innerHTML;
+        const rank = document.createElement("div");
+        rank.className = "rank";
+        rank.textContent = String(i + 1).padStart(2, "0");
+
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = e.nickname;
+
+        const points = document.createElement("div");
+        points.className = "points";
+        points.textContent = `${e.sessionDays} pt${e.sessionDays === 1 ? "" : "s"}`;
+
+        row.append(rank, name, points);
+        list.appendChild(row);
+      });
     }
 
     render();

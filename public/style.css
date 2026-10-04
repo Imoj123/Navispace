@@ -1,0 +1,252 @@
+/*
+ * NaviSpace shared design system.
+ *
+ * Visual direction: a status board, not a dashboard. Seat occupancy is
+ * exactly the kind of information a departures board or wayfinding
+ * sign exists to carry — flat colour fields that mean one thing each,
+ * generous dark ground, confident numerals. That's the vocabulary
+ * this borrows from, rather than generic SaaS cards.
+ *
+ * Three signal colours (available / occupied / stepped away) are the
+ * only accents in the whole system, and they always mean the same
+ * thing everywhere they appear.
+ */
+
+:root {
+    --ink: #10182b;
+    --panel: #1b2740;
+    --panel-raised: #24324f;
+    --paper: #f4f3ef;
+    --line: rgba(255, 255, 255, 0.1);
+    --line-on-paper: rgba(16, 24, 43, 0.12);
+    --slate: #8d96a8;
+    --slate-dim: #5c6679;
+
+    --green: #35a776;
+    --green-dim: #223c33;
+    --vermilion: #e2472b;
+    --vermilion-dim: #3a2420;
+    --amber: #e8a23d;
+    --amber-dim: #3a301f;
+
+    --font-display: "Space Grotesk", sans-serif;
+    --font-body: "IBM Plex Sans", sans-serif;
+
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+a {
+    color: inherit;
+}
+
+button {
+    font-family: var(--font-body);
+}
+
+:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 2px;
+}
+
+/* --- Top bar: the one piece of chrome every page shares ------------- */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+}
+
+.wordmark {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    color: var(--paper);
+    white-space: nowrap;
+}
+
+.wordmark-mark {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: var(--paper);
+    position: relative;
+    flex-shrink: 0;
+}
+
+.wordmark-mark::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+}
+
+.topnav {
+    display: flex;
+    gap: 22px;
+    font-size: 0.9rem;
+}
+
+.topnav a {
+    text-decoration: none;
+    color: var(--slate);
+    transition: color 0.15s ease;
+}
+
+.topnav a:hover,
+.topnav a.current {
+    color: var(--paper);
+}
+
+/* --- Page shell ------------------------------------------------------ */
+
+main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 36px 20px 56px;
+}
+
+.page-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.5rem;
+    margin: 0 0 6px;
+}
+
+.page-subtitle {
+    color: var(--slate);
+    font-size: 0.92rem;
+    margin: 0 0 28px;
+}
+
+/* --- Status language, shared by seat tiles and the seat card -------- */
+
+.signal-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.signal-AVAILABLE {
+    background: var(--green);
+}
+
+.signal-OCCUPIED {
+    background: var(--vermilion);
+}
+
+.signal-STEPPED_AWAY {
+    background: var(--amber);
+}
+
+/* --- Buttons ---------------------------------------------------------- */
+
+.btn {
+    display: block;
+    width: 100%;
+    padding: 13px 16px;
+    margin: 8px 0;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.95rem;
+    text-align: center;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--paper);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover {
+    border-color: var(--slate);
+}
+
+.btn-primary {
+    background: var(--paper);
+    color: var(--ink);
+    border-color: var(--paper);
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background: #e4e2db;
+    border-color: #e4e2db;
+}
+
+.btn-quiet {
+    background: none;
+    border: none;
+    color: var(--slate);
+    font-size: 0.82rem;
+    font-weight: 400;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    padding: 6px;
+    width: auto;
+    display: inline-block;
+}
+
+.btn-tinted {
+    background: var(--panel-raised);
+    border-color: var(--line);
+    color: var(--paper);
+    font-size: 0.88rem;
+}
+
+/* --- Form controls ----------------------------------------------------- */
+
+input[type="text"] {
+    font-family: var(--font-body);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--paper);
+    border-radius: 7px;
+    padding: 9px 11px;
+    font-size: 0.9rem;
+}
+
+input[type="text"]::placeholder {
+    color: var(--slate-dim);
+}
+
+/* --- Toast -------------------------------------------------------------- */
+
+.toast {
+    margin-top: 14px;
+    font-size: 0.85rem;
+    color: var(--slate);
+    min-height: 1.4em;
+}

@@ -13,13 +13,19 @@
  *   page (or the map if no seat was included).
  */
 
-const CACHE_NAME = "navispace-shell-v1";
+// Bump this whenever the cached shell files change meaningfully (new
+// design, new pages) — activate() deletes any cache under the old
+// name, so this is what actually forces previously-installed devices
+// to pick up the new version instead of serving stale cached HTML
+// forever under a cache-first strategy.
+const CACHE_NAME = "navispace-shell-v2";
 const SHELL_FILES = [
     "/",
     "/index.html",
     "/seat.html",
     "/leaderboard.html",
     "/client.js",
+    "/styles.css",
     "/manifest.json",
     "/icons/icon-192.png",
     "/icons/icon-512.png",
