@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#10182b" />
-<link rel="manifest" href="/manifest.json" />
+<link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
 <link rel="icon" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="NaviSpace" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Galada&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/styles.css" />
 <title>NaviSpace — Seat</title>
 <meta name="description" content="Check in or out of this seat with NaviSpace." />
@@ -26,25 +26,32 @@
 
   .seat-card {
     width: 100%;
-    max-width: 380px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 28px 24px 24px;
+    max-width: 400px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 32px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    padding: 30px 26px 26px;
   }
 
   .seat-card-label {
-    font-size: 0.8rem;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
     color: var(--slate);
-    margin-bottom: 2px;
+    margin-bottom: 4px;
   }
 
   .seat-card-id {
     font-family: var(--font-display);
     font-weight: 700;
-    font-size: 3rem;
-    line-height: 1.05;
-    margin-bottom: 18px;
+    font-size: 4.2rem;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin: 0 0 22px;
   }
 
   .status-band {
@@ -53,8 +60,8 @@
     gap: 9px;
     font-weight: 600;
     font-size: 0.98rem;
-    padding: 12px 14px;
-    border-radius: 9px;
+    padding: 14px 18px;
+    border-radius: 100px;
     margin-bottom: 18px;
   }
 
@@ -81,7 +88,7 @@
   .modal-box p { margin: 0 0 16px; font-size: 0.95rem; }
 </style>
 </head>
-<body>
+<body data-room="library">
   <header class="topbar">
     <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
     <nav class="topnav" id="topnav"></nav>
@@ -281,7 +288,7 @@
         toast("Reminders saved, but the test notification didn't go through — the server's push setup needs checking.");
         refresh();
       } else if (result.reason === "ios_not_installed") {
-        toast("On iPhone: tap Share, then \"Add to Home Screen\" — reopen NaviSpace from there to enable reminders.");
+        toast("On iPhone: tap Share, then \"Add to Home Screen\", and open NaviSpace from the new icon — it opens on this seat, ready for reminders.");
       } else if (result.reason === "unsupported") {
         toast("Reminders aren't supported in this browser.");
       } else if (result.reason === "permission_denied") {
