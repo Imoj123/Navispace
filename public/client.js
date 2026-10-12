@@ -24,6 +24,59 @@ function registerServiceWorker() {
 }
 registerServiceWorker();
 
+function isStandaloneApp() {
+  return (
+    window.navigator.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches
+  );
+}
+
+/**
+ * The installed (Home Screen) app is launched with the identity of the
+ * browser it was installed from: ?handoff=<token>&nick=<nickname>, put
+ * there by the server's dynamic manifest. Adopting it means the app and
+ * the browser that scanned the QR code are the same student — which is
+ * what lets a push subscription made in the app reach the seat checked
+ * into from the browser. Only honoured inside the installed app, so a
+ * shared link can never swap a browser's identity.
+ */
+(function adoptHandoffIdentity() {
+  const params = new URLSearchParams(window.location.search);
+  const handoff = params.get("handoff");
+  if (!handoff) return;
+  if (isStandaloneApp() && /^[0-9a-f-]{36}$/i.test(handoff)) {
+    localStorage.setItem("navispace_token", handoff);
+    const nick = (params.get("nick") || "").trim();
+    if (nick) localStorage.setItem("navispace_nickname", nick.slice(0, 24));
+  }
+  params.delete("handoff");
+  params.delete("nick");
+  const qs = params.toString();
+  history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+})();
+
+/**
+ * Points this page's manifest link at the identity-carrying manifest,
+ * so "Add to Home Screen" installs an app that starts as this student.
+ * Called on load and whenever the identity is created or renamed.
+ */
+function updateManifestHandoff() {
+  const link = document.querySelector('link[rel="manifest"]');
+  const token = localStorage.getItem("navispace_token");
+  if (!link || !token) return;
+  const params = new URLSearchParams({ handoff: token });
+  const nick = localStorage.getItem("navispace_nickname");
+  if (nick && nick !== "Anonymous") params.set("nick", nick);
+  const href = `/manifest.json?${params}`;
+  if (link.getAttribute("href") === href) return;
+  // A fresh element rather than a new href: some browsers (Safari) only
+  // read a manifest link when it's inserted, not when it changes.
+  const fresh = link.cloneNode();
+  fresh.href = href;
+  link.replaceWith(fresh);
+}
+updateManifestHandoff();
+
 /**
  * Converts a URL-safe base64 VAPID public key (as returned by
  * /api/config) into the Uint8Array PushManager.subscribe expects.
@@ -49,10 +102,7 @@ function urlBase64ToUint8Array(base64String) {
  */
 function isIosNotInstalled() {
   const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone =
-    window.navigator.standalone === true ||
-    window.matchMedia("(display-mode: standalone)").matches;
-  return isIos && !isStandalone;
+  return isIos && !isStandaloneApp();
 }
 
 /**
@@ -99,7 +149,7 @@ async function enablePushReminders(identity) {
       body: JSON.stringify({ token: identity.token, subscription }),
     });
     const body = await res.json();
-    return { ok: !!body.ok };
+    return { ok: !!body.ok, testSent: !!body.testSent, testReason: body.testReason || null };
   } catch (err) {
     return { ok: false, reason: String((err && err.message) || err) };
   }
@@ -128,12 +178,14 @@ function getOrCreateIdentity() {
     localStorage.setItem("navispace_nickname", nickname);
   }
 
+  updateManifestHandoff();
   return { token, nickname };
 }
 
 function setNickname(nickname) {
   const clean = (nickname || "").trim() || "Anonymous";
   localStorage.setItem("navispace_nickname", clean);
+  updateManifestHandoff();
   return clean;
 }
 
@@ -151,6 +203,16 @@ function getLibraryIdFromUrl() {
 /** Builds a page URL that carries the given library id along. */
 function libraryUrl(path, libraryId) {
   return `${path}?lib=${encodeURIComponent(libraryId)}`;
+}
+
+/** The seat this device currently holds, if any: { libraryId, seatId, state } or nulls. */
+async function getHeldSeat(token) {
+  const res = await fetch(`/api/held`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return res.json();
 }
 
 async function getLibraries() {

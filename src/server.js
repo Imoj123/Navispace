@@ -1,20 +1,24 @@
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 
 const config = require("./config");
 const { LIBRARIES, getLibrary, isActiveLibrary } = require("./libraries");
 const { getSeatIds, getZoneOrder } = require("./seats");
-const { getSeat, handleScan } = require("./scan");
+const { getSeat, handleScan, findHeldSeat } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
 const { reportSeat } = require("./reports");
-const { saveSubscription, removeSubscription } = require("./push");
+const { saveSubscription, removeSubscription, sendPush } = require("./push");
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem } = require("./lostfound");
 
 const PORT = process.env.PORT || 3000;
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
+const BASE_MANIFEST = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, "manifest.json"), "utf8"));
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Every active library's { libraryId, seatIds } — what the sweep and
  * reminder loops need to check every library in one pass. */
@@ -28,7 +32,33 @@ function activeLibrarySeatGroups() {
 function createApp() {
   const app = express();
   app.use(express.json({ limit: "3mb" })); // lost & found photos ride in the JSON body
-  app.use(express.static(path.join(__dirname, "..", "public")));
+
+  // Uptime pings (cron-job.org / UptimeRobot) hit this to keep the
+  // instance awake: cheap, touches no store, never cached.
+  app.get("/healthz", (_req, res) => {
+    res.set("Cache-Control", "no-store").json({ ok: true, uptime: Math.round(process.uptime()) });
+  });
+
+  // The web app manifest, with the installing device's identity carried
+  // in start_url. iOS gives a Home Screen app its own storage, separate
+  // from Safari, so without this the installed app gets a fresh token —
+  // and its push subscription is filed under a token that never holds a
+  // seat, so reminders never reach it. client.js points the manifest
+  // link here with ?handoff=<token>&nick=<nickname>; the installed app
+  // adopts them on launch (see adoptHandoffIdentity in client.js).
+  app.get("/manifest.json", (req, res) => {
+    const manifest = { ...BASE_MANIFEST, id: "/" };
+    const handoff = String(req.query.handoff || "");
+    if (UUID_RE.test(handoff)) {
+      const params = new URLSearchParams({ handoff });
+      const nick = String(req.query.nick || "").trim().slice(0, 24);
+      if (nick) params.set("nick", nick);
+      manifest.start_url = `/?${params}`;
+    }
+    res.set("Cache-Control", "no-store").type("application/manifest+json").send(JSON.stringify(manifest));
+  });
+
+  app.use(express.static(PUBLIC_DIR));
 
   // --- Libraries ---------------------------------------------------------
 
@@ -196,7 +226,28 @@ function createApp() {
       return res.status(400).json({ ok: false, reason: "missing_fields" });
     }
     await saveSubscription(token, subscription);
-    res.json({ ok: true });
+    // Send one right away so the student sees reminders work end to end
+    // (and a broken VAPID/push setup shows up now, not 55 minutes later).
+    const test = await sendPush(token, {
+      title: "NaviSpace",
+      body: "Reminders are on. We'll ping you before your seat frees up.",
+    });
+    res.json({ ok: true, testSent: test.sent, testReason: test.reason || null });
+  });
+
+  // Body: { token } — which seat (if any) this device holds, across all
+  // active libraries. Lets the home page (and the installed app, which
+  // isn't opened by a QR scan) take a student straight back to it.
+  app.post("/api/held", async (req, res) => {
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ ok: false, reason: "missing_token" });
+    }
+    for (const { libraryId, seatIds } of activeLibrarySeatGroups()) {
+      const seat = await findHeldSeat(libraryId, token, seatIds);
+      if (seat) return res.json({ ok: true, libraryId, seatId: seat.id, state: seat.state });
+    }
+    res.json({ ok: true, libraryId: null, seatId: null });
   });
 
   app.post("/api/push/unsubscribe", async (req, res) => {
