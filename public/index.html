@@ -4,20 +4,20 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#10182b" />
+    <meta name="theme-color" content="#011411" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NaviSpace" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Galada&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
         rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
-    <title>NaviSpace</title>
+    <title>NaviSpace — Find a seat</title>
     <meta name="description" content="Live seat status, study leaderboards, and lost & found for Wits libraries." />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="NaviSpace" />
@@ -26,60 +26,1476 @@
     <meta property="og:image" content="https://navispace-1.onrender.com/icons/icon-512.png" />
     <meta name="twitter:card" content="summary" />
     <style>
-        main {
-            max-width: 560px;
+        /*
+         * The library picker as a hero: each library is a book. Switching
+         * libraries morphs the room colour, spins the book and swaps its
+         * cover at the peak, while the loose books, pages and bookmarks
+         * around it fall into the spine and burst back out.
+         */
+        :root {
+            --muted: rgba(255, 255, 255, 0.72);
+            --glass-bg: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.14);
+            --accent: #fbcfe8;
+            --on-accent: #011d17;
+            --font-heading: "Galada", cursive;
+
+            /* Room colour — tweened per library by the script. */
+            --bg-inner: #0b8a78;
+            --bg-mid: #044e3b;
+            --bg-outer: #011411;
+
+            /* Floating props: cover, page, ribbon. */
+            --fa: #2f8f6f;
+            --fb: #f4ecd8;
+            --fc: #fbcfe8;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            background: radial-gradient(circle at center, var(--bg-inner) 0%, var(--bg-mid) 50%, var(--bg-outer) 100%);
+            background-color: var(--bg-outer);
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        /* --- Rising letters (the soda's bubbles) --------------------------- */
+
+        #motes {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .mote {
+            position: absolute;
+            bottom: -50px;
+            font-family: var(--font-heading);
+            color: #fff;
+            line-height: 1;
+            pointer-events: none;
+            will-change: transform, opacity;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+            10% { opacity: var(--o, 0.4); }
+            90% { opacity: var(--o, 0.4); }
+            100% { transform: translateY(-110vh) translateX(30px) rotate(360deg); opacity: 0; }
+        }
+
+        /* --- Header ------------------------------------------------------- */
+
+        .lp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 1.6rem 4%;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 120;
+        }
+
+        .lp-header .wordmark {
+            font-size: 1.15rem;
+        }
+
+        .lp-nav {
+            display: flex;
+            gap: 0.4rem;
+            padding: 0.4rem;
+            border-radius: 100px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .lp-nav a {
+            font-family: var(--font-display);
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 0.5rem 1.2rem;
+            border-radius: 100px;
+            white-space: nowrap;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .lp-nav a:hover,
+        .lp-nav a.active {
+            background: var(--accent);
+            color: var(--on-accent);
+        }
+
+        .lp-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: none;
+            padding: 0.8rem 1.4rem;
+            border-radius: 100px;
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-decoration: none;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+
+        .lp-pill:hover {
+            background: rgba(0, 0, 0, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .lp-pill[hidden] {
+            display: none;
+        }
+
+        .lp-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            min-width: 150px;
+        }
+
+        .ios-hint {
+            position: fixed;
+            top: 5.2rem;
+            right: 4%;
+            z-index: 130;
+            max-width: 260px;
+            background: var(--panel-raised);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 0.85rem;
+        }
+
+        .ios-hint[hidden] {
+            display: none;
+        }
+
+        /* --- Hero ----------------------------------------------------------- */
+
+        .lp-hero {
+            height: 100%;
+            max-width: none;
+            margin: 0;
+            display: flex;
+            padding: 5rem 4% 0;
+        }
+
+        .lp-content {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            width: 100%;
+            height: 100%;
+        }
+
+        .lp-title,
+        .lp-side {
+            font-family: var(--font-heading);
+            font-size: clamp(4rem, min(10vw, 16vh), 12rem);
+            line-height: 0.8;
+            font-weight: 400;
+            white-space: nowrap;
+            margin: 0;
+            color: #fff;
+        }
+
+        .lp-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            height: 100%;
+            padding: clamp(2rem, 7vh, 6rem) 0;
+            z-index: 100;
+            position: relative;
+        }
+
+        .lp-desc {
+            color: var(--muted);
+            font-size: 1.08rem;
+            line-height: 1.6;
+            max-width: 400px;
+            margin: 0;
+        }
+
+        .lp-desc strong {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .lp-cta {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            padding: 0.4rem 0.4rem 0.4rem 1.5rem;
+            border-radius: 100px;
+            font-weight: 700;
+            text-decoration: none;
+            width: fit-content;
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+
+        .lp-cta:hover {
+            background: rgba(0, 0, 0, 0.7);
+            transform: translateY(-3px);
+        }
+
+        .lp-cta[aria-disabled="true"] {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .lp-plus {
+            background: var(--accent);
+            color: var(--on-accent);
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.4rem;
+            font-weight: 700;
+            line-height: 1;
+            padding-bottom: 2px;
+        }
+
+        .lp-badge {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: auto;
+        }
+
+        .lp-badge-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .lp-badge-icon .signal-dot {
+            width: 12px;
+            height: 12px;
+        }
+
+        .lp-badge-icon .signal-dot.live {
+            animation: pulse 2.4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(53, 167, 118, 0.55); }
+            50% { box-shadow: 0 0 0 7px rgba(53, 167, 118, 0); }
+        }
+
+        .lp-badge-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .lp-badge-title {
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .lp-badge-sub {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        /* --- Background glyphs (the soda's leaves) ------------------------- */
+
+        .glyphs {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .glyph {
+            position: absolute;
+            font-family: var(--font-heading);
+            color: #fff;
+            line-height: 1;
+            opacity: 0.1;
+            will-change: transform;
+        }
+
+        .g1 { top: 8%; left: 14%; font-size: 64px; opacity: 0.16; }
+        .g2 { top: 38%; left: 80%; font-size: 150px; opacity: 0.08; }
+        .g3 { top: 68%; left: 74%; font-size: 84px; opacity: 0.14; }
+        .g4 { top: 82%; left: 22%; font-size: 120px; opacity: 0.07; }
+
+        /* --- The book ---------------------------------------------------- */
+
+        .lp-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0;
+            animation: fadeIn 1.5s ease-out 0.3s forwards, bob 6s ease-in-out infinite;
+            background: radial-gradient(circle at center, rgba(255, 255, 255, 0.07) 0%, transparent 60%);
+        }
+
+        @keyframes fadeIn { to { opacity: 1; } }
+
+        @keyframes bob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .book-wrap {
+            transform: rotate(-8deg);
+        }
+
+        .book-stage {
+            --bw: clamp(190px, min(22vw, 40vh), 320px);
+            --bh: calc(var(--bw) * 1.4);
+            --bd: calc(var(--bw) * 0.2);
+            width: var(--bw);
+            height: var(--bh);
+            perspective: 1600px;
+        }
+
+        .book {
+            --cover: #2f8f6f;
+            --cover-dark: #1d5c48;
+            --foil: #f1dfae;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transform: rotateY(-28deg) rotateX(8deg);
+            will-change: transform;
+        }
+
+        .face {
+            position: absolute;
+            backface-visibility: hidden;
+        }
+
+        .face-front,
+        .face-back {
+            inset: 0;
+            border-radius: 4px 12px 12px 4px;
+        }
+
+        .face-front {
+            transform: translateZ(calc(var(--bd) / 2));
+            background:
+                linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0, rgba(0, 0, 0, 0) 7%, rgba(255, 255, 255, 0.12) 8.5%, rgba(0, 0, 0, 0) 10%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.25)),
+                var(--cover);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 12% 0 16%;
+            color: var(--foil);
+            overflow: hidden;
+        }
+
+        .face-front::before {
+            content: "";
+            position: absolute;
+            inset: 7% 7% 7% 13%;
+            border: 1.5px solid var(--foil);
+            border-radius: 6px;
+            opacity: 0.55;
+        }
+
+        .face-front::after {
+            /* Sheen that slides as the book turns — set by the script. */
+            content: "";
+            position: absolute;
+            inset: -20%;
+            background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.16) 50%, transparent 60%);
+            transform: translateX(var(--sheen, 0%));
+            pointer-events: none;
+        }
+
+        .cover-kicker {
+            font-family: var(--font-display);
+            font-size: calc(var(--bw) * 0.042);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            opacity: 0.85;
+        }
+
+        .cover-title {
+            font-family: var(--font-heading);
+            /* --ts is set per library so the longest word fits one line. */
+            font-size: calc(var(--bw) * var(--ts, 0.2));
+            line-height: 0.95;
+            margin: 0.35em 0 0.15em;
+            overflow-wrap: break-word;
+        }
+
+        .cover-sub {
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: calc(var(--bw) * 0.05);
+            letter-spacing: 0.32em;
+            text-transform: uppercase;
+        }
+
+        .cover-rule {
+            width: 28%;
+            height: 1.5px;
+            background: var(--foil);
+            opacity: 0.6;
+            margin: 1.1em 0;
+        }
+
+        .cover-mark {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: calc(var(--bw) * 0.045);
+            letter-spacing: 0.04em;
+        }
+
+        .cover-mark .wordmark-mark {
+            width: 1.4em;
+            height: 1.4em;
+            border-radius: 0.4em;
+        }
+
+        .cover-mark .wordmark-mark::after {
+            width: 0.56em;
+            height: 0.56em;
+        }
+
+        .cover-ribbon {
+            position: absolute;
+            top: 9%;
+            right: -9%;
+            transform: rotate(35deg);
+            background: var(--accent);
+            color: var(--on-accent);
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: calc(var(--bw) * 0.038);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            padding: 0.5em 3em;
+        }
+
+        .cover-ribbon[hidden] {
+            display: none;
+        }
+
+        .face-back {
+            transform: rotateY(180deg) translateZ(calc(var(--bd) / 2));
+            background: linear-gradient(200deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.3)), var(--cover-dark);
+        }
+
+        .face-spine {
+            top: 0;
+            height: 100%;
+            width: var(--bd);
+            left: calc(50% - var(--bd) / 2);
+            transform: rotateY(-90deg) translateZ(calc(var(--bw) / 2));
+            background:
+                linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.12) 45%, rgba(0, 0, 0, 0.3)),
+                var(--cover-dark);
+            border-radius: 6px 2px 2px 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--foil);
+        }
+
+        .spine-title {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: calc(var(--bd) * 0.32);
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .face-pages {
+            top: 1.5%;
+            height: 97%;
+            width: calc(var(--bd) - 4px);
+            left: calc(50% - (var(--bd) - 4px) / 2);
+            transform: rotateY(90deg) translateZ(calc(var(--bw) / 2 - 5px));
+            background:
+                repeating-linear-gradient(90deg, #efe6cf 0 2px, #d9cdb0 2px 3px),
+                #efe6cf;
+        }
+
+        .face-top,
+        .face-bottom {
+            left: 1%;
+            width: calc(100% - 6px);
+            height: calc(var(--bd) - 4px);
+            top: calc(50% - (var(--bd) - 4px) / 2);
+            background:
+                repeating-linear-gradient(0deg, #efe6cf 0 2px, #d9cdb0 2px 3px),
+                #efe6cf;
+        }
+
+        .face-top {
+            transform: rotateX(90deg) translateZ(calc(var(--bh) / 2 - 4px));
+        }
+
+        .face-bottom {
+            transform: rotateX(-90deg) translateZ(calc(var(--bh) / 2 - 4px));
+        }
+
+        /* --- Floating props (the soda's berries) ---------------------------- */
+
+        .props,
+        .props-bg {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .props {
+            z-index: 110;
+        }
+
+        .props-bg {
+            z-index: 0;
+        }
+
+        .prop {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            overflow: visible;
+            filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
+            will-change: transform;
+        }
+
+        .p1 { top: 22%; left: 28%; width: 150px; height: 150px; }
+        .p2 { top: 62%; left: 41%; width: 84px; height: 84px; }
+        .p3 { top: 26%; left: 63%; width: 170px; height: 170px; }
+        .p4 { top: 12%; left: 47%; width: 96px; height: 96px; }
+        .p5 { top: 74%; left: 19%; width: 104px; height: 104px; }
+        .p6 { top: 50%; left: 74%; width: 128px; height: 128px; }
+        .p7 { top: 14%; left: 38%; width: 64px; height: 64px; opacity: 0.6; }
+        .p8 { top: 52%; left: 56%; width: 56px; height: 56px; opacity: 0.5; }
+        .p9 { top: 80%; left: 34%; width: 60px; height: 60px; opacity: 0.6; }
+
+        /* --- Right column: the shelf ---------------------------------------- */
+
+        .lp-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-end;
+            text-align: right;
+            height: 100%;
+            padding: clamp(2rem, 7vh, 6rem) 0;
+            z-index: 100;
+            width: 460px;
+            pointer-events: none;
+        }
+
+        .lp-carousel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            align-items: flex-end;
+            pointer-events: auto;
+            max-width: 100%;
+        }
+
+        .lp-cards {
+            display: flex;
+            gap: 1rem;
+            /* Room above the cards for the mini books to lift into on hover
+               (a scrolling row clips both axes). */
+            padding-top: 5.5rem;
+            margin-top: -2rem;
+            overflow-x: auto;
+            scrollbar-width: none;
+            max-width: 100%;
+        }
+
+        .lp-cards::-webkit-scrollbar {
+            display: none;
+        }
+
+        .lp-card {
+            flex-shrink: 0;
+            width: 128px;
+            padding: 3.4rem 0.8rem 1rem;
+            border-radius: 28px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.1rem;
+            color: #fff;
+            font-family: var(--font-body);
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.4s ease;
+        }
+
+        .lp-card:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .lp-card[aria-pressed="true"] {
+            border-color: var(--accent);
+        }
+
+        .mini-book {
+            width: 66px;
+            height: 92px;
+            margin-top: -6.4rem;
+            border-radius: 3px 7px 7px 3px;
+            background:
+                linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0, rgba(0, 0, 0, 0) 12%, rgba(255, 255, 255, 0.15) 14%, rgba(0, 0, 0, 0) 17%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.22)),
+                var(--cover);
+            box-shadow: 6px 0 0 -1px #efe6cf, 7px 1px 0 -1px #d9cdb0, 0 18px 30px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-heading);
+            font-size: 2rem;
+            color: var(--foil);
+            transform: rotate(-6deg);
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .lp-card:hover .mini-book {
+            transform: translateY(-22px) rotate(-14deg) scale(1.12);
+        }
+
+        .lp-card-name {
+            font-size: 0.76rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .lp-card-status {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--muted);
+            font-weight: 400;
+            margin-top: 2px;
+        }
+
+        .lp-arrows {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .lp-arrow {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: background 0.3s;
+        }
+
+        .lp-arrow:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .lp-side {
+            align-self: flex-end;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+        }
+
+        /* --- Smaller screens: stack, and let the page scroll ------------------ */
+
+        @media (max-width: 1100px) {
+            .lp-right {
+                width: 380px;
+            }
+
+            .lp-side {
+                display: none;
+            }
+
+            .lp-right {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 860px) {
+            body {
+                overflow-x: hidden;
+                overflow-y: auto;
+                height: auto;
+                min-height: 100dvh;
+                background-attachment: fixed;
+            }
+
+            .lp-header {
+                position: absolute;
+                flex-wrap: wrap;
+                padding: 1.1rem 16px;
+            }
+
+            .lp-nav {
+                order: 3;
+                width: 100%;
+                overflow-x: auto;
+                scrollbar-width: none;
+            }
+
+            .lp-nav a {
+                padding: 0.45rem 0.9rem;
+            }
+
+            .lp-actions {
+                min-width: 0;
+            }
+
+            .lp-pill {
+                padding: 0.65rem 1rem;
+            }
+
+            .lp-hero {
+                height: auto;
+                padding: 8.2rem 16px 2rem;
+            }
+
+            .lp-content {
+                flex-direction: column;
+                height: auto;
+                gap: 1.5rem;
+            }
+
+            .lp-center {
+                position: relative;
+                inset: auto;
+                order: -1;
+                height: min(42vh, 360px);
+            }
+
+            .book-stage {
+                --bw: min(48vw, 27vh, 230px);
+            }
+
+            .lp-left {
+                height: auto;
+                padding: 0;
+                gap: 1.3rem;
+            }
+
+            .lp-title {
+                font-size: clamp(3.6rem, 17vw, 5.4rem);
+                white-space: normal;
+            }
+
+            .lp-badge {
+                margin-top: 0.4rem;
+            }
+
+            .lp-right {
+                width: 100%;
+                height: auto;
+                padding: 0;
+                align-items: stretch;
+                text-align: left;
+            }
+
+            .lp-carousel {
+                align-items: stretch;
+            }
+
+            .lp-arrows {
+                display: none;
+            }
+
+            /* Behind the text on a phone, and fewer of them. */
+            .props {
+                z-index: 0;
+            }
+
+            .props .p1,
+            .props .p2,
+            .props .p3,
+            .props .p5,
+            .props .p6 {
+                display: none;
+            }
+
+            .lp-nav a {
+                font-size: 0.8rem;
+                padding: 0.45rem 0.8rem;
+            }
+
+            .ios-hint {
+                position: absolute;
+                top: 4.4rem;
+                right: 16px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .lp-center {
+                animation: fadeIn 0.6s ease-out forwards;
+            }
+
+            #motes,
+            .props,
+            .props-bg {
+                display: none;
+            }
         }
     </style>
 </head>
 
 <body>
-    <header class="topbar">
+    <div id="motes" aria-hidden="true"></div>
+
+    <header class="lp-header">
         <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+        <nav class="lp-nav" aria-label="Sections">
+            <a href="/" class="active" aria-current="page">Home</a>
+            <a href="/library.html" data-path="/library.html">Map</a>
+            <a href="/leaderboard.html" data-path="/leaderboard.html">Leaderboard</a>
+            <a href="/lost-found.html" data-path="/lost-found.html">Lost &amp; Found</a>
+        </nav>
+        <div class="lp-actions">
+            <a class="lp-pill" id="heldPill" href="#" hidden><span class="signal-dot signal-OCCUPIED"></span><span
+                    id="heldText">Your seat</span></a>
+            <button class="lp-pill" id="installBtn" type="button" hidden>Install app</button>
+        </div>
     </header>
+    <div class="ios-hint" id="iosHint" role="status" hidden>
+        Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Open NaviSpace from there to get seat
+        reminders.
+    </div>
 
-    <main>
-        <h1 class="page-title">Choose a library</h1>
-        <p class="page-subtitle">Live seat status, study leaderboards, and lost &amp; found — one per library.</p>
+    <main class="lp-hero">
+        <div class="lp-content" id="content">
+            <div class="glyphs" aria-hidden="true">
+                <span class="glyph g1">&amp;</span>
+                <span class="glyph g2">¶</span>
+                <span class="glyph g3">§</span>
+                <span class="glyph g4">Aa</span>
+            </div>
 
-        <div class="library-grid" id="libraryGrid"></div>
+            <div class="lp-left">
+                <h1 class="lp-title">Find a<br>seat</h1>
+                <p class="lp-desc" id="desc">
+                    Live seat status for <strong id="descName">your library</strong>. Scan the QR code on any desk to
+                    check in, hold your seat while you step away, and climb this week's study board.
+                </p>
+                <a class="lp-cta" id="cta" href="/library.html">
+                    <span id="ctaText">Open the map</span>
+                    <span class="lp-plus" aria-hidden="true">+</span>
+                </a>
+                <div class="lp-badge">
+                    <div class="lp-badge-icon"><span class="signal-dot signal-AVAILABLE" id="badgeDot"></span></div>
+                    <div class="lp-badge-text">
+                        <span class="lp-badge-title" id="badgeTitle">Live now</span>
+                        <span class="lp-badge-sub" id="badgeSub" aria-live="polite">Checking seats…</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="props-bg" aria-hidden="true">
+                <svg class="prop p7"><use href="#g-page" /></svg>
+                <svg class="prop p8"><use href="#g-mark" /></svg>
+                <svg class="prop p9"><use href="#g-book" /></svg>
+            </div>
+
+            <div class="lp-center" aria-hidden="true">
+                <div class="book-wrap" id="bookWrap">
+                    <div class="book-stage">
+                        <div class="book" id="book">
+                            <div class="face face-front">
+                                <div class="cover-kicker">Wits · Vol. I</div>
+                                <div class="cover-title" id="coverTitle">Engineering</div>
+                                <div class="cover-sub">Library</div>
+                                <div class="cover-rule"></div>
+                                <div class="cover-mark"><span class="wordmark-mark"></span>navispace</div>
+                                <div class="cover-ribbon" id="coverRibbon" hidden>Opening soon</div>
+                            </div>
+                            <div class="face face-back"></div>
+                            <div class="face face-spine"><span class="spine-title" id="spineTitle">Engineering</span>
+                            </div>
+                            <div class="face face-pages"></div>
+                            <div class="face face-top"></div>
+                            <div class="face face-bottom"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="props" aria-hidden="true">
+                <svg class="prop p1"><use href="#g-book" /></svg>
+                <svg class="prop p2"><use href="#g-mark" /></svg>
+                <svg class="prop p3"><use href="#g-open" /></svg>
+                <svg class="prop p4"><use href="#g-page" /></svg>
+                <svg class="prop p5"><use href="#g-open" /></svg>
+                <svg class="prop p6"><use href="#g-book" /></svg>
+            </div>
+
+            <div class="lp-right">
+                <div class="lp-carousel">
+                    <h2 class="sr-only">Libraries</h2>
+                    <div class="lp-cards" id="cards"></div>
+                    <div class="lp-arrows">
+                        <button class="lp-arrow" id="prevLib" type="button" aria-label="Previous library">←</button>
+                        <button class="lp-arrow" id="nextLib" type="button" aria-label="Next library">→</button>
+                    </div>
+                </div>
+                <p class="lp-side" aria-hidden="true">Study<br>together</p>
+            </div>
+        </div>
     </main>
 
+    <!-- Props, drawn once and reused. Colours follow the room (--fa/--fb/--fc). -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="g-book" viewBox="0 0 100 100">
+            <g transform="rotate(-12 50 50)">
+                <rect x="20" y="14" width="58" height="76" rx="4" style="fill:#efe6cf" />
+                <rect x="16" y="10" width="58" height="76" rx="4" style="fill:var(--fa)" />
+                <rect x="16" y="10" width="9" height="76" rx="3" style="fill:#000;opacity:.25" />
+                <rect x="33" y="30" width="30" height="3" rx="1.5" style="fill:var(--fb);opacity:.85" />
+                <rect x="33" y="37" width="20" height="3" rx="1.5" style="fill:var(--fb);opacity:.6" />
+            </g>
+        </symbol>
+        <symbol id="g-open" viewBox="0 0 100 100">
+            <path d="M8 34 Q30 24 50 36 Q70 24 92 34 L92 78 Q70 68 50 80 Q30 68 8 78 Z" style="fill:var(--fa)" />
+            <path d="M12 30 Q31 21 50 32 L50 74 Q31 63 12 72 Z" style="fill:var(--fb)" />
+            <path d="M88 30 Q69 21 50 32 L50 74 Q69 63 88 72 Z" style="fill:#e6dcc2" />
+            <path d="M20 38 Q32 33 44 39 M20 46 Q32 41 44 47 M20 54 Q32 49 44 55 M56 39 Q68 33 80 38 M56 47 Q68 41 80 46"
+                style="fill:none;stroke:var(--fa);stroke-width:1.6;opacity:.45;stroke-linecap:round" />
+        </symbol>
+        <symbol id="g-page" viewBox="0 0 100 100">
+            <g transform="rotate(10 50 50)">
+                <path d="M24 10 H66 L78 22 V90 H24 Z" style="fill:var(--fb)" />
+                <path d="M66 10 V22 H78 Z" style="fill:#d9cdb0" />
+                <path d="M33 34 H69 M33 44 H69 M33 54 H69 M33 64 H58"
+                    style="stroke:var(--fa);stroke-width:3;stroke-linecap:round;opacity:.55" />
+            </g>
+        </symbol>
+        <symbol id="g-mark" viewBox="0 0 100 100">
+            <g transform="rotate(-18 50 50)">
+                <path d="M36 6 H64 V92 L50 78 L36 92 Z" style="fill:var(--fc)" />
+                <path d="M36 6 H64 V16 H36 Z" style="fill:#000;opacity:.12" />
+            </g>
+        </symbol>
+    </svg>
+
     <script src="/client.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
     <script>
-        async function render() {
-            const libraries = await getLibraries();
-            const grid = document.getElementById("libraryGrid");
-            grid.innerHTML = "";
+        // One room per library, by position (libraries come from the
+        // server's LIBRARIES config, so this cycles if there are more).
+        const THEMES = [
+            { inner: "#0b8a78", mid: "#044e3b", outer: "#011411", cover: "#2f8f6f", coverDark: "#1d5c48", foil: "#f1dfae" },
+            { inner: "#0b4f8a", mid: "#04294e", outer: "#010c14", cover: "#2a5d9f", coverDark: "#1a3d6b", foil: "#f3e4bd" },
+            { inner: "#8a2b4f", mid: "#4e0f2a", outer: "#14010a", cover: "#a03a5c", coverDark: "#66223b", foil: "#f6dfc0" },
+            { inner: "#8a5a0b", mid: "#4e3004", outer: "#140c01", cover: "#a8742a", coverDark: "#6b4816", foil: "#fbe9c4" },
+        ];
+        const PROP_KINDS = ["book", "open", "page", "mark"];
+        const LIBS_CACHE_KEY = "navispace_libs_cache";
+        const LAST_LIB_KEY = "navispace_last_lib";
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-            for (const lib of libraries) {
-                const isActive = lib.status === "active";
-                const el = document.createElement(isActive ? "a" : "div");
-                el.className = "library-card" + (isActive ? "" : " is-soon");
-                if (isActive) el.href = libraryUrl("/library.html", lib.id);
+        const $ = (id) => document.getElementById(id);
+        const book = $("book");
+        const bookWrap = $("bookWrap");
+        const content = $("content");
+        const propsFG = document.querySelector(".props");
+        const propsBG = document.querySelector(".props-bg");
+        const glyphs = document.querySelectorAll(".glyph");
+        const allProps = [...document.querySelectorAll(".prop")];
 
-                const left = document.createElement("div");
-                const name = document.createElement("div");
-                name.className = "library-card-name";
-                name.textContent = lib.name;
-                left.appendChild(name);
+        let libraries = [];
+        let current = -1;
+        let isSwitching = false;
+        let switchSpin = 0;
+        let statsTimer = null;
 
-                const meta = document.createElement("div");
-                meta.className = "library-card-meta";
-                meta.textContent = isActive
-                    ? `${lib.seatCount} seat${lib.seatCount === 1 ? "" : "s"} tracked`
-                    : "Not open for check-in yet";
-                left.appendChild(meta);
-
-                const status = document.createElement("div");
-                status.className = "library-card-status " + (isActive ? "active" : "soon");
-                status.textContent = isActive ? "Open" : "Coming soon";
-
-                el.append(left, status);
-                grid.appendChild(el);
-            }
+        function safeGet(key) {
+            try { return localStorage.getItem(key); } catch { return null; }
+        }
+        function safeSet(key, value) {
+            try { localStorage.setItem(key, value); } catch { }
         }
 
-        render();
+        const themeFor = (i) => THEMES[i % THEMES.length];
+        // "Engineering Library" → "Engineering" for the cover and card.
+        const shortName = (name) => name.replace(/\s+library$/i, "");
+
+        function setCover(i) {
+            const lib = libraries[i];
+            const t = themeFor(i);
+            book.style.setProperty("--cover", t.cover);
+            book.style.setProperty("--cover-dark", t.coverDark);
+            book.style.setProperty("--foil", t.foil);
+            const title = shortName(lib.name);
+            const longest = Math.max(...title.split(/\s+/).map((w) => w.length));
+            $("coverTitle").style.setProperty("--ts", Math.min(0.2, 1.45 / longest).toFixed(3));
+            $("coverTitle").textContent = title;
+            $("spineTitle").textContent = shortName(lib.name);
+            $("coverRibbon").hidden = lib.status === "active";
+        }
+
+        function setRoomInstant(t) {
+            const s = document.body.style;
+            s.setProperty("--bg-inner", t.inner);
+            s.setProperty("--bg-mid", t.mid);
+            s.setProperty("--bg-outer", t.outer);
+            s.setProperty("--fa", t.cover);
+        }
+
+        function renderCards() {
+            const wrap = $("cards");
+            wrap.innerHTML = "";
+            libraries.forEach((lib, i) => {
+                const t = themeFor(i);
+                const card = document.createElement("button");
+                card.type = "button";
+                card.className = "lp-card";
+                card.setAttribute("aria-pressed", "false");
+                card.style.setProperty("--cover", t.cover);
+                card.style.setProperty("--foil", t.foil);
+
+                const mini = document.createElement("span");
+                mini.className = "mini-book";
+                mini.setAttribute("aria-hidden", "true");
+                mini.textContent = shortName(lib.name).charAt(0);
+
+                const name = document.createElement("span");
+                name.className = "lp-card-name";
+                name.textContent = shortName(lib.name);
+                const status = document.createElement("span");
+                status.className = "lp-card-status";
+                status.textContent = lib.status === "active"
+                    ? `Open · ${lib.seatCount} seat${lib.seatCount === 1 ? "" : "s"}`
+                    : "Coming soon";
+                name.appendChild(status);
+
+                card.append(mini, name);
+                card.addEventListener("click", () => selectLibrary(i));
+                wrap.appendChild(card);
+            });
+        }
+
+        function updateCopy(i) {
+            const lib = libraries[i];
+            const active = lib.status === "active";
+            $("descName").textContent = lib.name;
+            document.querySelectorAll(".lp-nav a[data-path]").forEach((a) => {
+                a.href = libraryUrl(a.dataset.path, lib.id);
+            });
+            const cta = $("cta");
+            cta.href = active ? libraryUrl("/library.html", lib.id) : "#";
+            cta.setAttribute("aria-disabled", active ? "false" : "true");
+            $("ctaText").textContent = active ? "Open the map" : "Opening soon";
+            document.querySelectorAll(".lp-card").forEach((c, j) => c.setAttribute("aria-pressed", String(j === i)));
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.content = themeFor(i).outer;
+            refreshStats();
+        }
+
+        async function refreshStats() {
+            clearTimeout(statsTimer);
+            const lib = libraries[current];
+            if (!lib) return;
+            const dot = $("badgeDot");
+            if (lib.status !== "active") {
+                $("badgeTitle").textContent = "Coming soon";
+                $("badgeSub").textContent = "Not open for check-in yet";
+                dot.className = "signal-dot signal-STEPPED_AWAY";
+                return;
+            }
+            try {
+                const seats = await getAllSeats(lib.id);
+                if (libraries[current] !== lib || !Array.isArray(seats)) return;
+                const free = seats.filter((s) => s.state === "AVAILABLE").length;
+                $("badgeTitle").textContent = "Live now";
+                $("badgeSub").textContent = `${free} of ${seats.length} seat${seats.length === 1 ? "" : "s"} free`;
+                dot.className = "signal-dot live " + (free ? "signal-AVAILABLE" : "signal-OCCUPIED");
+            } catch {
+                $("badgeSub").textContent = "Waking up the server…";
+            }
+            statsTimer = setTimeout(refreshStats, 20000);
+        }
+
+        function selectLibrary(i, { instant = false } = {}) {
+            if (!libraries.length) return;
+            i = (i + libraries.length) % libraries.length;
+            if (i === current || isSwitching) return;
+            const first = current === -1;
+            current = i;
+            safeSet(LAST_LIB_KEY, libraries[i].id);
+            updateCopy(i);
+
+            if (first || instant || reduceMotion || !window.gsap) {
+                setRoomInstant(themeFor(i));
+                setCover(i);
+                return;
+            }
+            switchLibrary(i);
+        }
+
+        function switchLibrary(i) {
+            isSwitching = true;
+            const t = themeFor(i);
+
+            // 1. The room morphs.
+            gsap.to(document.body, {
+                "--bg-inner": t.inner,
+                "--bg-mid": t.mid,
+                "--bg-outer": t.outer,
+                "--fa": t.cover,
+                duration: 1.5,
+                ease: "power2.inOut",
+            });
+
+            // 2. The book spins 720° with a motion blur; the cover swaps at the peak.
+            const spin = { val: 0, blur: 0 };
+            gsap.to(spin, {
+                val: 360,
+                blur: 15,
+                duration: 0.6,
+                ease: "power2.in",
+                onUpdate: () => {
+                    switchSpin = spin.val;
+                    bookWrap.style.filter = `blur(${spin.blur}px)`;
+                },
+                onComplete: () => {
+                    setCover(i);
+                    gsap.to(spin, {
+                        val: 720,
+                        blur: 0,
+                        duration: 1.5,
+                        ease: "back.out(0.7)",
+                        onUpdate: () => {
+                            switchSpin = spin.val;
+                            bookWrap.style.filter = `blur(${spin.blur}px)`;
+                        },
+                        onComplete: () => {
+                            switchSpin = 0;
+                            bookWrap.style.filter = "none";
+                        },
+                    });
+                },
+            });
+
+            // 3. Props fall into the book, change shape, and burst back out.
+            const visible = allProps.filter((p) => p.offsetParent !== null);
+            if (!visible.length) {
+                isSwitching = false;
+                return;
+            }
+            const bookRect = book.getBoundingClientRect();
+            const bookCX = bookRect.left + bookRect.width / 2;
+            const bookCY = bookRect.top + bookRect.height / 2;
+            const center = document.querySelector(".lp-center");
+            let done = 0;
+
+            const layerOffset = (prop) => {
+                const m = new DOMMatrixReadOnly(getComputedStyle(prop.parentNode).transform);
+                return { x: m.m41, y: m.m42 };
+            };
+
+            visible.forEach((prop) => {
+                const st = prop._st;
+                const off = layerOffset(prop);
+                const nextX = (Math.random() - 0.5) * 200;
+                const nextY = (Math.random() - 0.5) * 200;
+
+                gsap.set(prop, { rotation: st.angle, x: st.baseX + st.rx, y: st.baseY + st.ry });
+                gsap.timeline()
+                    .to(prop, {
+                        x: bookCX - st.cx0 - off.x,
+                        y: bookCY - (st.cy0 - window.scrollY) - off.y,
+                        rotation: st.angle + 45,
+                        scale: 0.1,
+                        opacity: 0,
+                        duration: 0.5,
+                        ease: "power2.in",
+                        onComplete: () => {
+                            const use = prop.querySelector("use");
+                            const kind = use.getAttribute("href").slice(3);
+                            const others = PROP_KINDS.filter((k) => k !== kind);
+                            use.setAttribute("href", "#g-" + others[Math.floor(Math.random() * others.length)]);
+                            center.style.zIndex = 50;
+                        },
+                    })
+                    .to(prop, { duration: 0.3 })
+                    .to(prop, {
+                        onStart: () => { center.style.zIndex = 1; },
+                        x: nextX,
+                        y: nextY,
+                        rotation: st.angle + 90,
+                        scale: 1,
+                        opacity: st.opacity,
+                        duration: 0.9,
+                        ease: "back.out(1.5)",
+                        onComplete: () => {
+                            st.angle += 90;
+                            st.baseX = nextX;
+                            st.baseY = nextY;
+                            st.rx = 0;
+                            st.ry = 0;
+                            if (++done === visible.length) isSwitching = false;
+                        },
+                    });
+            });
+        }
+
+        // --- Motion: tilt toward the pointer, parallax, repulsion, float ----
+
+        const mouse = { x: 0, y: 0, px: -9999, py: -9999, at: 0 };
+        const cur = { x: 0, y: 0 };
+
+        window.addEventListener("pointermove", (e) => {
+            mouse.x = e.clientX / window.innerWidth - 0.5;
+            mouse.y = e.clientY / window.innerHeight - 0.5;
+            mouse.px = e.clientX;
+            mouse.py = e.clientY;
+            mouse.at = performance.now();
+        }, { passive: true });
+
+        allProps.forEach((p) => {
+            p._st = {
+                rx: 0, ry: 0, angle: Math.random() * 360, baseX: 0, baseY: 0, cx0: 0, cy0: 0,
+                opacity: parseFloat(getComputedStyle(p).opacity) || 1,
+            };
+        });
+
+        // Each prop's resting centre, measured once per layout instead of
+        // every frame (reading layout inside the loop forces reflows).
+        function measureProps() {
+            const r = content.getBoundingClientRect();
+            allProps.forEach((p) => {
+                p._st.cx0 = r.left + p.offsetLeft + p.offsetWidth / 2;
+                p._st.cy0 = r.top + window.scrollY + p.offsetTop + p.offsetHeight / 2;
+            });
+        }
+
+        function animate() {
+            const time = performance.now() * 0.001;
+
+            // No pointer for a while (phones): drift gently on our own.
+            if (performance.now() - mouse.at > 4000) {
+                mouse.x = Math.sin(time * 0.35) * 0.22;
+                mouse.y = Math.cos(time * 0.27) * 0.12;
+            }
+            cur.x += (mouse.x - cur.x) * 0.05;
+            cur.y += (mouse.y - cur.y) * 0.05;
+
+            const rotY = -28 + cur.x * 40 + switchSpin;
+            const rotX = 8 - cur.y * 20;
+            book.style.transform = `rotateY(${rotY}deg) rotateX(${rotX}deg)`;
+            book.style.setProperty("--sheen", `${(-cur.x * 60).toFixed(1)}%`);
+
+            const fg = { x: cur.x * 60, y: cur.y * 60 };
+            const bg = { x: cur.x * -30, y: cur.y * -30 };
+            propsFG.style.transform = `translate(${fg.x}px, ${fg.y}px)`;
+            propsBG.style.transform = `translate(${bg.x}px, ${bg.y}px)`;
+
+            if (!isSwitching) {
+                const scrollY = window.scrollY;
+                allProps.forEach((prop, i) => {
+                    const st = prop._st;
+                    const layer = prop.parentNode === propsFG ? fg : bg;
+                    const px = st.cx0 + layer.x + st.rx + st.baseX;
+                    const py = st.cy0 - scrollY + layer.y + st.ry + st.baseY;
+                    const dx = mouse.px - px;
+                    const dy = mouse.py - py;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    let tx = 0, ty = 0, speed = 1;
+                    if (dist < 400) {
+                        const force = (400 - dist) / 400;
+                        tx = (dx / dist) * force * -80;
+                        ty = (dy / dist) * force * -80;
+                        speed = 1 + force * 5;
+                    }
+                    st.rx += (tx - st.rx) * 0.1;
+                    st.ry += (ty - st.ry) * 0.1;
+                    st.angle += 0.2 * speed;
+
+                    const dur = [5, 7, 6, 8, 5.5, 6.5, 9, 11, 10][i % 9];
+                    const phase = (time + i * 0.7) * (Math.PI * 2 / dur);
+                    const floatY = Math.sin(phase) * 15;
+                    const floatAngle = Math.cos(phase) * 6;
+                    prop.style.transform =
+                        `translate(${st.rx + st.baseX}px, ${st.ry + st.baseY + floatY}px) rotate(${st.angle + floatAngle}deg)`;
+                });
+            }
+
+            glyphs.forEach((g, i) => {
+                const dur = 10 + i * 2;
+                const phase = (time + i * 1.2) * (Math.PI * 2 / dur);
+                const fx = Math.cos(phase * 0.5) * 15 + cur.x * -15;
+                const fy = Math.sin(phase) * 20 + cur.y * -15;
+                g.style.transform = `translate(${fx}px, ${fy}px) rotate(${Math.sin(phase * 0.3) * 15}deg)`;
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- Rising letters ------------------------------------------------
+
+        const motes = $("motes");
+        const LETTERS = "aeinorstlu§¶&";
+        function createMote() {
+            if (document.hidden || motes.childElementCount > 40) return;
+            const m = document.createElement("span");
+            m.className = "mote";
+            m.textContent = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+            m.style.fontSize = Math.random() * 20 + 10 + "px";
+            m.style.left = Math.random() * 100 + "%";
+            m.style.setProperty("--o", (Math.random() * 0.4 + 0.2).toFixed(2));
+            const duration = Math.random() * 6 + 4;
+            m.style.animation = `floatUp ${duration}s linear forwards`;
+            motes.appendChild(m);
+            setTimeout(() => m.remove(), duration * 1000);
+        }
+
+        // --- Header: your seat, install ------------------------------------
+
+        async function showHeldSeat() {
+            const token = safeGet("navispace_token");
+            if (!token) return;
+            try {
+                const held = await getHeldSeat(token);
+                if (!held || !held.seatId) return;
+                const pill = $("heldPill");
+                pill.href = `/seat.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`;
+                $("heldText").textContent = `Your seat · ${held.seatId}`;
+                pill.querySelector(".signal-dot").className =
+                    "signal-dot signal-" + (held.state === "STEPPED_AWAY" ? "STEPPED_AWAY" : "OCCUPIED");
+                pill.hidden = false;
+                $("installBtn").hidden = true;
+            } catch { }
+        }
+
+        let deferredInstall = null;
+        window.addEventListener("beforeinstallprompt", (e) => {
+            e.preventDefault();
+            deferredInstall = e;
+            if ($("heldPill").hidden) $("installBtn").hidden = false;
+        });
+        if (typeof isIosNotInstalled === "function" && isIosNotInstalled()) {
+            $("installBtn").hidden = false;
+        }
+        $("installBtn").addEventListener("click", async () => {
+            if (deferredInstall) {
+                deferredInstall.prompt();
+                await deferredInstall.userChoice;
+                deferredInstall = null;
+                $("installBtn").hidden = true;
+            } else {
+                $("iosHint").hidden = !$("iosHint").hidden;
+            }
+        });
+
+        // --- Boot ----------------------------------------------------------
+
+        function applyLibraries(list) {
+            if (!Array.isArray(list) || !list.length) return;
+            const keepId = current >= 0 ? libraries[current].id : safeGet(LAST_LIB_KEY);
+            libraries = list;
+            current = -1;
+            renderCards();
+            let idx = libraries.findIndex((l) => l.id === keepId);
+            if (idx < 0) idx = Math.max(0, libraries.findIndex((l) => l.status === "active"));
+            selectLibrary(idx, { instant: true });
+        }
+
+        $("prevLib").addEventListener("click", () => selectLibrary(current - 1));
+        $("nextLib").addEventListener("click", () => selectLibrary(current + 1));
+        document.addEventListener("keydown", (e) => {
+            if (e.target.closest("input, textarea")) return;
+            if (e.key === "ArrowLeft") selectLibrary(current - 1);
+            if (e.key === "ArrowRight") selectLibrary(current + 1);
+        });
+
+        // Paint straight away from the last known list (the server may be
+        // waking up), then replace it with the live one.
+        try { applyLibraries(JSON.parse(safeGet(LIBS_CACHE_KEY) || "null")); } catch { }
+        getLibraries()
+            .then((list) => {
+                safeSet(LIBS_CACHE_KEY, JSON.stringify(list));
+                applyLibraries(list);
+            })
+            .catch(() => {
+                if (!libraries.length) $("badgeSub").textContent = "Can't reach NaviSpace right now";
+            });
+        showHeldSeat();
+
+        measureProps();
+        window.addEventListener("resize", measureProps);
+        document.fonts && document.fonts.ready.then(measureProps);
+
+        if (!reduceMotion) {
+            requestAnimationFrame(animate);
+            setInterval(createMote, 400);
+        }
     </script>
 </body>
 

@@ -4,8 +4,8 @@
  * NaviSpace service worker: makes the app installable and handles Web
  * Push reminders. Kept deliberately simple:
  *
- * - App-shell caching is cache-first for static files, network-first
- *   for API calls (/api/...) — seat/leaderboard state must never be
+ * - App-shell caching is stale-while-revalidate for static files,
+ *   network-only for API calls (/api/...) — seat/leaderboard state must never be
  *   served stale from cache, that would defeat the whole point of a
  *   live status display.
  * - Push events show a notification; clicking it focuses an existing
@@ -18,7 +18,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v3";
+const CACHE_NAME = "navispace-shell-v4";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -28,9 +28,10 @@ const SHELL_FILES = [
     "/lost-found.html",
     "/client.js",
     "/styles.css",
-    "/manifest.json",
     "/icons/icon-192.png",
     "/icons/icon-512.png",
+    "/icons/badge-96.png",
+    "/icons/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -67,19 +68,34 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Cache-first for the static app shell, falling back to network
-    // (and caching what we fetch) for anything else same-origin.
+    // The manifest carries this device's identity (see /manifest.json in
+    // server.js), so it must always come from the server, never a cache.
+    if (url.pathname === "/manifest.json") return;
+
+    // Only same-origin GETs are cached; fonts, CDN scripts and anything
+    // else go straight to the network.
+    if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
+
+    // Stale-while-revalidate for the app shell: answer from cache
+    // instantly (so an installed app opens immediately even while the
+    // server is still waking up), and refresh the cached copy in the
+    // background so the next open has the latest version.
     event.respondWith(
-        caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-            return fetch(event.request).then((res) => {
-                if (res.ok && url.origin === self.location.origin) {
-                    const copy = res.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        caches.open(CACHE_NAME).then((cache) =>
+            cache.match(event.request, { ignoreSearch: event.request.mode === "navigate" }).then((cached) => {
+                const network = fetch(event.request)
+                    .then((res) => {
+                        if (res.ok) cache.put(event.request, res.clone());
+                        return res;
+                    })
+                    .catch(() => cached);
+                if (cached) {
+                    event.waitUntil(network);
+                    return cached;
                 }
-                return res;
-            });
-        })
+                return network;
+            })
+        )
     );
 });
 
@@ -97,7 +113,9 @@ self.addEventListener("push", (event) => {
         self.registration.showNotification(payload.title, {
             body: payload.body,
             icon: "/icons/icon-192.png",
-            badge: "/icons/icon-192.png",
+            badge: "/icons/badge-96.png",
+            renotify: Boolean(payload.seatId),
+            vibrate: [120, 60, 120],
             data: { seatId: payload.seatId || null, libraryId: payload.libraryId || null },
             tag: payload.seatId ? `navispace-${payload.libraryId}-${payload.seatId}` : "navispace",
         })
