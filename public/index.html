@@ -57,12 +57,12 @@
         }
 
         body {
-            background: radial-gradient(circle at center, var(--bg-inner) 0%, var(--bg-mid) 50%, var(--bg-outer) 100%);
+            background: radial-gradient(circle at center, var(--bg-inner) 0%, var(--bg-mid) 50%, var(--bg-outer) 100%) fixed;
             background-color: var(--bg-outer);
             color: #fff;
-            overflow: hidden;
-            height: 100vh;
-            height: 100dvh;
+            overflow-x: hidden;
+            height: auto;
+            min-height: 100%;
         }
 
         /* --- Rising letters (the soda's bubbles) --------------------------- */
@@ -194,7 +194,8 @@
         /* --- Hero ----------------------------------------------------------- */
 
         .lp-hero {
-            height: 100%;
+            height: 100vh;
+            height: 100svh;
             max-width: none;
             margin: 0;
             display: flex;
@@ -765,6 +766,357 @@
             white-space: nowrap;
         }
 
+
+        /* --- The shelf: a scroll-driven cascade of books ---------------------
+           A tall section whose inner frame sticks to the viewport while you
+           scroll through it. Books wait in a stack leaning back, rise one at
+           a time to an upright crest, then fold forward and drop into the
+           pit below. Positions are written per frame by the script. */
+
+        .shelf {
+            position: relative;
+            /* One screen, plus a stretch of scroll per book after the first. */
+            height: calc(100vh + (var(--n, 8) - 1) * 55vh);
+        }
+
+        .shelf-sticky {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            height: 100svh;
+            display: grid;
+            grid-template-columns: minmax(320px, 0.9fr) 1.1fr;
+            align-items: center;
+            gap: 2rem;
+            padding: 6.5rem 4% 2rem;
+            overflow: hidden;
+        }
+
+        .shelf-copy {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 1.4rem;
+            max-width: 520px;
+        }
+
+        .shelf-kicker {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-family: var(--font-display);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .shelf-kicker::before {
+            content: "";
+            width: 44px;
+            height: 1px;
+            background: currentColor;
+        }
+
+        .shelf-title {
+            margin: 0;
+            line-height: 0.82;
+            font-weight: 400;
+        }
+
+        .shelf-title .st-a {
+            display: block;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: clamp(3.6rem, 7.5vw, 7.5rem);
+            letter-spacing: -0.04em;
+        }
+
+        .shelf-title .st-b {
+            display: block;
+            font-family: var(--font-heading);
+            font-size: clamp(4.6rem, 10vw, 10rem);
+            background: linear-gradient(95deg, var(--accent) 0%, #f9e6c8 55%, #ffffff 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            padding: 0.05em 0.1em 0.12em 0;
+        }
+
+        .shelf-lede {
+            color: var(--muted);
+            font-size: 1.02rem;
+            line-height: 1.6;
+            margin: 0;
+            max-width: 400px;
+        }
+
+        .shelf-now {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 1.1rem;
+            border-top: 1px solid var(--glass-border);
+            max-width: 400px;
+            min-height: 6.4rem;
+        }
+
+        .shelf-count {
+            font-family: var(--font-display);
+            font-variant-numeric: tabular-nums;
+            font-size: 0.75rem;
+            letter-spacing: 0.2em;
+            color: var(--muted);
+        }
+
+        .shelf-name {
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 1.35rem;
+        }
+
+        .shelf-blurb {
+            color: var(--muted);
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+
+        .shelf-stage {
+            position: relative;
+            height: 100%;
+            perspective: 1500px;
+            perspective-origin: 50% 20%;
+            transform-style: preserve-3d;
+        }
+
+        .cbook {
+            --cw: clamp(200px, min(23vw, 36vh), 320px);
+            --ch: calc(var(--cw) * 1.36);
+            --cd: calc(var(--cw) * 0.13);
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: var(--cw);
+            height: var(--ch);
+            margin: calc(var(--ch) / -2) 0 0 calc(var(--cw) / -2);
+            transform-style: preserve-3d;
+            transform-origin: 50% 100%;
+            will-change: transform, opacity;
+            color: var(--foil);
+            text-decoration: none;
+            pointer-events: none;
+        }
+
+        .cbook.is-crest {
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .cb-face {
+            position: absolute;
+            backface-visibility: hidden;
+        }
+
+        .cb-front,
+        .cb-back {
+            inset: 0;
+            border-radius: 5px 16px 16px 5px;
+        }
+
+        .cb-front {
+            transform: translateZ(calc(var(--cd) / 2));
+            background:
+                linear-gradient(90deg, rgba(0, 0, 0, 0.38) 0, rgba(0, 0, 0, 0) 6%, rgba(255, 255, 255, 0.14) 7.2%, rgba(0, 0, 0, 0) 8.6%),
+                radial-gradient(120% 75% at 15% 0%, var(--glow) 0%, transparent 55%),
+                radial-gradient(90% 70% at 100% 100%, var(--glow2) 0%, transparent 60%),
+                linear-gradient(165deg, var(--cover), var(--cover-dark));
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 30px 60px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 8% 9% 9% 13%;
+        }
+
+        .cb-glyph {
+            position: absolute;
+            right: -8%;
+            top: 4%;
+            font-family: var(--font-heading);
+            font-size: calc(var(--cw) * 0.95);
+            line-height: 1;
+            opacity: 0.13;
+            pointer-events: none;
+        }
+
+        .cb-top {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: var(--font-display);
+            font-size: calc(var(--cw) * 0.036);
+            font-weight: 600;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+        }
+
+        .cb-index {
+            padding: 0.45em 0.9em;
+            border-radius: 100px;
+            border: 1px solid currentColor;
+            font-variant-numeric: tabular-nums;
+            opacity: 0.85;
+        }
+
+        .cb-tag {
+            opacity: 0.75;
+        }
+
+        .cb-body {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0.45em;
+        }
+
+        .cb-kicker {
+            font-family: var(--font-display);
+            font-size: calc(var(--cw) * 0.036);
+            font-weight: 600;
+            letter-spacing: 0.26em;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .cb-title {
+            font-family: var(--font-heading);
+            font-size: calc(var(--cw) * var(--ts, 0.17));
+            line-height: 0.95;
+            color: #fff;
+        }
+
+        .cb-sub {
+            font-size: calc(var(--cw) * 0.043);
+            line-height: 1.45;
+            color: rgba(255, 255, 255, 0.78);
+            max-width: 92%;
+        }
+
+        .cb-ribbon {
+            position: absolute;
+            top: 13%;
+            right: -13%;
+            transform: rotate(35deg);
+            background: var(--accent);
+            color: var(--on-accent);
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: calc(var(--cw) * 0.034);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            padding: 0.55em 3.4em;
+        }
+
+        .cb-back {
+            transform: rotateY(180deg) translateZ(calc(var(--cd) / 2));
+            background: linear-gradient(200deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.3)), var(--cover-dark);
+        }
+
+        .cb-spine {
+            top: 0;
+            height: 100%;
+            width: var(--cd);
+            left: calc(50% - var(--cd) / 2);
+            transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2));
+            background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.12) 45%, rgba(0, 0, 0, 0.3)), var(--cover-dark);
+        }
+
+        .cb-pages {
+            top: 1.5%;
+            height: 97%;
+            width: calc(var(--cd) - 4px);
+            left: calc(50% - (var(--cd) - 4px) / 2);
+            transform: rotateY(90deg) translateZ(calc(var(--cw) / 2 - 5px));
+            background: repeating-linear-gradient(90deg, #efe6cf 0 2px, #d9cdb0 2px 3px), #efe6cf;
+        }
+
+        .cb-head,
+        .cb-foot {
+            left: 1%;
+            width: calc(100% - 6px);
+            height: calc(var(--cd) - 4px);
+            top: calc(50% - (var(--cd) - 4px) / 2);
+            background: repeating-linear-gradient(0deg, #efe6cf 0 2px, #d9cdb0 2px 3px), #efe6cf;
+        }
+
+        .cb-head {
+            transform: rotateX(90deg) translateZ(calc(var(--ch) / 2 - 4px));
+        }
+
+        .cb-foot {
+            transform: rotateX(-90deg) translateZ(calc(var(--ch) / 2 - 4px));
+        }
+
+        .shelf-hint {
+            position: absolute;
+            left: 50%;
+            bottom: 1.6rem;
+            transform: translateX(-50%);
+            font-family: var(--font-display);
+            font-size: 0.7rem;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: var(--muted);
+            transition: opacity 0.4s ease;
+        }
+
+        @media (max-width: 860px) {
+            .shelf {
+                height: calc(100svh + (var(--n, 8) - 1) * 45svh);
+            }
+
+            .shelf-sticky {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                align-items: start;
+                gap: 0.5rem;
+                padding: 5.5rem 16px 1rem;
+            }
+
+            .shelf-copy {
+                gap: 0.8rem;
+            }
+
+            .shelf-title .st-a {
+                font-size: clamp(2.6rem, 12vw, 3.4rem);
+            }
+
+            .shelf-title .st-b {
+                font-size: clamp(3.2rem, 15vw, 4.4rem);
+            }
+
+            .shelf-lede,
+            .shelf-kicker {
+                display: none;
+            }
+
+            .shelf-now {
+                min-height: 0;
+                padding-top: 0.7rem;
+            }
+
+            .shelf-copy .lp-cta {
+                display: none;
+            }
+
+            .cbook {
+                --cw: min(52vw, 30svh, 230px);
+            }
+        }
+
         /* --- Smaller screens: stack, and let the page scroll ------------------ */
 
         @media (max-width: 1100px) {
@@ -973,7 +1325,7 @@
                                 <div class="cover-sub">Library</div>
                                 <div class="cover-rule"></div>
                                 <div class="cover-mark"><span class="wordmark-mark"></span>navispace</div>
-                                <div class="cover-ribbon" id="coverRibbon" hidden>Opening soon</div>
+                                <div class="cover-ribbon" id="coverRibbon" hidden>Coming soon</div>
                             </div>
                             <div class="face face-back"></div>
                             <div class="face face-spine"><span class="spine-title" id="spineTitle">Engineering</span>
@@ -1008,6 +1360,28 @@
             </div>
         </div>
     </main>
+
+    <section class="shelf" id="shelf" aria-labelledby="shelfTitle">
+        <div class="shelf-sticky">
+            <div class="shelf-copy">
+                <div class="shelf-kicker">NaviSpace · Vol. 01</div>
+                <h2 class="shelf-title" id="shelfTitle"><span class="st-a">The</span><span class="st-b">Shelf</span></h2>
+                <p class="shelf-lede">Every library on campus, and everything NaviSpace does, bound into one stack.
+                    Scroll, and each book rises to the crest, then falls away for the next.</p>
+                <div class="shelf-now" aria-live="polite">
+                    <span class="shelf-count" id="shelfCount">01 / 08</span>
+                    <span class="shelf-name" id="shelfName">&nbsp;</span>
+                    <span class="shelf-blurb" id="shelfBlurb">&nbsp;</span>
+                </div>
+                <a class="lp-cta" id="shelfCta" href="#">
+                    <span id="shelfCtaText">Open the map</span>
+                    <span class="lp-plus" aria-hidden="true">→</span>
+                </a>
+            </div>
+            <div class="shelf-stage" id="shelfStage"></div>
+            <div class="shelf-hint" id="shelfHint" aria-hidden="true">Scroll</div>
+        </div>
+    </section>
 
     <!-- Props, drawn once and reused. Colours follow the room (--fa/--fb/--fc). -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -1144,7 +1518,7 @@
             const cta = $("cta");
             cta.href = active ? libraryUrl("/library.html", lib.id) : "#";
             cta.setAttribute("aria-disabled", active ? "false" : "true");
-            $("ctaText").textContent = active ? "Open the map" : "Opening soon";
+            $("ctaText").textContent = active ? "Open the map" : "Coming soon";
             document.querySelectorAll(".lp-card").forEach((c, j) => c.setAttribute("aria-pressed", String(j === i)));
             const meta = document.querySelector('meta[name="theme-color"]');
             if (meta) meta.content = themeFor(i).outer;
@@ -1175,10 +1549,15 @@
             statsTimer = setTimeout(refreshStats, 20000);
         }
 
-        function selectLibrary(i, { instant = false } = {}) {
+        /**
+         * instant: no animation at all (first paint, live list arriving).
+         * soft: the room colour glides and the cover swaps without the
+         * spin — used by the shelf below, where the hero is off screen.
+         */
+        function selectLibrary(i, { instant = false, soft = false } = {}) {
             if (!libraries.length) return;
             i = (i + libraries.length) % libraries.length;
-            if (i === current || isSwitching) return;
+            if (i === current || (isSwitching && !soft)) return;
             const first = current === -1;
             current = i;
             safeSet(LAST_LIB_KEY, libraries[i].id);
@@ -1186,6 +1565,15 @@
 
             if (first || instant || reduceMotion || !window.gsap) {
                 setRoomInstant(themeFor(i));
+                setCover(i);
+                return;
+            }
+            if (soft) {
+                const t = themeFor(i);
+                gsap.to(document.body, {
+                    "--bg-inner": t.inner, "--bg-mid": t.mid, "--bg-outer": t.outer, "--fa": t.cover,
+                    duration: 0.9, ease: "power2.out", overwrite: "auto",
+                });
                 setCover(i);
                 return;
             }
@@ -1448,6 +1836,273 @@
             }
         });
 
+        // --- The shelf: scroll-driven cascade -----------------------------
+
+        // After the libraries, the shelf explains NaviSpace as "chapters".
+        // path: where each chapter's link goes, in the selected library.
+        const CHAPTERS = [
+            {
+                title: "Check in", tag: "Guide", path: "/library.html", cta: "See live seats",
+                blurb: "Every desk has a QR code. Scan it, tap Check in, and the seat is yours.",
+                theme: { cover: "#3d4f7a", coverDark: "#232d49", foil: "#f3e4bd" },
+            },
+            {
+                title: "Step away", tag: "Guide", path: "/library.html", cta: "Open the map",
+                blurb: "Off for coffee? Hold your seat. Come back before the timer runs out and it's still yours.",
+                theme: { cover: "#6b4a7a", coverDark: "#3f2a4a", foil: "#f6dfc0" },
+            },
+            {
+                title: "Leaderboard", tag: "Weekly", path: "/leaderboard.html", cta: "See the board",
+                blurb: "One point per seat per day. Climb this week's study board.",
+                theme: { cover: "#b0773a", coverDark: "#6b461d", foil: "#fbe9c4" },
+            },
+            {
+                title: "Lost & found", tag: "Board", path: "/lost-found.html", cta: "Open lost & found",
+                blurb: "Found something? Post a photo. Lost something? Check the board first.",
+                theme: { cover: "#2f7a73", coverDark: "#1a4744", foil: "#f1dfae" },
+            },
+            {
+                title: "Reminders", tag: "Install", path: null, cta: "Install the app",
+                blurb: "Add NaviSpace to your Home Screen and we'll ping you before your seat frees up.",
+                theme: { cover: "#8a3b3b", coverDark: "#532222", foil: "#f6dfc0" },
+            },
+        ];
+
+        // Tuning, after the reference deck: crest tilt, how the waiting
+        // stack leans back and climbs, and how far the pit drops.
+        const CASCADE = {
+            follow: 0.14,      // scroll smoothing (1 = none)
+            crestTilt: 4,      // deg, the book at the crest
+            crestLift: -0.16,  // × book height, crest sits a little low to leave room above
+            backTilt: 58,      // deg, books waiting in the stack lie back this far
+            backRise: 0.62,    // × book height, first waiting book's hinge above the crest
+            backStep: 0.085,   // × book height, each further book climbs this much
+            backDepth: 150,    // px, each waiting book sits this much further back (keeps a rising book from cutting through the stack)
+            backVisible: 5,    // books shown in the stack before fading
+            fold: 120,         // deg, how far a passing book folds forward
+            drop: 0.62,        // × stage height, how far it falls by the end
+            leanIn: 1.3,       // easing exponent on the drop
+            fadeStart: 1.1,    // fade window, in books past the crest
+            fadeEnd: 2.0,
+        };
+
+        const shelf = $("shelf");
+        const stage = $("shelfStage");
+        let shelfItems = [];
+        let shelfBooks = [];
+        let shelfCur = 0;
+        let shelfTarget = 0;
+        let shelfActive = -1;
+        let shelfRaf = 0;
+        let bookH = 0;
+        let stageH = 0;
+
+        const clamp01 = (x) => Math.max(0, Math.min(1, x));
+        const smooth = (x) => x * x * (3 - 2 * x);
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const pad2 = (n) => String(n).padStart(2, "0");
+
+        function shelfItemsFor(libs) {
+            const items = libs.map((lib, i) => ({
+                kind: "library",
+                libIndex: i,
+                title: shortName(lib.name),
+                tag: "Library",
+                kicker: lib.status === "active" ? "Open now" : "Wits library",
+                blurb: lib.status !== "active"
+                    ? "Not open for check-in yet. Coming soon to NaviSpace."
+                    : lib.seatCount
+                        ? `${lib.seatCount} seat${lib.seatCount === 1 ? "" : "s"} tracked live. Scan in, hold your seat, climb the board.`
+                        : "Open on NaviSpace. Scan in, hold your seat, climb the board.",
+                active: lib.status === "active",
+                theme: themeFor(i),
+            }));
+            CHAPTERS.forEach((c, j) => items.push({
+                kind: "chapter",
+                ...c,
+                kicker: `Chapter ${pad2(j + 1)}`,
+                active: true,
+            }));
+            return items;
+        }
+
+        function buildShelf() {
+            shelfItems = shelfItemsFor(libraries);
+            const n = shelfItems.length;
+            shelf.style.setProperty("--n", n);
+            stage.innerHTML = "";
+            shelfBooks = shelfItems.map((item, i) => {
+                const t = item.theme;
+                const book = document.createElement("a");
+                book.className = "cbook";
+                book.style.setProperty("--cover", t.cover);
+                book.style.setProperty("--cover-dark", t.coverDark);
+                book.style.setProperty("--foil", t.foil);
+                book.style.setProperty("--glow", t.foil + "55");
+                book.style.setProperty("--glow2", t.cover + "cc");
+                book.setAttribute("aria-label", item.title);
+                book.tabIndex = -1;
+
+                const longest = Math.max(...item.title.split(/\s+/).map((w) => w.length));
+                book.innerHTML = `
+                    <div class="cb-face cb-front">
+                        <span class="cb-glyph" aria-hidden="true"></span>
+                        <div class="cb-top"><span class="cb-index">${pad2(i + 1)} / ${pad2(n)}</span><span class="cb-tag"></span></div>
+                        <div class="cb-body">
+                            <span class="cb-kicker"></span>
+                            <span class="cb-title" style="--ts:${Math.min(0.17, 1.25 / longest).toFixed(3)}"></span>
+                            <span class="cb-sub"></span>
+                        </div>
+                        ${item.kind === "library" && !item.active ? '<div class="cb-ribbon">Coming soon</div>' : ""}
+                    </div>
+                    <div class="cb-face cb-back"></div>
+                    <div class="cb-face cb-spine"></div>
+                    <div class="cb-face cb-pages"></div>
+                    <div class="cb-face cb-head"></div>
+                    <div class="cb-face cb-foot"></div>`;
+                // Text goes in as text, never markup.
+                book.querySelector(".cb-glyph").textContent = item.title.charAt(0);
+                book.querySelector(".cb-tag").textContent = item.tag;
+                book.querySelector(".cb-kicker").textContent = item.kicker;
+                book.querySelector(".cb-title").textContent = item.title;
+                book.querySelector(".cb-sub").textContent = item.blurb;
+                book.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    followShelfItem(item);
+                });
+                stage.appendChild(book);
+                return book;
+            });
+            shelfActive = -1;
+            measureShelf();
+            shelfCur = shelfTarget = shelfProgress();
+            placeBooks(shelfCur);
+            setShelfActive(Math.round(shelfCur));
+        }
+
+        function shelfHref(item) {
+            const lib = libraries[current] || libraries[0];
+            if (item.kind === "library") {
+                return item.active ? libraryUrl("/library.html", libraries[item.libIndex].id) : null;
+            }
+            if (!item.path) return null;
+            return lib ? libraryUrl(item.path, lib.id) : item.path;
+        }
+
+        function followShelfItem(item) {
+            const href = shelfHref(item);
+            if (href) {
+                window.location.href = href;
+            } else if (item.kind === "chapter") {
+                if (deferredInstall || (typeof isIosNotInstalled === "function" && isIosNotInstalled())) {
+                    $("installBtn").hidden = false;
+                    $("installBtn").click();
+                } else {
+                    const lib = libraries[current] || libraries[0];
+                    window.location.href = lib ? libraryUrl("/library.html", lib.id) : "/";
+                }
+            }
+        }
+
+        function setShelfActive(i) {
+            i = Math.max(0, Math.min(shelfItems.length - 1, i));
+            if (i === shelfActive) return;
+            shelfActive = i;
+            const item = shelfItems[i];
+            shelfBooks.forEach((b, j) => b.classList.toggle("is-crest", j === i));
+            $("shelfCount").textContent = `${pad2(i + 1)} / ${pad2(shelfItems.length)}`;
+            $("shelfName").textContent = item.kind === "library" ? libraries[item.libIndex].name : item.title;
+            $("shelfBlurb").textContent = item.blurb;
+
+            const cta = $("shelfCta");
+            const href = shelfHref(item);
+            const usable = Boolean(href) || item.kind === "chapter";
+            cta.href = href || "#";
+            cta.setAttribute("aria-disabled", usable ? "false" : "true");
+            $("shelfCtaText").textContent = item.kind === "library"
+                ? (item.active ? "Open the map" : "Coming soon")
+                : item.cta;
+
+            // A library at the crest becomes the selected library: the room
+            // takes its colour, and the hero and nav follow.
+            // Only once the shelf is actually on screen, so building it
+            // never overrides the library chosen in the hero.
+            if (item.kind === "library" && shelf.getBoundingClientRect().top < window.innerHeight * 0.4) {
+                selectLibrary(item.libIndex, { soft: true });
+            }
+        }
+
+        function measureShelf() {
+            bookH = shelfBooks.length ? shelfBooks[0].offsetHeight : 0;
+            stageH = stage.offsetHeight;
+        }
+
+        /** 0 at the top of the shelf section, n-1 at the bottom. */
+        function shelfProgress() {
+            const total = shelf.offsetHeight - window.innerHeight;
+            if (total <= 0 || !shelfItems.length) return 0;
+            const p = clamp01(-shelf.getBoundingClientRect().top / total);
+            return p * (shelfItems.length - 1);
+        }
+
+        function placeBooks(p) {
+            const C = CASCADE;
+            const base = bookH * C.crestLift;
+            shelfBooks.forEach((book, i) => {
+                const d = i - p; // > 0 waiting in the stack, < 0 already fallen
+                let y, z, rx, s = 1, o = 1;
+                if (d >= 0) {
+                    if (d <= 1) {
+                        const e = smooth(d);
+                        y = lerp(base, base - bookH * C.backRise, e);
+                        z = lerp(0, -C.backDepth, e);
+                        rx = lerp(C.crestTilt, C.backTilt, e);
+                        s = 1 - 0.04 * e;
+                    } else {
+                        const k = d - 1;
+                        y = base - bookH * (C.backRise + k * C.backStep);
+                        z = -C.backDepth * (1 + k * 0.9);
+                        rx = C.backTilt;
+                        s = 0.96 - k * 0.025;
+                    }
+                    if (d > C.backVisible - 1) o = clamp01(C.backVisible - d);
+                } else {
+                    const t = -d;
+                    const f = smooth(clamp01(t));
+                    rx = C.crestTilt - C.fold * f;
+                    y = base + stageH * C.drop * Math.pow(t, C.leanIn);
+                    z = 40 * f;
+                    o = t < C.fadeStart ? 1 : clamp01(1 - (t - C.fadeStart) / (C.fadeEnd - C.fadeStart));
+                }
+                book.style.transform = `translate3d(0, ${y.toFixed(1)}px, ${z.toFixed(1)}px) rotateX(${rx.toFixed(2)}deg) scale(${s.toFixed(3)})`;
+                book.style.opacity = o.toFixed(3);
+                book.style.visibility = o <= 0.001 ? "hidden" : "visible";
+            });
+        }
+
+        function shelfTick() {
+            const k = reduceMotion ? 1 : CASCADE.follow;
+            shelfCur += (shelfTarget - shelfCur) * k;
+            if (Math.abs(shelfTarget - shelfCur) < 0.0015) shelfCur = shelfTarget;
+            placeBooks(shelfCur);
+            setShelfActive(Math.round(shelfCur));
+            $("shelfHint").style.opacity = shelfCur > 0.3 ? "0" : "1";
+            shelfRaf = shelfCur !== shelfTarget ? requestAnimationFrame(shelfTick) : 0;
+        }
+
+        function onShelfScroll() {
+            if (!shelfItems.length) return;
+            shelfTarget = shelfProgress();
+            if (!shelfRaf) shelfRaf = requestAnimationFrame(shelfTick);
+        }
+
+        window.addEventListener("scroll", onShelfScroll, { passive: true });
+        window.addEventListener("resize", () => {
+            measureShelf();
+            onShelfScroll();
+            placeBooks(shelfCur);
+        });
+
         // --- Boot ----------------------------------------------------------
 
         function applyLibraries(list) {
@@ -1459,6 +2114,7 @@
             let idx = libraries.findIndex((l) => l.id === keepId);
             if (idx < 0) idx = Math.max(0, libraries.findIndex((l) => l.status === "active"));
             selectLibrary(idx, { instant: true });
+            buildShelf();
         }
 
         $("prevLib").addEventListener("click", () => selectLibrary(current - 1));
