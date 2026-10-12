@@ -127,7 +127,19 @@
 
   <script src="/client.js"></script>
   <script>
-    const seatId = new URLSearchParams(window.location.search).get("seat") || "A1";
+    const seatId = new URLSearchParams(window.location.search).get("seat");
+    // No seat in the address (e.g. an app launched without one): go to the
+    // seat this device holds, or to the map — never guess a seat.
+    if (!seatId) {
+      const token = localStorage.getItem("navispace_token");
+      const fallback = libraryUrl("/library.html", getLibraryIdFromUrl());
+      (token ? getHeldSeat(token) : Promise.resolve(null))
+        .then((held) => window.location.replace(held && held.seatId
+          ? `/seat.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`
+          : fallback))
+        .catch(() => window.location.replace(fallback));
+      throw new Error("no seat — redirecting");
+    }
     // Defaults to "engineering" — see getLibraryIdFromUrl in client.js:
     // this keeps every QR code printed before multi-library support
     // existed working untouched.
@@ -173,6 +185,10 @@
     }
 
     function render(seat) {
+      if (seat && seat.reason === "unknown_seat") {
+        renderUnknownSeat();
+        return;
+      }
       const statusEl = document.getElementById("status");
       statusEl.className = "status-band " + seat.state;
       statusEl.innerHTML = "";
@@ -216,6 +232,23 @@
       // worker round trip on every render).
       const reminderBtn = document.getElementById("enableReminders");
       reminderBtn.style.display = isHolder && !reminderEnabled ? "block" : "none";
+    }
+
+    function renderUnknownSeat() {
+      const statusEl = document.getElementById("status");
+      statusEl.className = "status-band STEPPED_AWAY";
+      statusEl.textContent = "This seat isn't on NaviSpace";
+      const actions = document.getElementById("actions");
+      actions.innerHTML = "";
+      const link = document.createElement("a");
+      link.className = "btn btn-primary";
+      link.href = libraryUrl("/library.html", libraryId);
+      link.textContent = "See the seat map";
+      link.style.textDecoration = "none";
+      actions.appendChild(link);
+      document.getElementById("reportLink").style.display = "none";
+      document.getElementById("enableReminders").style.display = "none";
+      toast("This code may be from an older seat layout — scan the code on your desk, or pick a seat on the map.");
     }
 
     function makeButton(label, primary, onClick) {
