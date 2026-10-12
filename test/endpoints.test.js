@@ -93,3 +93,13 @@ test("engineering seats come from its floor plan, which the API serves", async (
     assert.equal((await fetch(`${base}/api/library/commerce/layout`)).status, 404);
   });
 });
+
+test("a seat id that isn't in the library is reported, not shown as free", async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/library/engineering/seat/NOT-A-SEAT`);
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).reason, "unknown_seat");
+    const ok = await fetch(`${base}/api/library/engineering/seat/${getSeatIds("engineering")[0]}`);
+    assert.equal(ok.status, 200);
+  });
+});
