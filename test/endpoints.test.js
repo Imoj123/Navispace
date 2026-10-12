@@ -40,6 +40,21 @@ test("manifest carries a valid handoff token into start_url, and only a valid on
   });
 });
 
+test("manifest starts on the seat when given one, and falls back to the handoff cookie", async () => {
+  await withServer(async (base) => {
+    const token = "123e4567-e89b-12d3-a456-426614174000";
+    const viaQuery = await (await fetch(`${base}/manifest.json?handoff=${token}&lib=engineering&seat=A2`)).json();
+    assert.equal(viaQuery.start_url, `/seat.html?handoff=${token}&lib=engineering&seat=A2`);
+
+    const cookie = encodeURIComponent(`handoff=${token}&nick=Goat&lib=engineering&seat=A2`);
+    const viaCookie = await (await fetch(`${base}/manifest.json`, { headers: { Cookie: `ns_handoff=${cookie}` } })).json();
+    assert.equal(viaCookie.start_url, `/seat.html?handoff=${token}&nick=Goat&lib=engineering&seat=A2`);
+
+    const unsafeSeat = await (await fetch(`${base}/manifest.json?handoff=${token}&lib=engineering&seat=${encodeURIComponent("<x>")}`)).json();
+    assert.equal(unsafeSeat.start_url, `/?handoff=${token}`);
+  });
+});
+
 test("/api/held finds the seat this token holds", async () => {
   await withServer(async (base) => {
     const token = "tok-held-1";

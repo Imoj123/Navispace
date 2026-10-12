@@ -1,6 +1,11 @@
 /*
  * NaviSpace shared design system.
  *
+ * Pages sit in their library's "room": a radial gradient in that
+ * library's colours (set per page by client.js paintRoom), with glass
+ * surfaces, pill controls and one pink accent for the current place and
+ * the primary action — the same look as the home page's bookshelf.
+ *
  * Visual direction: a status board, not a dashboard. Seat occupancy is
  * exactly the kind of information a departures board or wayfinding
  * sign exists to carry — flat colour fields that mean one thing each,
@@ -14,13 +19,14 @@
 
 :root {
     --ink: #10182b;
-    --panel: #1b2740;
-    --panel-raised: #24324f;
+    --panel: rgba(255, 255, 255, 0.06);
+    --panel-raised: rgba(255, 255, 255, 0.1);
     --paper: #f4f3ef;
-    --line: rgba(255, 255, 255, 0.1);
+    --line: rgba(255, 255, 255, 0.14);
     --line-on-paper: rgba(16, 24, 43, 0.12);
-    --slate: #8d96a8;
-    --slate-dim: #5c6679;
+    /* Secondary text as translucent white, so it reads on every room. */
+    --slate: rgba(255, 255, 255, 0.7);
+    --slate-dim: rgba(255, 255, 255, 0.45);
 
     --green: #35a776;
     --green-dim: #223c33;
@@ -31,6 +37,21 @@
 
     --font-display: "Space Grotesk", sans-serif;
     --font-body: "IBM Plex Sans", sans-serif;
+    --font-heading: "Galada", cursive;
+
+    /* Room (overridden per library by client.js) */
+    --bg-inner: #0b8a78;
+    --bg-mid: #044e3b;
+    --bg-outer: #011411;
+
+    /* Glass and accent */
+    --glass-bg: rgba(255, 255, 255, 0.06);
+    --glass-strong: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --well: rgba(0, 0, 0, 0.28);
+    --accent: #fbcfe8;
+    --accent-hover: #fde4f2;
+    --on-accent: #011d17;
 
     color-scheme: dark;
 }
@@ -46,7 +67,11 @@ body {
 }
 
 body {
-    background: var(--ink);
+    /* Lit from above, so content in the middle of the page sits on the
+       darker mid tone and text keeps its contrast. */
+    background: radial-gradient(ellipse 120% 80% at 50% -10%, var(--bg-inner) 0%, var(--bg-mid) 55%, var(--bg-outer) 100%) fixed;
+    background-color: var(--bg-outer);
+    min-height: 100vh;
     color: var(--paper);
     font-family: var(--font-body);
     font-size: 16px;
@@ -73,9 +98,9 @@ button {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 18px 20px;
-    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+    gap: 14px 16px;
+    padding: 22px 4%;
 }
 
 .wordmark {
@@ -113,19 +138,59 @@ button {
 
 .topnav {
     display: flex;
-    gap: 22px;
-    font-size: 0.9rem;
+    gap: 0.35rem;
+    padding: 0.35rem;
+    border-radius: 100px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.topnav::-webkit-scrollbar {
+    display: none;
 }
 
 .topnav a {
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 500;
     text-decoration: none;
     color: var(--slate);
-    transition: color 0.15s ease;
+    padding: 0.45rem 1.05rem;
+    border-radius: 100px;
+    white-space: nowrap;
+    transition: background 0.25s ease, color 0.25s ease;
 }
 
-.topnav a:hover,
-.topnav a.current {
+.topnav a:hover {
     color: var(--paper);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.topnav a.current {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+@media (max-width: 560px) {
+    .topbar {
+        padding: 16px;
+    }
+
+    .topnav {
+        order: 3;
+        width: 100%;
+    }
+
+    .topnav a {
+        padding: 0.45rem 0.85rem;
+        font-size: 0.8rem;
+    }
 }
 
 /* --- Page shell ------------------------------------------------------ */
@@ -133,20 +198,21 @@ button {
 main {
     max-width: 720px;
     margin: 0 auto;
-    padding: 36px 20px 56px;
+    padding: 28px 20px 64px;
 }
 
 .page-title {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.5rem;
-    margin: 0 0 6px;
+    font-family: var(--font-heading);
+    font-weight: 400;
+    font-size: clamp(2.8rem, 9vw, 4.4rem);
+    line-height: 0.95;
+    margin: 0 0 10px;
 }
 
 .page-subtitle {
     color: var(--slate);
-    font-size: 0.92rem;
-    margin: 0 0 28px;
+    font-size: 0.95rem;
+    margin: 0 0 30px;
 }
 
 /* --- Library context bar: which library a page belongs to, and a ---- */
@@ -157,19 +223,28 @@ main {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 20px;
-    border-bottom: 1px solid var(--line);
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4px 20px 0;
     font-size: 0.85rem;
 }
 
 .context-bar .library-name {
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 0.75rem;
     color: var(--paper);
 }
 
 .context-bar a {
     color: var(--slate);
     text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .context-bar a:hover {
@@ -189,10 +264,12 @@ main {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: var(--panel);
+    padding: 20px 22px;
+    border-radius: 28px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     text-decoration: none;
     color: var(--paper);
     transition: border-color 0.15s ease;
@@ -247,9 +324,11 @@ main {
 }
 
 .lf-card {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--panel);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -268,7 +347,7 @@ main {
 }
 
 .lf-card-body {
-    padding: 10px 12px 12px;
+    padding: 12px 14px 14px;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -304,10 +383,12 @@ main {
 }
 
 .lf-form {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 28px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 22px;
     margin-bottom: 24px;
 }
 
@@ -326,13 +407,32 @@ main {
 .lf-form textarea {
     width: 100%;
     font-family: var(--font-body);
-    background: var(--ink);
-    border: 1px solid var(--line);
+    background: var(--well);
+    border: 1px solid var(--glass-border);
     color: var(--paper);
-    border-radius: 7px;
-    padding: 9px 11px;
+    border-radius: 14px;
+    padding: 11px 14px;
     font-size: 0.9rem;
     resize: vertical;
+}
+
+.lf-form input[type="file"] {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--slate);
+    max-width: 100%;
+}
+
+.lf-form input[type="file"]::file-selector-button {
+    font-family: var(--font-body);
+    font-weight: 500;
+    margin-right: 12px;
+    padding: 9px 16px;
+    border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-strong);
+    color: var(--paper);
+    cursor: pointer;
 }
 
 .lf-photo-preview {
@@ -357,10 +457,12 @@ main {
 }
 
 .modal-box {
-    background: var(--panel-raised);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 22px;
+    background: rgba(12, 18, 32, 0.88);
+    border: 1px solid var(--glass-border);
+    border-radius: 28px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 26px;
     max-width: 340px;
     width: 100%;
     text-align: left;
@@ -404,12 +506,12 @@ main {
     font-weight: 500;
     font-size: 0.95rem;
     text-align: center;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: transparent;
+    border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    background: var(--well);
     color: var(--paper);
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.2s ease;
 }
 
 .btn:hover {
@@ -417,15 +519,16 @@ main {
 }
 
 .btn-primary {
-    background: var(--paper);
-    color: var(--ink);
-    border-color: var(--paper);
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
     font-weight: 600;
 }
 
 .btn-primary:hover {
-    background: #e4e2db;
-    border-color: #e4e2db;
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    transform: translateY(-2px);
 }
 
 .btn-quiet {
@@ -442,7 +545,7 @@ main {
 }
 
 .btn-tinted {
-    background: var(--panel-raised);
+    background: var(--glass-strong);
     border-color: var(--line);
     color: var(--paper);
     font-size: 0.88rem;
@@ -452,11 +555,11 @@ main {
 
 input[type="text"] {
     font-family: var(--font-body);
-    background: var(--panel);
-    border: 1px solid var(--line);
+    background: var(--well);
+    border: 1px solid var(--glass-border);
     color: var(--paper);
-    border-radius: 7px;
-    padding: 9px 11px;
+    border-radius: 100px;
+    padding: 11px 16px;
     font-size: 0.9rem;
 }
 

@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#011411" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
     <link rel="icon" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -180,9 +180,9 @@
             right: 4%;
             z-index: 130;
             max-width: 260px;
-            background: var(--panel-raised);
-            border: 1px solid var(--line);
-            border-radius: 12px;
+            background: rgba(12, 18, 32, 0.92);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
             padding: 12px 14px;
             font-size: 0.85rem;
         }
@@ -1048,14 +1048,8 @@
     <script>
         // One room per library, by position (libraries come from the
         // server's LIBRARIES config, so this cycles if there are more).
-        const THEMES = [
-            { inner: "#0b8a78", mid: "#044e3b", outer: "#011411", cover: "#2f8f6f", coverDark: "#1d5c48", foil: "#f1dfae" },
-            { inner: "#0b4f8a", mid: "#04294e", outer: "#010c14", cover: "#2a5d9f", coverDark: "#1a3d6b", foil: "#f3e4bd" },
-            { inner: "#8a2b4f", mid: "#4e0f2a", outer: "#14010a", cover: "#a03a5c", coverDark: "#66223b", foil: "#f6dfc0" },
-            { inner: "#8a5a0b", mid: "#4e3004", outer: "#140c01", cover: "#a8742a", coverDark: "#6b4816", foil: "#fbe9c4" },
-        ];
+        const THEMES = LIBRARY_THEMES;
         const PROP_KINDS = ["book", "open", "page", "mark"];
-        const LIBS_CACHE_KEY = "navispace_libs_cache";
         const LAST_LIB_KEY = "navispace_last_lib";
         const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -1479,10 +1473,7 @@
         // waking up), then replace it with the live one.
         try { applyLibraries(JSON.parse(safeGet(LIBS_CACHE_KEY) || "null")); } catch { }
         getLibraries()
-            .then((list) => {
-                safeSet(LIBS_CACHE_KEY, JSON.stringify(list));
-                applyLibraries(list);
-            })
+            .then(applyLibraries)
             .catch(() => {
                 if (!libraries.length) $("badgeSub").textContent = "Can't reach NaviSpace right now";
             });

@@ -11,7 +11,7 @@ const { getSeat, handleScan, findHeldSeat } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
 const { reportSeat } = require("./reports");
-const { saveSubscription, removeSubscription, sendPush } = require("./push");
+const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = require("./push");
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem } = require("./lostfound");
 
@@ -27,6 +27,66 @@ function activeLibrarySeatGroups() {
     libraryId: lib.id,
     seatIds: getSeatIds(lib.id),
   }));
+}
+
+const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
+/** Minimal Cookie header parser — the one cookie we read doesn't justify a dependency. */
+function readCookie(req, name) {
+  const header = req.headers.cookie || "";
+  for (const part of header.split(";")) {
+    const i = part.indexOf("=");
+    if (i > -1 && part.slice(0, i).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(i + 1).trim());
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The web app manifest, with the installing device's identity (and the
+ * seat it's on) carried in start_url. iOS gives a Home Screen app its own
+ * storage, separate from Safari, so without this the installed app gets a
+ * fresh token — and its push subscription is filed under a token that
+ * never holds a seat, so reminders never reach it.
+ *
+ * The identity arrives two ways, because Safari may read the manifest
+ * either when the page loads or when "Add to Home Screen" is tapped:
+ * the manifest link's own query (?handoff=&nick=&lib=&seat=, set by
+ * client.js once the page has an identity), or the ns_handoff cookie
+ * client.js sets with the same fields (sent because the link is
+ * crossorigin="use-credentials"). The installed app adopts it on launch
+ * (adoptHandoffIdentity in client.js).
+ */
+function buildManifest(req) {
+  const manifest = { ...BASE_MANIFEST, id: "/" };
+  let source = req.query;
+  if (!UUID_RE.test(String(source.handoff || ""))) {
+    source = Object.fromEntries(new URLSearchParams(readCookie(req, "ns_handoff") || ""));
+  }
+  const handoff = String(source.handoff || "");
+  if (!UUID_RE.test(handoff)) return manifest;
+
+  const params = new URLSearchParams({ handoff });
+  const nick = String(source.nick || "").trim().slice(0, 24);
+  if (nick) params.set("nick", nick);
+
+  // Start on the seat the student was on, so the installed app opens
+  // right where "Enable seat reminders" is.
+  const lib = String(source.lib || "");
+  const seat = String(source.seat || "");
+  if (SAFE_ID_RE.test(lib) && SAFE_ID_RE.test(seat)) {
+    params.set("lib", lib);
+    params.set("seat", seat);
+    manifest.start_url = `/seat.html?${params}`;
+  } else {
+    manifest.start_url = `/?${params}`;
+  }
+  return manifest;
 }
 
 function createApp() {
@@ -47,15 +107,9 @@ function createApp() {
   // link here with ?handoff=<token>&nick=<nickname>; the installed app
   // adopts them on launch (see adoptHandoffIdentity in client.js).
   app.get("/manifest.json", (req, res) => {
-    const manifest = { ...BASE_MANIFEST, id: "/" };
-    const handoff = String(req.query.handoff || "");
-    if (UUID_RE.test(handoff)) {
-      const params = new URLSearchParams({ handoff });
-      const nick = String(req.query.nick || "").trim().slice(0, 24);
-      if (nick) params.set("nick", nick);
-      manifest.start_url = `/?${params}`;
-    }
-    res.set("Cache-Control", "no-store").type("application/manifest+json").send(JSON.stringify(manifest));
+    res.set("Cache-Control", "no-store")
+      .type("application/manifest+json")
+      .send(JSON.stringify(buildManifest(req)));
   });
 
   app.use(express.static(PUBLIC_DIR));
@@ -271,7 +325,7 @@ function createApp() {
       PEAK_CHECK_IN_DURATION_MS: config.PEAK_CHECK_IN_DURATION_MS,
       PEAK_HOURS_START: config.PEAK_HOURS_START,
       PEAK_HOURS_END: config.PEAK_HOURS_END,
-      VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || null,
+      VAPID_PUBLIC_KEY: vapidPublicKey(),
     });
   });
 
@@ -280,6 +334,9 @@ function createApp() {
 
 function start() {
   const app = createApp();
+  // Surfaces a missing or malformed VAPID setup in the logs at boot,
+  // rather than at the first reminder.
+  require("./push").ensureConfigured();
 
   const stopSweep = startSweepLoop(
     () => Promise.resolve(activeLibrarySeatGroups()),
