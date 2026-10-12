@@ -6,7 +6,7 @@ const express = require("express");
 
 const config = require("./config");
 const { LIBRARIES, getLibrary, isActiveLibrary } = require("./libraries");
-const { getSeatIds, getZoneOrder } = require("./seats");
+const { getSeatIds, getZoneOrder, getLayout } = require("./seats");
 const { getSeat, handleScan, findHeldSeat } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
@@ -124,8 +124,17 @@ function createApp() {
         status: lib.status,
         seatCount: lib.status === "active" ? getSeatIds(lib.id).length : 0,
         zoneOrder: lib.status === "active" ? getZoneOrder(lib.id) : null,
+        hasLayout: Boolean(getLayout(lib.id)),
       }))
     );
+  });
+
+  // --- Floor plan -----------------------------------------------------------
+
+  app.get("/api/library/:libId/layout", (req, res) => {
+    const layout = getLayout(req.params.libId);
+    if (!layout) return res.status(404).json({ ok: false, reason: "no_layout" });
+    res.json(layout);
   });
 
   // --- Seat state ----------------------------------------------------------
