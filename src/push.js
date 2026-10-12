@@ -21,6 +21,12 @@ function vapidConfigured() {
 let configured = false;
 function ensureConfigured() {
     if (configured || !vapidConfigured()) return;
+    // Apple's push service rejects VAPID JWTs whose subject isn't a
+    // real contact (403 BadJwtToken), so a placeholder here silently
+    // breaks every iPhone. Set VAPID_SUBJECT=mailto:you@yourdomain.
+    if (!process.env.VAPID_SUBJECT) {
+        console.warn("[push] VAPID_SUBJECT is not set — iOS devices will reject pushes. Set it to mailto:<your email>.");
+    }
     webpush.setVapidDetails(
         process.env.VAPID_SUBJECT || "mailto:admin@example.com",
         process.env.VAPID_PUBLIC_KEY,
@@ -56,12 +62,22 @@ async function sendPush(token, payload) {
     if (!subscription) return { sent: false, reason: "not_subscribed" };
 
     try {
-        await webpush.sendNotification(subscription, JSON.stringify(payload));
+        // TTL: a "your seat frees up soon" reminder is worthless after
+        // a few minutes, so don't let the push service deliver it late.
+        // urgency high: lets it through Android's battery saver/doze.
+        await webpush.sendNotification(subscription, JSON.stringify(payload), {
+            TTL: 5 * 60,
+            urgency: "high",
+        });
         return { sent: true };
     } catch (err) {
         if (err.statusCode === 404 || err.statusCode === 410) {
             await removeSubscription(token);
         }
+        // Logged so a failing push service shows up in the host's logs
+        // instead of vanishing — this is where "notifications don't
+        // work" gets diagnosed.
+        console.warn(`[push] send failed (${err.statusCode || "no status"}): ${err.body || err.message}`);
         return { sent: false, reason: err.message || "send_failed" };
     }
 }

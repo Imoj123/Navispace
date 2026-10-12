@@ -1,0 +1,41 @@
+# Deploying NaviSpace on Render
+
+## Stop the free tier from sleeping
+
+Render's free web services sleep after 15 minutes without traffic. The next visitor waits 30–60 seconds while it boots. Worse, while it sleeps **the reminder and expiry loops don't run**, so no seat reminders are sent and expired seats aren't freed.
+
+Pick one:
+
+1. **Upgrade the service to Render's Starter plan.** This is the real fix: it never sleeps, and nothing else needs maintaining.
+2. **Free: ping it every 10 minutes.** Create a free monitor at [cron-job.org](https://cron-job.org) or [UptimeRobot](https://uptimerobot.com) that requests:
+
+   ```
+   https://navispace-1.onrender.com/healthz
+   ```
+
+   every 10 minutes. `/healthz` is cheap and never cached. One service running 24/7 uses about 730 of the free tier's 750 instance-hours a month, so a single always-on service fits. Don't run a second free service on the same account this way, because together they would go over.
+
+Installed copies of the app open instantly either way: the service worker now serves the cached pages first and refreshes them in the background.
+
+## Environment variables for notifications
+
+All four need to be set on the Render service (Dashboard → your service → Environment):
+
+| Variable | Value |
+| --- | --- |
+| `VAPID_PUBLIC_KEY` | from `npm run vapid-keys` |
+| `VAPID_PRIVATE_KEY` | from `npm run vapid-keys` |
+| `VAPID_SUBJECT` | `mailto:` + a real email address you own, e.g. `mailto:you@yourdomain` (Apple rejects pushes signed with a placeholder) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | from a free Upstash Redis database. Without these, every restart or sleep **erases** check-ins and notification sign-ups. |
+
+Generate the VAPID keys once and keep them. Changing them invalidates every existing subscription.
+
+## Checking notifications work
+
+1. Check in to a seat and tap **Enable seat reminders**. A test notification should arrive within a few seconds.
+   - If the page says the test didn't go through, open Render → Logs and look for a `[push] send failed (...)` line, which gives the push service's reason.
+2. **iPhone:** iOS only allows web notifications for an app added to the Home Screen.
+   - Check in from Safari, then **Share → Add to Home Screen**, then open NaviSpace from the Home Screen icon.
+   - The installed app keeps your check-in (your identity is handed over when it's installed). Tap **Your seat** in the header, then **Enable seat reminders**.
+   - If the app was installed before this update, delete it and add it again so the handover happens.
+3. A reminder arrives 5 minutes before a seat would free up (`REMINDER_LEAD_MS` in `src/config.js`).

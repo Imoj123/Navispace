@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#10182b" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="icon" href="/icons/icon-192.png" />
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="NaviSpace" />
@@ -272,9 +272,13 @@
 
     document.getElementById("enableReminders").onclick = async () => {
       const result = await enablePushReminders(identity);
-      if (result.ok) {
+      if (result.ok && result.testSent) {
         reminderEnabled = true;
-        toast("Reminders on — we'll ping you before your seat frees up.");
+        toast("Reminders on — you should have just got a test notification.");
+        refresh();
+      } else if (result.ok) {
+        reminderEnabled = true;
+        toast("Reminders saved, but the test notification didn't go through — the server's push setup needs checking.");
         refresh();
       } else if (result.reason === "ios_not_installed") {
         toast("On iPhone: tap Share, then \"Add to Home Screen\" — reopen NaviSpace from there to enable reminders.");
