@@ -121,6 +121,142 @@
             opacity: 0.7;
         }
 
+        /* --- Floor plan (libraries with src/layouts/<id>.json) -------------- */
+
+        main.has-plan {
+            max-width: 1040px;
+        }
+
+        .plan-meta {
+            font-family: var(--font-display);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--slate);
+            margin: -18px 0 22px;
+        }
+
+        .plan-wrap {
+            /* Phones scroll the plan sideways rather than shrinking seats
+               below a tappable, readable size. */
+            overflow-x: auto;
+            margin: 0 -20px;
+            padding: 0 20px 8px;
+            scrollbar-width: thin;
+        }
+
+        .plan-card {
+            min-width: 700px;
+            padding: 18px;
+            border-radius: 28px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        svg.plan {
+            display: block;
+            width: 100%;
+            height: auto;
+            overflow: visible;
+        }
+
+        .plan-floor {
+            fill: rgba(255, 255, 255, 0.05);
+            stroke: rgba(255, 255, 255, 0.5);
+            stroke-width: 2.5;
+            stroke-linejoin: round;
+        }
+
+        .plan-room {
+            fill: rgba(255, 255, 255, 0.05);
+            stroke: rgba(255, 255, 255, 0.28);
+            stroke-dasharray: 5 4;
+        }
+
+        .plan-core {
+            fill: rgba(0, 0, 0, 0.3);
+            stroke: rgba(255, 255, 255, 0.3);
+        }
+
+        .plan-label {
+            fill: var(--slate);
+            font-family: var(--font-display);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .plan-label.outside {
+            fill: rgba(255, 255, 255, 0.3);
+            font-size: 14px;
+        }
+
+        .plan-stack {
+            stroke: rgba(255, 255, 255, 0.2);
+            stroke-width: 4;
+            stroke-linecap: round;
+        }
+
+        .plan-table {
+            fill: rgba(255, 255, 255, 0.1);
+            stroke: rgba(255, 255, 255, 0.28);
+            stroke-width: 1.5;
+        }
+
+        .plan-seat rect {
+            stroke-width: 2;
+        }
+
+        .plan-seat text {
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 700;
+            text-anchor: middle;
+            dominant-baseline: central;
+            fill: currentColor;
+        }
+
+        .plan-seat.state-AVAILABLE rect { fill: var(--green-dim); stroke: var(--green); }
+        .plan-seat.state-OCCUPIED rect { fill: var(--vermilion-dim); stroke: #ff8a73; }
+        .plan-seat.state-STEPPED_AWAY rect { fill: var(--amber-dim); stroke: var(--amber); }
+        .plan-seat.state-UNKNOWN { color: var(--slate-dim); }
+        .plan-seat.state-UNKNOWN rect { fill: rgba(255, 255, 255, 0.06); stroke: rgba(255, 255, 255, 0.25); }
+
+        /* Same confidence language as the tiles: solid = recent, dashed = stale. */
+        .plan-seat.staleness-medium rect { stroke-dasharray: 4 3; }
+        .plan-seat.staleness-low rect { stroke: var(--slate-dim); stroke-dasharray: 4 3; }
+        .plan-seat.staleness-low { opacity: 0.75; }
+
+        .plan-hint {
+            display: none;
+            font-size: 0.8rem;
+            color: var(--slate);
+            margin: 10px 0 0;
+        }
+
+        @media (max-width: 760px) {
+            .plan-hint {
+                display: block;
+            }
+        }
+
+        .plan-entrance {
+            fill: var(--accent);
+        }
+
+        .plan-entrance-label {
+            fill: var(--accent);
+            font-family: var(--font-display);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
         #empty {
             text-align: center;
             color: var(--slate);
@@ -150,6 +286,11 @@
             <span>Solid border = confirmed recently, dashed = getting stale</span>
         </div>
 
+        <p class="plan-meta" id="planMeta" hidden></p>
+        <div class="plan-wrap" id="planWrap" hidden>
+            <div class="plan-card"><svg class="plan" id="plan" role="img" aria-label="Floor plan with live seat status"></svg></div>
+            <p class="plan-hint">Swipe sideways to see the whole floor →</p>
+        </div>
         <div id="map"></div>
         <p id="empty" style="display:none;">No seats configured yet.</p>
     </main>
@@ -169,15 +310,120 @@
             document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
         });
 
+        // --- Floor plan ----------------------------------------------------
+
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        let layoutPromise = null;
+
+        function getLayout() {
+            if (!layoutPromise) {
+                layoutPromise = fetch(`/api/library/${encodeURIComponent(libraryId)}/layout`)
+                    .then((res) => (res.ok ? res.json() : null))
+                    .catch(() => null);
+            }
+            return layoutPromise;
+        }
+
+        function svgEl(tag, attrs, parent) {
+            const el = document.createElementNS(SVG_NS, tag);
+            for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+            if (parent) parent.appendChild(el);
+            return el;
+        }
+
+        /** Draws the building once; seats are re-coloured on every refresh. */
+        let planSeats = null;
+        function drawPlan(layout) {
+            const svg = document.getElementById("plan");
+            svg.innerHTML = "";
+            const [x, y, w, h] = layout.viewBox || [0, 0, 1000, 520];
+            // A little headroom for the entrance arrow above the outline.
+            svg.setAttribute("viewBox", `${x - 10} ${y - 40} ${w + 20} ${h + 60}`);
+
+            for (const z of layout.zones || []) {
+                const t = svgEl("text", { x: z.x, y: z.y, class: "plan-label outside", "text-anchor": "middle" }, svg);
+                t.textContent = z.label;
+            }
+            if (layout.outline) svgEl("path", { d: layout.outline, class: "plan-floor" }, svg);
+
+            for (const r of layout.rooms || []) {
+                svgEl("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 8, class: r.kind === "core" ? "plan-core" : "plan-room" }, svg);
+                const t = svgEl("text", { x: r.x + r.w / 2, y: r.y + r.h / 2, class: "plan-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg);
+                t.textContent = r.label;
+            }
+
+            for (const st of layout.stacks || []) {
+                // Book stacks: a run of shelf lines filling the block.
+                const g = svgEl("g", {}, svg);
+                for (let ly = st.y + 6; ly <= st.y + st.h - 4; ly += 14) {
+                    svgEl("line", { x1: st.x, y1: ly, x2: st.x + st.w, y2: ly, class: "plan-stack" }, g);
+                }
+            }
+
+            for (const t of layout.tables || []) {
+                if (t.shape === "round") {
+                    svgEl("circle", { cx: t.cx, cy: t.cy, r: t.r, class: "plan-table" }, svg);
+                } else {
+                    svgEl("rect", { x: t.x, y: t.y, width: t.w, height: t.h, rx: 4, class: "plan-table" }, svg);
+                }
+            }
+
+            if (layout.entrance) {
+                const e = layout.entrance;
+                svgEl("path", { d: `M${e.x - 10} ${e.y - 26} h20 v12 h9 l-19 18 l-19 -18 h9 z`, class: "plan-entrance" }, svg);
+                const t = svgEl("text", { x: e.x + 18, y: e.y - 16, class: "plan-entrance-label" }, svg);
+                t.textContent = e.label || "Enter";
+            }
+
+            planSeats = new Map();
+            for (const seat of layout.seats) {
+                const g = svgEl("g", { class: "plan-seat state-UNKNOWN", transform: `translate(${seat.x} ${seat.y})` }, svg);
+                svgEl("rect", { x: -13, y: -13, width: 26, height: 26, rx: 7 }, g);
+                const t = svgEl("text", { x: 0, y: 0.5 }, g);
+                t.textContent = seat.id;
+                const title = svgEl("title", {}, g);
+                planSeats.set(String(seat.id), { g, title });
+            }
+        }
+
+        const STATE_WORDS = { AVAILABLE: "available", OCCUPIED: "occupied", STEPPED_AWAY: "stepped away" };
+
+        function paintPlan(seats, config) {
+            const byId = new Map(seats.map((s) => [s.id, s]));
+            for (const [id, { g, title }] of planSeats) {
+                const seat = byId.get(id);
+                const state = seat ? seat.state : "UNKNOWN";
+                const level = seat ? confidenceLevel(seat, config) : null;
+                g.setAttribute("class", `plan-seat state-${state}` + (level ? ` staleness-${level}` : ""));
+                title.textContent = `Seat ${id}: ${STATE_WORDS[state] || "not set up"}`;
+            }
+        }
+
         async function render() {
-            const [seats, config, libraries] = await Promise.all([
+            const [seats, config, libraries, layout] = await Promise.all([
                 getAllSeats(libraryId),
                 getServerConfig(),
                 getLibraries(),
+                getLayout(),
             ]);
             const mapEl = document.getElementById("map");
             const emptyEl = document.getElementById("empty");
             mapEl.innerHTML = "";
+
+            // A library with a floor plan shows its seats where they are.
+            if (layout) {
+                if (!planSeats) {
+                    drawPlan(layout);
+                    document.querySelector("main").classList.add("has-plan");
+                    document.getElementById("planWrap").hidden = false;
+                    const meta = document.getElementById("planMeta");
+                    meta.hidden = !layout.floor;
+                    meta.textContent = layout.floor || "";
+                }
+                paintPlan(seats, config);
+                emptyEl.style.display = "none";
+                return;
+            }
 
             if (!seats.length) {
                 emptyEl.style.display = "block";
