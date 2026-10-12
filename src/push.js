@@ -14,25 +14,42 @@ function pushKey(token) {
     return `push:${token}`;
 }
 
+// Values pasted into a host's dashboard often pick up a stray space or
+// newline; Apple's push service rejects the resulting JWT outright while
+// other browsers' services tolerate it, so trim before use.
+const env = (name) => (process.env[name] || "").trim();
+
 function vapidConfigured() {
-    return Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+    return Boolean(env("VAPID_PUBLIC_KEY") && env("VAPID_PRIVATE_KEY"));
+}
+
+function vapidPublicKey() {
+    return env("VAPID_PUBLIC_KEY") || null;
 }
 
 let configured = false;
 function ensureConfigured() {
     if (configured || !vapidConfigured()) return;
-    // Apple's push service rejects VAPID JWTs whose subject isn't a
-    // real contact (403 BadJwtToken), so a placeholder here silently
-    // breaks every iPhone. Set VAPID_SUBJECT=mailto:you@yourdomain.
-    if (!process.env.VAPID_SUBJECT) {
-        console.warn("[push] VAPID_SUBJECT is not set — iOS devices will reject pushes. Set it to mailto:<your email>.");
+    // Apple's push service rejects VAPID JWTs whose subject isn't a real
+    // contact (403 BadJwtToken): a placeholder, a missing "mailto:", or a
+    // space after it all break every iPhone while laptops keep working.
+    const subject = env("VAPID_SUBJECT");
+    if (!/^(mailto:[^\s@]+@[^\s@]+\.[^\s@]+|https:\/\/\S+)$/.test(subject)) {
+        console.warn(
+            `[push] VAPID_SUBJECT ${subject ? `"${subject}" is malformed` : "is not set"} — ` +
+            "iPhones will reject pushes. Use mailto:you@yourdomain (no spaces)."
+        );
     }
-    webpush.setVapidDetails(
-        process.env.VAPID_SUBJECT || "mailto:admin@example.com",
-        process.env.VAPID_PUBLIC_KEY,
-        process.env.VAPID_PRIVATE_KEY
-    );
-    configured = true;
+    try {
+        webpush.setVapidDetails(
+            subject || "mailto:admin@example.com",
+            env("VAPID_PUBLIC_KEY"),
+            env("VAPID_PRIVATE_KEY")
+        );
+        configured = true;
+    } catch (err) {
+        console.warn(`[push] VAPID keys rejected: ${err.message}`);
+    }
 }
 
 async function saveSubscription(token, subscription) {
@@ -57,6 +74,7 @@ async function removeSubscription(token) {
 async function sendPush(token, payload) {
     if (!vapidConfigured()) return { sent: false, reason: "no_vapid_key" };
     ensureConfigured();
+    if (!configured) return { sent: false, reason: "bad_vapid_config" };
 
     const subscription = await store.get(pushKey(token));
     if (!subscription) return { sent: false, reason: "not_subscribed" };
@@ -83,7 +101,9 @@ async function sendPush(token, payload) {
 }
 
 module.exports = {
+    ensureConfigured,
     vapidConfigured,
+    vapidPublicKey,
     saveSubscription,
     removeSubscription,
     sendPush,
