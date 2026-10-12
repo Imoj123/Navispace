@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 
 const { createApp } = require("../src/server");
 const { store } = require("../src/store");
+const { getSeatIds } = require("../src/seats");
 
 async function withServer(fn) {
   const server = createApp().listen(0);
@@ -58,7 +59,8 @@ test("manifest starts on the seat when given one, and falls back to the handoff 
 test("/api/held finds the seat this token holds", async () => {
   await withServer(async (base) => {
     const token = "tok-held-1";
-    const scan = await fetch(`${base}/api/library/engineering/scan/A1`, {
+    const seatId = getSeatIds("engineering")[0];
+    const scan = await fetch(`${base}/api/library/engineering/scan/${seatId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "checkIn", token, nickname: "Ayo" }),
@@ -70,7 +72,7 @@ test("/api/held finds the seat this token holds", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
     })).json();
-    assert.deepEqual(held, { ok: true, libraryId: "engineering", seatId: "A1", state: "OCCUPIED" });
+    assert.deepEqual(held, { ok: true, libraryId: "engineering", seatId, state: "OCCUPIED" });
 
     const none = await (await fetch(`${base}/api/held`, {
       method: "POST",
@@ -78,5 +80,16 @@ test("/api/held finds the seat this token holds", async () => {
       body: JSON.stringify({ token: "someone-else" }),
     })).json();
     assert.equal(none.seatId, null);
+  });
+});
+
+test("engineering seats come from its floor plan, which the API serves", async () => {
+  const ids = getSeatIds("engineering");
+  assert.ok(ids.length >= 30, `expected the floor plan's seats, got ${ids.length}`);
+  assert.equal(new Set(ids).size, ids.length, "seat ids must be unique");
+  await withServer(async (base) => {
+    const layout = await (await fetch(`${base}/api/library/engineering/layout`)).json();
+    assert.deepEqual(layout.seats.map((s) => s.id), ids);
+    assert.equal((await fetch(`${base}/api/library/commerce/layout`)).status, 404);
   });
 });
