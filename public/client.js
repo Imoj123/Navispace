@@ -24,6 +24,18 @@ function registerServiceWorker() {
 }
 registerServiceWorker();
 
+// When a new service worker takes over (a new deploy), reload once so the
+// page shown is the new version rather than the one already on screen.
+// Skipped on a device's very first visit, when there was nothing to replace.
+if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+  let reloadedForUpdate = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloadedForUpdate) return;
+    reloadedForUpdate = true;
+    window.location.reload();
+  });
+}
+
 function isStandaloneApp() {
   return (
     window.navigator.standalone === true ||
