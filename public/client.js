@@ -67,6 +67,15 @@ function updateManifestHandoff() {
   const params = new URLSearchParams({ handoff: token });
   const nick = localStorage.getItem("navispace_nickname");
   if (nick && nick !== "Anonymous") params.set("nick", nick);
+  // On a seat page, the installed app should open on this seat.
+  if (window.location.pathname === "/seat.html") {
+    const here = new URLSearchParams(window.location.search);
+    params.set("lib", getLibraryIdFromUrl());
+    params.set("seat", here.get("seat") || "A1");
+  }
+  // The same fields as a cookie: Safari may fetch the manifest before this
+  // script runs, and the link's crossorigin="use-credentials" sends it.
+  document.cookie = `ns_handoff=${encodeURIComponent(params)}; path=/; max-age=31536000; SameSite=Lax; Secure`;
   const href = `/manifest.json?${params}`;
   if (link.getAttribute("href") === href) return;
   // A fresh element rather than a new href: some browsers (Safari) only
@@ -215,9 +224,60 @@ async function getHeldSeat(token) {
   return res.json();
 }
 
-async function getLibraries() {
-  const res = await fetch(`/api/libraries`);
-  return res.json();
+/**
+ * Each library's "room": the background and book colours it wears on
+ * every page, by its position in the server's LIBRARIES list (cycling if
+ * there are more libraries than themes). The home page's book covers use
+ * the same entries, so a library looks the same everywhere.
+ */
+const LIBRARY_THEMES = [
+  { inner: "#0b8a78", mid: "#044e3b", outer: "#011411", cover: "#2f8f6f", coverDark: "#1d5c48", foil: "#f1dfae" },
+  { inner: "#0b4f8a", mid: "#04294e", outer: "#010c14", cover: "#2a5d9f", coverDark: "#1a3d6b", foil: "#f3e4bd" },
+  { inner: "#8a2b4f", mid: "#4e0f2a", outer: "#14010a", cover: "#a03a5c", coverDark: "#66223b", foil: "#f6dfc0" },
+  { inner: "#8a5a0b", mid: "#4e3004", outer: "#140c01", cover: "#a8742a", coverDark: "#6b4816", foil: "#fbe9c4" },
+];
+const LIBS_CACHE_KEY = "navispace_libs_cache";
+
+function cachedLibraries() {
+  try {
+    const list = JSON.parse(localStorage.getItem(LIBS_CACHE_KEY) || "null");
+    return Array.isArray(list) ? list : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Sets a theme's room colours on the page (body CSS variables + browser chrome). */
+function paintRoom(theme) {
+  const s = document.body.style;
+  s.setProperty("--bg-inner", theme.inner);
+  s.setProperty("--bg-mid", theme.mid);
+  s.setProperty("--bg-outer", theme.outer);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = theme.outer;
+}
+
+function libraryTheme(libraries, libraryId) {
+  const i = Math.max(0, (libraries || []).findIndex((l) => l.id === libraryId));
+  return LIBRARY_THEMES[i % LIBRARY_THEMES.length];
+}
+
+let _librariesPromise = null;
+/** The library list — fetched once per page, and cached for the next page's first paint. */
+function getLibraries() {
+  if (!_librariesPromise) {
+    _librariesPromise = fetch(`/api/libraries`)
+      .then((res) => res.json())
+      .then((list) => {
+        try { localStorage.setItem(LIBS_CACHE_KEY, JSON.stringify(list)); } catch { }
+        return list;
+      })
+      .catch((err) => {
+        _librariesPromise = null;
+        throw err;
+      });
+  }
+  return _librariesPromise;
 }
 
 async function postScan(libraryId, seatId, action, identity) {
@@ -373,3 +433,15 @@ function confidenceLevel(seat, config, now = Date.now()) {
   if (staleness < config.STALENESS_MEDIUM_MAX) return "medium";
   return "low";
 }
+
+/**
+ * Library pages (body data-room="library") wear their library's room:
+ * straight away from the cached list, then confirmed from the live one.
+ */
+(function paintLibraryRoom() {
+  if (!document.body || document.body.dataset.room !== "library") return;
+  const id = getLibraryIdFromUrl();
+  const cached = cachedLibraries();
+  if (cached) paintRoom(libraryTheme(cached, id));
+  getLibraries().then((list) => paintRoom(libraryTheme(list, id))).catch(() => {});
+})();

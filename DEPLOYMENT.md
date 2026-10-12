@@ -34,8 +34,9 @@ Generate the VAPID keys once and keep them. Changing them invalidates every exis
 
 1. Check in to a seat and tap **Enable seat reminders**. A test notification should arrive within a few seconds.
    - If the page says the test didn't go through, open Render → Logs and look for a `[push] send failed (...)` line, which gives the push service's reason.
-2. **iPhone:** iOS only allows web notifications for an app added to the Home Screen.
-   - Check in from Safari, then **Share → Add to Home Screen**, then open NaviSpace from the Home Screen icon.
-   - The installed app keeps your check-in (your identity is handed over when it's installed). Tap **Your seat** in the header, then **Enable seat reminders**.
-   - If the app was installed before this update, delete it and add it again so the handover happens.
+2. **iPhone:** iOS only allows web notifications for an app added to the Home Screen, on iOS 16.4 or newer.
+   - Check in from Safari, then **Share → Add to Home Screen**, then open NaviSpace from the new icon.
+   - The installed app takes over your Safari identity and opens on your seat. Tap **Enable seat reminders** there.
+   - If the app shows the seat as just "Occupied" instead of "You're checked in", the identity didn't carry over. Delete the icon, reload the seat page in Safari, and add it again.
+   - If the test notification doesn't arrive, check Render → Logs for a `[push] VAPID_SUBJECT ... malformed` warning. It must be exactly `mailto:you@domain`, with no spaces.
 3. A reminder arrives 5 minutes before a seat would free up (`REMINDER_LEAD_MS` in `src/config.js`).
