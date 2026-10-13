@@ -52,19 +52,46 @@ function isStandaloneApp() {
  * into from the browser. Only honoured inside the installed app, so a
  * shared link can never swap a browser's identity.
  */
+function readCookie(name) {
+  for (const part of document.cookie.split(";")) {
+    const i = part.indexOf("=");
+    if (i > -1 && part.slice(0, i).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(i + 1).trim());
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 (function adoptHandoffIdentity() {
   const params = new URLSearchParams(window.location.search);
-  const handoff = params.get("handoff");
-  if (!handoff) return;
-  if (isStandaloneApp() && /^[0-9a-f-]{36}$/i.test(handoff)) {
-    localStorage.setItem("navispace_token", handoff);
-    const nick = (params.get("nick") || "").trim();
-    if (nick) localStorage.setItem("navispace_nickname", nick.slice(0, 24));
+  // Two routes in, because iOS versions differ: the start_url's query
+  // (some drop it), or the ns_handoff cookie, which iOS copies from Safari
+  // into a Home Screen app when it's installed.
+  let source = params.get("handoff") ? params : null;
+  if (!source && isStandaloneApp()) {
+    const cookie = readCookie("ns_handoff");
+    if (cookie) source = new URLSearchParams(cookie);
   }
-  params.delete("handoff");
-  params.delete("nick");
-  const qs = params.toString();
-  history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+  if (source && isStandaloneApp()) {
+    const token = source.get("handoff") || "";
+    if (/^[0-9a-f-]{36}$/i.test(token) && token !== localStorage.getItem("navispace_token")) {
+      localStorage.setItem("navispace_token", token);
+      const nick = (source.get("nick") || "").trim();
+      if (nick) localStorage.setItem("navispace_nickname", nick.slice(0, 24));
+      // Just became this student: take them to the seat they hold.
+      sessionStorage.setItem("navispace_go_to_seat", "1");
+    }
+  }
+  if (params.has("handoff") || params.has("nick")) {
+    params.delete("handoff");
+    params.delete("nick");
+    const qs = params.toString();
+    history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+  }
 })();
 
 /**
@@ -456,4 +483,23 @@ function confidenceLevel(seat, config, now = Date.now()) {
   const cached = cachedLibraries();
   if (cached) paintRoom(libraryTheme(cached, id));
   getLibraries().then((list) => paintRoom(libraryTheme(list, id))).catch(() => {});
+})();
+
+/**
+ * Right after the installed app takes over a student's identity, open
+ * the seat they hold — that's where "Enable seat reminders" is.
+ */
+(function goToHeldSeatAfterHandoff() {
+  if (sessionStorage.getItem("navispace_go_to_seat") !== "1") return;
+  sessionStorage.removeItem("navispace_go_to_seat");
+  const token = localStorage.getItem("navispace_token");
+  if (!token) return;
+  getHeldSeat(token)
+    .then((held) => {
+      if (!held || !held.seatId) return;
+      const here = new URLSearchParams(window.location.search);
+      if (window.location.pathname === "/seat.html" && here.get("seat") === held.seatId) return;
+      window.location.replace(`/seat.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`);
+    })
+    .catch(() => {});
 })();
