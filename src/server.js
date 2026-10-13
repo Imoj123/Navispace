@@ -144,6 +144,11 @@ function createApp() {
     if (!getLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "unknown_library" });
     }
+    // An id that isn't one of this library's seats (an old QR code, a
+    // typo) is reported as such, rather than as a free seat.
+    if (!getSeatIds(libId).includes(req.params.id)) {
+      return res.status(404).json({ ok: false, reason: "unknown_seat" });
+    }
     const seat = await getSeat(libId, req.params.id);
     res.json(seat);
   });
