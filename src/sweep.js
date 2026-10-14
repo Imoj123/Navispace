@@ -61,10 +61,16 @@ async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
  */
 function startSweepLoop(getLibrarySeatGroups, intervalMs, onSweep) {
   const runSweep = async () => {
-    const groups = await getLibrarySeatGroups();
-    for (const { libraryId, seatIds } of groups) {
-      const reclaimed = await sweepExpiredSeats(libraryId, seatIds);
-      if (reclaimed.length && onSweep) onSweep(libraryId, reclaimed);
+    // A failed pass (e.g. the store briefly unreachable) is logged and
+    // retried next interval — it must never take the whole server down.
+    try {
+      const groups = await getLibrarySeatGroups();
+      for (const { libraryId, seatIds } of groups) {
+        const reclaimed = await sweepExpiredSeats(libraryId, seatIds);
+        if (reclaimed.length && onSweep) onSweep(libraryId, reclaimed);
+      }
+    } catch (err) {
+      console.error(`[sweep] pass failed, will retry: ${err.message}`);
     }
   };
 
