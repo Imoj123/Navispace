@@ -57,12 +57,28 @@
         }
 
         body {
-            background: radial-gradient(circle at center, var(--bg-inner) 0%, var(--bg-mid) 50%, var(--bg-outer) 100%) fixed;
+            background: radial-gradient(circle at center, var(--bg-inner) 0%, var(--bg-mid) 50%, var(--bg-outer) 100%) no-repeat;
             background-color: var(--bg-outer);
             color: #fff;
             overflow-x: hidden;
             height: auto;
             min-height: 100%;
+        }
+
+        /* A fixed room behind the scrolling shelf is cheap on a computer;
+           on phones it forces a full repaint on every scroll, so they skip it. */
+        @media (hover: hover) {
+            body {
+                background-attachment: fixed;
+            }
+        }
+
+        /* Phones: the floating props' drop shadows are re-rasterised every
+           frame as they move, so they go without. */
+        @media (hover: none) {
+            .prop {
+                filter: none;
+            }
         }
 
         /* --- Rising letters (the soda's bubbles) --------------------------- */
@@ -1139,7 +1155,6 @@
                 overflow-y: auto;
                 height: auto;
                 min-height: 100dvh;
-                background-attachment: fixed;
             }
 
             .lp-header {
@@ -1777,15 +1792,33 @@
                 g.style.transform = `translate(${fx}px, ${fy}px) rotate(${Math.sin(phase * 0.3) * 15}deg)`;
             });
 
+            if (heroVisible) requestAnimationFrame(animate);
+            else animating = false;
+        }
+
+        // The hero's motion only runs while the hero is on screen — once
+        // you've scrolled to the shelf it stops costing anything.
+        let heroVisible = true;
+        let animating = false;
+        function startHeroMotion() {
+            if (reduceMotion || animating || !heroVisible) return;
+            animating = true;
             requestAnimationFrame(animate);
+        }
+        if ("IntersectionObserver" in window) {
+            new IntersectionObserver(([entry]) => {
+                heroVisible = entry.isIntersecting;
+                if (heroVisible) startHeroMotion();
+            }).observe(document.querySelector(".lp-hero"));
         }
 
         // --- Rising letters ------------------------------------------------
 
         const motes = $("motes");
         const LETTERS = "aeinorstlu§¶&";
+        const isTouch = window.matchMedia("(hover: none)").matches;
         function createMote() {
-            if (document.hidden || motes.childElementCount > 40) return;
+            if (document.hidden || !heroVisible || motes.childElementCount > (isTouch ? 14 : 40)) return;
             const m = document.createElement("span");
             m.className = "mote";
             m.textContent = LETTERS[Math.floor(Math.random() * LETTERS.length)];
@@ -2140,8 +2173,8 @@
         document.fonts && document.fonts.ready.then(measureProps);
 
         if (!reduceMotion) {
-            requestAnimationFrame(animate);
-            setInterval(createMote, 400);
+            startHeroMotion();
+            setInterval(createMote, isTouch ? 900 : 400);
         }
     </script>
 </body>
