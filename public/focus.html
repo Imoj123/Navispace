@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0f0e" />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NaviSpace" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>NaviSpace — Focus</title>
+    <style>
+        /* Focus mode: one number, one scene, nothing else. The scene is drawn
+           live on a canvas; the controls fade away when you stop touching the
+           screen and come back on the next tap or mouse move. */
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            background: #0c0f0e;
+        }
+
+        #scene {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .veil {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse 70% 55% at 50% 50%, rgba(8, 10, 9, 0.42), rgba(8, 10, 9, 0.12) 70%, rgba(8, 10, 9, 0.35));
+            pointer-events: none;
+        }
+
+        .ui {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            padding: max(18px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+            color: #f3eee2;
+        }
+
+        .chrome {
+            transition: opacity 0.8s ease;
+        }
+
+        body.idle .chrome {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        body.idle {
+            cursor: none;
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            font: 400 11.5px/1 var(--font-mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .top a,
+        .top button {
+            color: rgba(243, 238, 226, 0.82);
+            text-decoration: none;
+            background: none;
+            border: 0;
+            font: inherit;
+            letter-spacing: inherit;
+            text-transform: inherit;
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        .center {
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            text-align: center;
+            gap: 14px;
+            text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45);
+        }
+
+        .where {
+            font: 400 11.5px/1 var(--font-mono);
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: rgba(243, 238, 226, 0.75);
+        }
+
+        .clock {
+            font: 400 clamp(64px, 16vw, 168px)/1 var(--font-serif);
+            letter-spacing: -0.03em;
+            font-variant-numeric: lining-nums tabular-nums;
+        }
+
+        .sub {
+            font: 400 italic clamp(17px, 2.4vw, 22px)/1.35 var(--font-serif);
+            color: rgba(243, 238, 226, 0.82);
+        }
+
+        .modes {
+            display: inline-flex;
+            border: 1px solid rgba(243, 238, 226, 0.28);
+            margin-top: 8px;
+        }
+
+        .modes button {
+            background: none;
+            border: 0;
+            color: rgba(243, 238, 226, 0.72);
+            font: 400 11px/1 var(--font-mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 10px 14px;
+            cursor: pointer;
+        }
+
+        .modes button[aria-pressed="true"] {
+            background: rgba(243, 238, 226, 0.92);
+            color: #121614;
+        }
+
+        .bottom {
+            display: grid;
+            gap: 14px;
+            justify-items: center;
+        }
+
+        .scenes {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .scene-btn {
+            display: grid;
+            gap: 6px;
+            justify-items: center;
+            background: none;
+            border: 0;
+            padding: 0;
+            color: rgba(243, 238, 226, 0.75);
+            font: 400 10.5px/1 var(--font-mono);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .scene-btn .sw {
+            width: 46px;
+            height: 46px;
+            border: 1px solid rgba(243, 238, 226, 0.3);
+        }
+
+        .scene-btn[aria-pressed="true"] {
+            color: #f3eee2;
+        }
+
+        .scene-btn[aria-pressed="true"] .sw {
+            outline: 2px solid var(--brass);
+            outline-offset: 2px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .ctl {
+            background: rgba(10, 12, 11, 0.45);
+            border: 1px solid rgba(243, 238, 226, 0.28);
+            color: #f3eee2;
+            font: 400 11px/1 var(--font-mono);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 12px 14px;
+            cursor: pointer;
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+        }
+
+        .ctl:hover {
+            border-color: var(--brass);
+        }
+
+        .ctl.end {
+            border-color: rgba(227, 140, 112, 0.6);
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        /* "Keep your seat" — appears before the check-in would run out. */
+        .keep {
+            position: fixed;
+            left: 50%;
+            bottom: max(120px, calc(env(safe-area-inset-bottom, 0px) + 120px));
+            transform: translateX(-50%);
+            width: min(92vw, 380px);
+            background: rgba(14, 17, 16, 0.92);
+            border: 1px solid var(--brass);
+            padding: 18px 20px;
+            display: grid;
+            gap: 12px;
+            text-align: center;
+            z-index: 5;
+        }
+
+        .keep p {
+            margin: 0;
+            font: 400 19px/1.3 var(--font-serif);
+        }
+
+        .keep .btn {
+            margin: 0;
+        }
+
+        .gate,
+        .done {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            text-align: center;
+            gap: 16px;
+            padding: 24px;
+            background: rgba(10, 12, 11, 0.86);
+            z-index: 6;
+        }
+
+        .gate h1,
+        .done h1 {
+            margin: 0;
+            font: 400 clamp(34px, 6vw, 52px)/1.05 var(--font-serif);
+        }
+
+        .gate p,
+        .done p {
+            margin: 0;
+            color: var(--muted);
+            max-width: 40ch;
+        }
+
+        @media (max-width: 560px) {
+            .scene-btn .sw {
+                width: 38px;
+                height: 38px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="scene" aria-hidden="true"></canvas>
+    <div class="veil"></div>
+
+    <div class="ui">
+        <div class="top chrome">
+            <a id="backLink" href="/">← Seat</a>
+            <button id="fullBtn" type="button">Full screen</button>
+        </div>
+
+        <div class="center">
+            <div class="where chrome" id="where">Focus session</div>
+            <div class="clock" id="clock" aria-live="off">00:00:00</div>
+            <div class="sub" id="sub">Settle in. The clock is yours.</div>
+            <div class="modes chrome" role="group" aria-label="Timer">
+                <button type="button" id="modeOpen" aria-pressed="true">Open session</button>
+                <button type="button" id="modePomo" aria-pressed="false">Pomodoro 25 / 5</button>
+            </div>
+        </div>
+
+        <div class="bottom chrome">
+            <div class="scenes" id="scenes" role="group" aria-label="Scene"></div>
+            <div class="controls">
+                <button class="ctl" id="soundBtn" type="button">Sound · Off</button>
+                <button class="ctl" id="awayBtn" type="button">Step away</button>
+                <button class="ctl end" id="endBtn" type="button">End session</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="keep" id="keep" hidden role="alertdialog" aria-labelledby="keepText">
+        <p id="keepText">Still studying? Keep your seat for another stretch.</p>
+        <button class="btn btn-primary" id="keepBtn" type="button">Keep my seat</button>
+    </div>
+
+    <div class="gate" id="gate" hidden>
+        <h1>Check in first.</h1>
+        <p id="gateText">Focus sessions start from the seat you're checked into. Scan the code on your desk, check
+            in, then come back.</p>
+        <a class="cta-link" id="gateLink" href="/">Go to the map</a>
+    </div>
+
+    <div class="done" id="done" hidden>
+        <h1 id="doneTitle">Well done.</h1>
+        <p id="doneText">Your seat is free for the next person.</p>
+        <a class="cta-link" href="/">Back to NaviSpace</a>
+    </div>
+
+    <script src="/client.js"></script>
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const params = new URLSearchParams(location.search);
+        const libraryId = getLibraryIdFromUrl();
+        const seatId = params.get("seat");
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const pad = (n) => String(n).padStart(2, "0");
+        const hms = (s) => `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+        const ms2 = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+        function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } }
+
+        let identity = null;
+        let seat = null;
+        let sessionStart = Date.now();
+
+        // ===== Scenes ==========================================================
+        // Each scene: { name, swatch (CSS background for its button), init(w,h), draw(ctx,w,h,t) }
+
+        const rand = (a, b) => a + Math.random() * (b - a);
+
+        const SCENES = {
+            rain: {
+                name: "Rain",
+                swatch: "linear-gradient(160deg,#2c3a4a,#11161d)",
+                init(w, h) {
+                    this.drops = Array.from({ length: Math.round(w * h / 5000) }, () => ({ x: rand(0, w), y: rand(0, h), l: rand(10, 26), v: rand(9, 16) }));
+                    this.bokeh = Array.from({ length: 26 }, () => ({ x: rand(0, w), y: rand(h * 0.35, h), r: rand(14, 60), c: Math.random() < 0.6 ? "255,190,120" : "150,190,255", a: rand(0.05, 0.16), dx: rand(-0.08, 0.08) }));
+                    this.beads = Array.from({ length: 34 }, () => ({ x: rand(0, w), y: rand(0, h), r: rand(1.5, 4), v: rand(0.05, 0.6) }));
+                },
+                draw(c, w, h) {
+                    const g = c.createLinearGradient(0, 0, 0, h);
+                    g.addColorStop(0, "#1b2430"); g.addColorStop(1, "#0b0f14");
+                    c.fillStyle = g; c.fillRect(0, 0, w, h);
+                    for (const b of this.bokeh) {
+                        b.x += b.dx; if (b.x < -80) b.x = w + 80; if (b.x > w + 80) b.x = -80;
+                        const rg = c.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+                        rg.addColorStop(0, `rgba(${b.c},${b.a})`); rg.addColorStop(1, `rgba(${b.c},0)`);
+                        c.fillStyle = rg; c.beginPath(); c.arc(b.x, b.y, b.r, 0, 7); c.fill();
+                    }
+                    c.strokeStyle = "rgba(190,210,235,0.32)"; c.lineWidth = 1;
+                    c.beginPath();
+                    for (const d of this.drops) {
+                        d.y += d.v; d.x += d.v * 0.18;
+                        if (d.y > h) { d.y = -d.l; d.x = rand(-40, w); }
+                        c.moveTo(d.x, d.y); c.lineTo(d.x - d.l * 0.18, d.y - d.l);
+                    }
+                    c.stroke();
+                    for (const b of this.beads) {
+                        b.y += b.v; if (b.y > h + 6) { b.y = -6; b.x = rand(0, w); }
+                        c.fillStyle = "rgba(220,232,245,0.28)"; c.beginPath(); c.arc(b.x, b.y, b.r, 0, 7); c.fill();
+                        c.fillStyle = "rgba(255,255,255,0.35)"; c.beginPath(); c.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.35, 0, 7); c.fill();
+                    }
+                },
+            },
+
+            forest: {
+                name: "Forest",
+                swatch: "linear-gradient(180deg,#183a33,#0a1512)",
+                init(w, h) {
+                    this.layers = [0.55, 0.68, 0.82].map((base, li) => {
+                        const trees = [];
+                        for (let x = -40; x < w + 40; x += rand(26, 60) * (1 + li * 0.25)) trees.push({ x, hgt: rand(h * 0.18, h * 0.38) * (1 + li * 0.18), wd: rand(26, 46) * (1 + li * 0.3) });
+                        return { base: h * base, trees, col: ["#173129", "#10241e", "#08140f"][li] };
+                    });
+                    this.flies = Array.from({ length: 42 }, () => ({ x: rand(0, w), y: rand(h * 0.45, h * 0.95), p: rand(0, 6.28), s: rand(0.2, 0.6) }));
+                },
+                draw(c, w, h, t) {
+                    const g = c.createLinearGradient(0, 0, 0, h);
+                    g.addColorStop(0, "#14302c"); g.addColorStop(0.6, "#0d1d1a"); g.addColorStop(1, "#060c0a");
+                    c.fillStyle = g; c.fillRect(0, 0, w, h);
+                    const mg = c.createRadialGradient(w * 0.72, h * 0.2, 0, w * 0.72, h * 0.2, h * 0.35);
+                    mg.addColorStop(0, "rgba(236,232,210,0.85)"); mg.addColorStop(0.08, "rgba(236,232,210,0.25)"); mg.addColorStop(1, "rgba(236,232,210,0)");
+                    c.fillStyle = mg; c.fillRect(0, 0, w, h);
+                    for (const L of this.layers) {
+                        c.fillStyle = L.col;
+                        for (const tr of L.trees) {
+                            c.beginPath();
+                            c.moveTo(tr.x, L.base - tr.hgt);
+                            c.lineTo(tr.x + tr.wd / 2, L.base); c.lineTo(tr.x - tr.wd / 2, L.base);
+                            c.closePath(); c.fill();
+                        }
+                        c.fillRect(0, L.base - 1, w, h - L.base + 1);
+                        c.fillStyle = "rgba(190,215,200,0.035)"; c.fillRect(0, L.base - 40, w, 40);
+                    }
+                    for (const f of this.flies) {
+                        f.p += 0.01 * f.s * 3;
+                        const x = f.x + Math.sin(f.p * 1.3) * 30, y = f.y + Math.cos(f.p) * 18;
+                        const a = 0.35 + 0.45 * Math.sin(t / 700 + f.p * 4);
+                        const rg = c.createRadialGradient(x, y, 0, x, y, 9);
+                        rg.addColorStop(0, `rgba(220,240,140,${Math.max(0, a)})`); rg.addColorStop(1, "rgba(220,240,140,0)");
+                        c.fillStyle = rg; c.beginPath(); c.arc(x, y, 9, 0, 7); c.fill();
+                    }
+                },
+            },
+
+            ocean: {
+                name: "Ocean",
+                swatch: "linear-gradient(180deg,#e2a37a,#5a4a78 45%,#16314a)",
+                init(w, h) { this.glints = Array.from({ length: 60 }, () => ({ x: rand(0, w), y: rand(h * 0.58, h), p: rand(0, 6.28) })); },
+                draw(c, w, h, t) {
+                    const sky = c.createLinearGradient(0, 0, 0, h * 0.58);
+                    sky.addColorStop(0, "#2a2a4a"); sky.addColorStop(0.6, "#7a5a78"); sky.addColorStop(1, "#e2a37a");
+                    c.fillStyle = sky; c.fillRect(0, 0, w, h * 0.58);
+                    const sun = c.createRadialGradient(w * 0.5, h * 0.56, 0, w * 0.5, h * 0.56, h * 0.25);
+                    sun.addColorStop(0, "rgba(255,214,160,0.95)"); sun.addColorStop(0.12, "rgba(255,190,140,0.5)"); sun.addColorStop(1, "rgba(255,190,140,0)");
+                    c.fillStyle = sun; c.fillRect(0, 0, w, h * 0.58);
+                    const sea = c.createLinearGradient(0, h * 0.58, 0, h);
+                    sea.addColorStop(0, "#3b4a6a"); sea.addColorStop(1, "#0d1a2a");
+                    c.fillStyle = sea; c.fillRect(0, h * 0.58, w, h);
+                    for (let i = 0; i < 7; i++) {
+                        const y0 = h * 0.6 + i * (h * 0.06) ;
+                        c.strokeStyle = `rgba(255,220,190,${0.12 - i * 0.012})`; c.lineWidth = 1.2;
+                        c.beginPath();
+                        for (let x = 0; x <= w; x += 12) {
+                            const y = y0 + Math.sin(x / (60 + i * 18) + t / (1400 - i * 120)) * (3 + i * 1.6);
+                            x ? c.lineTo(x, y) : c.moveTo(x, y);
+                        }
+                        c.stroke();
+                    }
+                    for (const g of this.glints) {
+                        const a = Math.max(0, Math.sin(t / 500 + g.p)) * 0.5 * (1 - Math.abs(g.x - w / 2) / w);
+                        c.fillStyle = `rgba(255,225,190,${a})`; c.fillRect(g.x, g.y, 2.5, 1);
+                    }
+                },
+            },
+
+            stars: {
+                name: "Night sky",
+                swatch: "radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),linear-gradient(180deg,#0b1430,#04060d)",
+                init(w, h) {
+                    this.stars = Array.from({ length: Math.round(w * h / 2600) }, () => ({ x: rand(0, w), y: rand(0, h * 0.85), r: rand(0.3, 1.5), p: rand(0, 6.28) }));
+                    this.ridge = []; let y = h * 0.8;
+                    for (let x = 0; x <= w + 20; x += 20) { y += rand(-14, 14); y = Math.min(h * 0.9, Math.max(h * 0.7, y)); this.ridge.push([x, y]); }
+                    this.shoot = null;
+                },
+                draw(c, w, h, t) {
+                    const g = c.createLinearGradient(0, 0, 0, h);
+                    g.addColorStop(0, "#050815"); g.addColorStop(0.7, "#0e1838"); g.addColorStop(1, "#1a2448");
+                    c.fillStyle = g; c.fillRect(0, 0, w, h);
+                    for (const s of this.stars) {
+                        const a = 0.45 + 0.45 * Math.sin(t / 900 + s.p * 3);
+                        c.fillStyle = `rgba(255,255,255,${a})`; c.beginPath(); c.arc(s.x, s.y, s.r, 0, 7); c.fill();
+                    }
+                    if (!this.shoot && Math.random() < 0.004) this.shoot = { x: rand(w * 0.1, w * 0.8), y: rand(0, h * 0.35), life: 0 };
+                    if (this.shoot) {
+                        const s = this.shoot; s.life += 1;
+                        const x = s.x + s.life * 9, y = s.y + s.life * 4;
+                        const lg = c.createLinearGradient(x - 90, y - 40, x, y);
+                        lg.addColorStop(0, "rgba(255,255,255,0)"); lg.addColorStop(1, `rgba(255,255,255,${1 - s.life / 45})`);
+                        c.strokeStyle = lg; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - 90, y - 40); c.lineTo(x, y); c.stroke();
+                        if (s.life > 45) this.shoot = null;
+                    }
+                    c.fillStyle = "#03050b"; c.beginPath(); c.moveTo(0, h);
+                    for (const [x, y] of this.ridge) c.lineTo(x, y);
+                    c.lineTo(w, h); c.closePath(); c.fill();
+                },
+            },
+
+            koi: {
+                name: "Koi pond",
+                swatch: "radial-gradient(ellipse at 40% 50%,#e8743b 0 18%,transparent 19%),linear-gradient(160deg,#16443f,#0a201e)",
+                init(w, h) {
+                    const cols = [["#e8743b", "#f6efe4"], ["#f6efe4", "#e0482f"], ["#f2a23a", "#f6efe4"], ["#f6efe4", "#2a2a2a"], ["#e05a2a", "#e05a2a"]];
+                    this.fish = cols.map((c2, i) => ({ a: rand(0, 6.28), rx: rand(w * 0.18, w * 0.4), ry: rand(h * 0.15, h * 0.32), cx: w / 2 + rand(-w * 0.1, w * 0.1), cy: h / 2 + rand(-h * 0.1, h * 0.1), sp: rand(0.0012, 0.0024) * (i % 2 ? 1 : -1), len: rand(46, 70), body: c2[0], spot: c2[1] }));
+                    this.pads = Array.from({ length: 7 }, () => ({ x: rand(0, w), y: rand(0, h), r: rand(26, 54), rot: rand(0, 6.28) }));
+                    this.ripples = [];
+                },
+                draw(c, w, h, t) {
+                    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+                    g.addColorStop(0, "#1b4a44"); g.addColorStop(1, "#071816");
+                    c.fillStyle = g; c.fillRect(0, 0, w, h);
+                    if (Math.random() < 0.02) this.ripples.push({ x: rand(0, w), y: rand(0, h), r: 0 });
+                    this.ripples = this.ripples.filter((r) => r.r < 90);
+                    for (const r of this.ripples) {
+                        r.r += 0.6; c.strokeStyle = `rgba(200,235,225,${0.18 * (1 - r.r / 90)})`; c.lineWidth = 1;
+                        c.beginPath(); c.ellipse(r.x, r.y, r.r, r.r * 0.6, 0, 0, 7); c.stroke();
+                    }
+                    for (const f of this.fish) {
+                        f.a += f.sp * (reduceMotion ? 0 : 1) * 16;
+                        const x = f.cx + Math.cos(f.a) * f.rx, y = f.cy + Math.sin(f.a) * f.ry;
+                        const dir = Math.atan2(Math.cos(f.a) * f.ry * Math.sign(f.sp), -Math.sin(f.a) * f.rx * Math.sign(f.sp));
+                        const wag = Math.sin(t / 160 + f.a * 9) * 0.35;
+                        c.save(); c.translate(x, y); c.rotate(dir);
+                        c.fillStyle = "rgba(0,0,0,0.18)"; c.beginPath(); c.ellipse(6, 8, f.len * 0.5, f.len * 0.17, 0, 0, 7); c.fill();
+                        c.fillStyle = f.body; c.beginPath(); c.ellipse(0, 0, f.len * 0.5, f.len * 0.16, 0, 0, 7); c.fill();
+                        c.save(); c.translate(-f.len * 0.48, 0); c.rotate(wag);
+                        c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-f.len * 0.25, -f.len * 0.2, -f.len * 0.32, -f.len * 0.12); c.quadraticCurveTo(-f.len * 0.2, 0, -f.len * 0.32, f.len * 0.12); c.quadraticCurveTo(-f.len * 0.25, f.len * 0.2, 0, 0); c.fill(); c.restore();
+                        c.fillStyle = f.spot; c.beginPath(); c.ellipse(f.len * 0.12, -f.len * 0.02, f.len * 0.14, f.len * 0.08, 0.4, 0, 7); c.fill();
+                        c.restore();
+                    }
+                    for (const p of this.pads) {
+                        c.save(); c.translate(p.x, p.y); c.rotate(p.rot + Math.sin(t / 4000 + p.x) * 0.05);
+                        c.fillStyle = "#2f6b3e"; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, p.r, 0.25, 6.03); c.closePath(); c.fill();
+                        c.strokeStyle = "rgba(255,255,255,0.08)"; c.stroke(); c.restore();
+                    }
+                },
+            },
+
+            lamp: {
+                name: "Library",
+                swatch: "radial-gradient(circle at 50% 20%,#6b5a35,#121614 70%)",
+                init(w, h) { this.motes = Array.from({ length: 70 }, () => ({ x: rand(w * 0.25, w * 0.75), y: rand(0, h), r: rand(0.6, 1.8), v: rand(0.05, 0.25), p: rand(0, 6.28) })); },
+                draw(c, w, h, t) {
+                    c.fillStyle = "#101412"; c.fillRect(0, 0, w, h);
+                    const rg = c.createRadialGradient(w / 2, -h * 0.05, 0, w / 2, -h * 0.05, h * 0.95);
+                    rg.addColorStop(0, "rgba(232,196,120,0.38)"); rg.addColorStop(0.45, "rgba(232,196,120,0.08)"); rg.addColorStop(1, "rgba(232,196,120,0)");
+                    c.fillStyle = rg; c.fillRect(0, 0, w, h);
+                    for (const m of this.motes) {
+                        m.y -= m.v; m.x += Math.sin(t / 3000 + m.p) * 0.15;
+                        if (m.y < -4) { m.y = h + 4; m.x = rand(w * 0.25, w * 0.75); }
+                        const a = 0.25 * (1 - Math.abs(m.x - w / 2) / (w * 0.4));
+                        c.fillStyle = `rgba(240,215,160,${Math.max(0, a)})`; c.beginPath(); c.arc(m.x, m.y, m.r, 0, 7); c.fill();
+                    }
+                },
+            },
+        };
+
+        const canvas = $("scene");
+        const ctx = canvas.getContext("2d");
+        let current = SCENES[store("navispace_scene")] ? store("navispace_scene") : "rain";
+        let W = 0, H = 0;
+
+        function resize() {
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            W = window.innerWidth; H = window.innerHeight;
+            canvas.width = W * dpr; canvas.height = H * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            SCENES[current].init(W, H);
+        }
+
+        function frame(t) {
+            SCENES[current].draw(ctx, W, H, t);
+            if (!reduceMotion) requestAnimationFrame(frame);
+        }
+
+        function setScene(key) {
+            current = key;
+            store("navispace_scene", key);
+            SCENES[key].init(W, H);
+            if (reduceMotion) SCENES[key].draw(ctx, W, H, 0);
+            document.querySelectorAll(".scene-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
+        }
+
+        for (const [key, sc] of Object.entries(SCENES)) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "scene-btn";
+            b.dataset.key = key;
+            b.innerHTML = '<span class="sw"></span><span></span>';
+            b.querySelector(".sw").style.background = sc.swatch;
+            b.lastChild.textContent = sc.name;
+            b.addEventListener("click", () => setScene(key));
+            $("scenes").appendChild(b);
+        }
+
+        // ===== Sound (generated, no files) ======================================
+
+        const SOUNDS = ["Off", "Rain", "Waves", "Brown noise"];
+        let soundIdx = 0, audio = null;
+
+        function noiseBuffer(ac, brown) {
+            const len = ac.sampleRate * 3, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+            let last = 0;
+            for (let i = 0; i < len; i++) {
+                const w = Math.random() * 2 - 1;
+                if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w;
+            }
+            return buf;
+        }
+
+        function stopSound() {
+            if (audio) { audio.ctx.close(); audio = null; }
+        }
+
+        function playSound(kind) {
+            stopSound();
+            if (kind === "Off") return;
+            const ac = new (window.AudioContext || window.webkitAudioContext)();
+            const src = ac.createBufferSource();
+            src.buffer = noiseBuffer(ac, kind !== "Rain");
+            src.loop = true;
+            const filter = ac.createBiquadFilter();
+            filter.type = "lowpass";
+            filter.frequency.value = kind === "Rain" ? 2600 : kind === "Waves" ? 700 : 500;
+            const gain = ac.createGain();
+            gain.gain.value = kind === "Rain" ? 0.07 : 0.22;
+            src.connect(filter).connect(gain).connect(ac.destination);
+            if (kind === "Waves") {
+                // Swell and fall like waves arriving.
+                const lfo = ac.createOscillator(), depth = ac.createGain();
+                lfo.frequency.value = 0.11; depth.gain.value = 0.16;
+                lfo.connect(depth).connect(gain.gain); lfo.start();
+            }
+            src.start();
+            audio = { ctx: ac };
+        }
+
+        $("soundBtn").addEventListener("click", () => {
+            soundIdx = (soundIdx + 1) % SOUNDS.length;
+            $("soundBtn").textContent = `Sound · ${SOUNDS[soundIdx]}`;
+            playSound(SOUNDS[soundIdx]);
+        });
+
+        // ===== Timer ==============================================================
+
+        let mode = store("navispace_focus_mode") === "pomo" ? "pomo" : "open";
+        const FOCUS_MIN = 25, BREAK_MIN = 5;
+
+        function setMode(m) {
+            mode = m;
+            store("navispace_focus_mode", m);
+            $("modeOpen").setAttribute("aria-pressed", String(m === "open"));
+            $("modePomo").setAttribute("aria-pressed", String(m === "pomo"));
+            tick();
+        }
+        $("modeOpen").addEventListener("click", () => setMode("open"));
+        $("modePomo").addEventListener("click", () => setMode("pomo"));
+
+        let lastPhase = null;
+        function tick() {
+            const elapsed = Math.max(0, Math.floor((Date.now() - sessionStart) / 1000));
+            if (mode === "open") {
+                $("clock").textContent = hms(elapsed);
+                $("sub").textContent = elapsed < 60 ? "Settle in. The clock is yours." : "Studied this sitting";
+                return;
+            }
+            // Pomodoro, counted from when you sat down: 25 minutes of focus, 5 of rest.
+            const cycle = (FOCUS_MIN + BREAK_MIN) * 60;
+            const into = elapsed % cycle;
+            const round = Math.floor(elapsed / cycle) + 1;
+            const focusing = into < FOCUS_MIN * 60;
+            const left = focusing ? FOCUS_MIN * 60 - into : cycle - into;
+            $("clock").textContent = ms2(left);
+            $("sub").textContent = `${focusing ? "Focus" : "Break"} · round ${round} · ${hms(elapsed)} this sitting`;
+            const phase = focusing ? "focus" : "break";
+            if (lastPhase && phase !== lastPhase) chime();
+            lastPhase = phase;
+        }
+
+        function chime() {
+            try {
+                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                const o = ac.createOscillator(), g = ac.createGain();
+                o.frequency.value = 660; g.gain.setValueAtTime(0.0001, ac.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.15, ac.currentTime + 0.05);
+                g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 1.6);
+                o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 1.7);
+            } catch { }
+        }
+
+        // ===== Keep the seat, keep the screen on ===================================
+
+        async function refreshSeat() {
+            try {
+                const s = await getSeat(libraryId, seatId);
+                if (!s || s.reason) return;
+                seat = s;
+                if (!isMine(seat.holderHash) || seat.state === "AVAILABLE") {
+                    showGate("Your check-in has ended.", "This seat isn't held by you any more. Scan the code on your desk to check in again.");
+                    return;
+                }
+                if (seat.state === "STEPPED_AWAY") {
+                    location.href = `/seat.html?lib=${encodeURIComponent(libraryId)}&seat=${encodeURIComponent(seatId)}`;
+                    return;
+                }
+                sessionStart = seat.sessionStart || seat.lastConfirmTime || sessionStart;
+                const left = seat.checkInExpiry ? seat.checkInExpiry - Date.now() : Infinity;
+                $("keep").hidden = !(left < 5 * 60 * 1000);
+            } catch { }
+        }
+
+        $("keepBtn").addEventListener("click", async () => {
+            $("keepBtn").setAttribute("aria-busy", "true");
+            try {
+                const r = await postScan(libraryId, seatId, "stillHere", identity);
+                if (r.ok) { seat = r.seat; $("keep").hidden = true; }
+            } finally {
+                $("keepBtn").removeAttribute("aria-busy");
+            }
+        });
+
+        let wakeLock = null;
+        async function holdScreen() {
+            try { if ("wakeLock" in navigator && !document.hidden) wakeLock = await navigator.wakeLock.request("screen"); } catch { }
+        }
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) { holdScreen(); refreshSeat(); } });
+
+        $("fullBtn").addEventListener("click", async () => {
+            try {
+                if (document.fullscreenElement) await document.exitFullscreen();
+                else await document.documentElement.requestFullscreen();
+            } catch { }
+        });
+        if (!document.documentElement.requestFullscreen) $("fullBtn").hidden = true;
+
+        $("awayBtn").addEventListener("click", async () => {
+            const r = await postScan(libraryId, seatId, "stepAway", identity).catch(() => null);
+            if (r && r.ok) location.href = `/seat.html?lib=${encodeURIComponent(libraryId)}&seat=${encodeURIComponent(seatId)}`;
+        });
+
+        $("endBtn").addEventListener("click", async () => {
+            const studied = Math.max(0, Math.floor((Date.now() - sessionStart) / 1000));
+            const r = await postScan(libraryId, seatId, "leaving", identity).catch(() => null);
+            if (!r || !r.ok) return;
+            stopSound();
+            const h = Math.floor(studied / 3600), m = Math.floor(studied / 60) % 60;
+            $("doneTitle").textContent = h ? `${h}h ${m}m. Well done.` : `${m} minute${m === 1 ? "" : "s"}. Well done.`;
+            $("done").hidden = false;
+        });
+
+        // ===== Idle: fade the controls ============================================
+
+        let idleTimer = null;
+        function wake() {
+            document.body.classList.remove("idle");
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => document.body.classList.add("idle"), 4000);
+        }
+        ["pointermove", "pointerdown", "keydown", "touchstart"].forEach((e) => window.addEventListener(e, wake, { passive: true }));
+
+        // ===== Boot ======================================================================
+
+        function showGate(title, text) {
+            $("gate").querySelector("h1").textContent = title;
+            $("gateText").textContent = text;
+            $("gateLink").href = libraryUrl("/library.html", libraryId);
+            $("gate").hidden = false;
+        }
+
+        async function boot() {
+            resize();
+            setScene(current);
+            setMode(mode);
+            requestAnimationFrame(frame);
+            window.addEventListener("resize", resize);
+            wake();
+
+            if (!seatId) {
+                showGate("Check in first.", "Focus sessions start from the seat you're checked into. Scan the code on your desk, check in, then come back.");
+                return;
+            }
+            identity = getOrCreateIdentity();
+            $("backLink").href = `/seat.html?lib=${encodeURIComponent(libraryId)}&seat=${encodeURIComponent(seatId)}`;
+            $("backLink").textContent = `← Seat ${seatId}`;
+            getLibraries().then((libs) => {
+                const lib = libs.find((l) => l.id === libraryId);
+                $("where").textContent = `Seat ${seatId} · ${lib ? lib.name : "NaviSpace"}`;
+            }).catch(() => { $("where").textContent = `Seat ${seatId}`; });
+
+            await refreshSeat();
+            holdScreen();
+            setInterval(tick, 1000);
+            setInterval(() => { if (!document.hidden) refreshSeat(); }, 60000);
+        }
+
+        boot();
+    </script>
+</body>
+
+</html>
