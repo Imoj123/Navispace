@@ -152,6 +152,19 @@
             color: var(--free);
         }
 
+        a.focus {
+            text-decoration: none;
+        }
+
+        a.focus[href]::after {
+            content: "  · Enter focus mode →";
+            color: var(--brass);
+        }
+
+        a.focus[href]:hover::after {
+            text-decoration: underline;
+        }
+
         .hours {
             display: flex;
             flex-wrap: wrap;
@@ -239,6 +252,12 @@
             stroke: rgba(236, 230, 214, 0.22);
             stroke-dasharray: 10 8;
             stroke-width: 2.5;
+        }
+
+        .plate .room.core {
+            fill: rgba(0, 0, 0, 0.22);
+            stroke: rgba(236, 230, 214, 0.16);
+            stroke-dasharray: none;
         }
 
         .plate .stack {
@@ -330,6 +349,14 @@
         .cube.free i:nth-child(1) {
             background: var(--free);
             box-shadow: 0 0 12px rgba(140, 197, 164, 0.75);
+        }
+
+        .cube.free i:nth-child(2) {
+            background: #4f7d65;
+        }
+
+        .cube.free i:nth-child(3) {
+            background: #426a56;
         }
 
         .cube.away i:nth-child(1) {
@@ -596,8 +623,8 @@
                 </div>
                 <div class="hero-actions">
                     <a class="cta-link" id="mapLink" href="/library.html">Open the map</a>
-                    <span class="focus" id="focus">Your focus session · <b id="focusTime">starts when you check
-                            in</b></span>
+                    <a class="focus" id="focus">Your focus session · <b id="focusTime">starts when you check
+                            in</b></a>
                 </div>
                 <div class="hours"><span>Busiest <b id="busiest">11:00–14:00</b></span><span>Open until <b
                             id="closes">22:00</b></span></div>
@@ -725,9 +752,10 @@
             if (Array.isArray(layout.outline)) {
                 svgEl("polygon", { points: layout.outline.map((p) => p.join(",")).join(" "), class: "floor-fill" }, svg);
             }
+            // Rooms (the stairs core included) are drawn flat on the floor, so
+            // nothing tall hides the seats.
             for (const r of layout.rooms || []) {
-                if (r.kind === "core") continue;
-                svgEl("rect", { x: r.x, y: r.y, width: r.w, height: r.h, class: "room" }, svg);
+                svgEl("rect", { x: r.x, y: r.y, width: r.w, height: r.h, class: r.kind === "core" ? "room core" : "room" }, svg);
             }
             for (const st of layout.stacks || []) {
                 for (let ly = st.y + 8; ly <= st.y + st.h - 4; ly += 16) {
@@ -757,21 +785,8 @@
                 plate.appendChild(w);
             }
 
-            // The stairs/services core, raised.
-            for (const r of layout.rooms || []) {
-                if (r.kind !== "core") continue;
-                const b = document.createElement("div");
-                b.className = "block";
-                b.style.left = r.x * s + "px";
-                b.style.top = r.y * s + "px";
-                b.style.width = r.w * s + "px";
-                b.style.height = r.h * s + "px";
-                face3(b, Math.max(10, 60 * s));
-                plate.appendChild(b);
-            }
-
             // One block per seat, at its real position.
-            const u = Math.max(6, 24 * s);
+            const u = Math.max(8, 30 * s);
             for (const seat of layout.seats) {
                 const c = document.createElement("div");
                 c.className = "cube";
@@ -790,7 +805,9 @@
             for (const [id, { el, u }] of cubes) {
                 const seat = seatsById.get(id);
                 const state = seat ? seat.state : "AVAILABLE";
-                const z = state === "OCCUPIED" ? u * 1.6 : state === "STEPPED_AWAY" ? u * 0.8 : 0;
+                // Every seat is a solid block: taken stand tall, stepped away
+                // half-height, free sit low and glow.
+                const z = state === "OCCUPIED" ? u * 2.2 : state === "STEPPED_AWAY" ? u * 1.15 : u * 0.35;
                 el.classList.toggle("free", state === "AVAILABLE");
                 el.classList.toggle("away", state === "STEPPED_AWAY");
                 el.style.setProperty("--z", z + "px");
@@ -866,6 +883,7 @@
                 const held = await getHeldSeat(token);
                 if (!held || !held.seatId) {
                     focusStart = null;
+                    $("focus").removeAttribute("href");
                     $("heldPill").hidden = true;
                     $("focus").classList.remove("live");
                     $("focusTime").textContent = "starts when you check in";
@@ -879,6 +897,11 @@
                 $("installBtn").hidden = true;
                 focusStart = held.sessionStart || null;
                 $("focus").classList.toggle("live", Boolean(focusStart));
+                if (held.state === "OCCUPIED") {
+                    $("focus").href = `/focus.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`;
+                } else {
+                    $("focus").removeAttribute("href");
+                }
                 tickFocus();
             } catch { }
         }
