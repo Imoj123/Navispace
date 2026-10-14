@@ -230,6 +230,34 @@ function getOrCreateIdentity() {
   return { token, nickname };
 }
 
+// Public APIs never return another device's raw token, only the first
+// 16 hex chars of its SHA-256 (holderHash, reporterHash, claimantHash).
+// This device hashes its own token the same way to recognise its seat.
+let myTokenHash = null;
+let myHashedToken = null;
+async function tokenHash(token) {
+  if (!token || !(window.crypto && crypto.subtle)) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(token)));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+function myHashReady() {
+  const token = localStorage.getItem("navispace_token");
+  if (!myTokenHash || token !== myHashedToken) {
+    myHashedToken = token;
+    myTokenHash = tokenHash(token).catch(() => null).then((h) => {
+      myHash = h;
+      return h;
+    });
+  }
+  return myTokenHash;
+}
+let myHash = null;
+/** True when a public *Hash field belongs to this device. Data from the
+ * fetch helpers below has already waited for the hash, so this is sync. */
+function isMine(hash) {
+  return !!hash && hash === myHash;
+}
+
 function setNickname(nickname) {
   const clean = (nickname || "").trim() || "Anonymous";
   localStorage.setItem("navispace_nickname", clean);
@@ -349,11 +377,12 @@ async function postScan(libraryId, seatId, action, identity) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, token: identity.token, nickname: identity.nickname }),
   });
-  const body = await res.json();
+  const [body] = await Promise.all([res.json(), myHashReady()]);
   return { httpOk: res.ok, ...body };
 }
 
 async function getSeat(libraryId, seatId) {
+  await myHashReady();
   return apiGet(`/api/library/${encodeURIComponent(libraryId)}/seat/${encodeURIComponent(seatId)}`);
 }
 
@@ -362,6 +391,7 @@ async function getLeaderboard(libraryId) {
 }
 
 async function getAllSeats(libraryId) {
+  await myHashReady();
   return apiGet(`/api/library/${encodeURIComponent(libraryId)}/seats`);
 }
 
@@ -385,6 +415,7 @@ async function reportSeatWrong(libraryId, seatId, identity) {
 /* --- Lost & Found ------------------------------------------------------- */
 
 async function getLostFoundItems(libraryId) {
+  await myHashReady();
   return apiGet(`/api/library/${encodeURIComponent(libraryId)}/lostfound`);
 }
 
