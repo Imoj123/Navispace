@@ -7,7 +7,7 @@ const express = require("express");
 const config = require("./config");
 const { LIBRARIES, getLibrary, isActiveLibrary } = require("./libraries");
 const { getSeatIds, getZoneOrder, getLayout } = require("./seats");
-const { getSeat, handleScan, findHeldSeat } = require("./scan");
+const { getSeat, getSeats, handleScan, findHeldSeat } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
 const { reportSeat } = require("./reports");
@@ -158,9 +158,7 @@ function createApp() {
     if (!getLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "unknown_library" });
     }
-    const seatIds = getSeatIds(libId);
-    const seats = await Promise.all(seatIds.map((id) => getSeat(libId, id)));
-    res.json(seats);
+    res.json(await getSeats(libId, getSeatIds(libId)));
   });
 
   // --- Scan actions ----------------------------------------------------------

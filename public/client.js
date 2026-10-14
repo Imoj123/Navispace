@@ -253,6 +253,31 @@ function libraryUrl(path, libraryId) {
   return `${path}?lib=${encodeURIComponent(libraryId)}`;
 }
 
+/**
+ * GET a JSON API endpoint, riding out a flaky phone connection: each try
+ * times out after 10s, and a network error or 5xx is retried twice
+ * (after 0.6s, then 1.5s) before giving up. 4xx answers are returned
+ * as-is (they carry a reason, e.g. unknown_seat). Without this, one
+ * dropped request left a page stuck on "Loading…" until a manual refresh.
+ */
+async function apiGet(url) {
+  const waits = [600, 1500];
+  for (let attempt = 0; ; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (res.status >= 500 && attempt < waits.length) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      if (attempt >= waits.length) throw err;
+      await new Promise((r) => setTimeout(r, waits[attempt]));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
 /** The seat this device currently holds, if any: { libraryId, seatId, state } or nulls. */
 async function getHeldSeat(token) {
   const res = await fetch(`/api/held`, {
@@ -305,8 +330,7 @@ let _librariesPromise = null;
 /** The library list — fetched once per page, and cached for the next page's first paint. */
 function getLibraries() {
   if (!_librariesPromise) {
-    _librariesPromise = fetch(`/api/libraries`)
-      .then((res) => res.json())
+    _librariesPromise = apiGet(`/api/libraries`)
       .then((list) => {
         try { localStorage.setItem(LIBS_CACHE_KEY, JSON.stringify(list)); } catch { }
         return list;
@@ -330,26 +354,22 @@ async function postScan(libraryId, seatId, action, identity) {
 }
 
 async function getSeat(libraryId, seatId) {
-  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/seat/${encodeURIComponent(seatId)}`);
-  return res.json();
+  return apiGet(`/api/library/${encodeURIComponent(libraryId)}/seat/${encodeURIComponent(seatId)}`);
 }
 
 async function getLeaderboard(libraryId) {
-  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/leaderboard`);
-  return res.json();
+  return apiGet(`/api/library/${encodeURIComponent(libraryId)}/leaderboard`);
 }
 
 async function getAllSeats(libraryId) {
-  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/seats`);
-  return res.json();
+  return apiGet(`/api/library/${encodeURIComponent(libraryId)}/seats`);
 }
 
 let _configCache = null;
 /** Config values that mirror src/config.js — cached for the page's lifetime. */
 async function getServerConfig() {
   if (_configCache) return _configCache;
-  const res = await fetch(`/api/config`);
-  _configCache = await res.json();
+  _configCache = await apiGet(`/api/config`);
   return _configCache;
 }
 
@@ -365,8 +385,7 @@ async function reportSeatWrong(libraryId, seatId, identity) {
 /* --- Lost & Found ------------------------------------------------------- */
 
 async function getLostFoundItems(libraryId) {
-  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/lostfound`);
-  return res.json();
+  return apiGet(`/api/library/${encodeURIComponent(libraryId)}/lostfound`);
 }
 
 async function reportLostFoundItem(libraryId, { description, location, photoDataUrl, identity }) {

@@ -17,8 +17,9 @@ const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
 async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
   const reclaimed = [];
 
-  for (const seatId of seatIds) {
-    const seat = await store.get(seatKey(libraryId, seatId));
+  const stored = await store.getMany(seatIds.map((id) => seatKey(libraryId, id)));
+  for (const [i, seatId] of seatIds.entries()) {
+    const seat = stored[i];
     if (!seat) continue;
 
     const occupiedExpired =

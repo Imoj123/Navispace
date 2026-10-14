@@ -28,11 +28,15 @@ class UpstashStore {
         this.token = token;
     }
 
-    /** Runs a single Redis command via Upstash's REST API. */
+    /**
+     * Runs a single Redis command via Upstash's REST API, sent as a JSON
+     * array in a POST body (no URL-length limit, so a many-key MGET fits).
+     */
     async command(...args) {
-        const path = args.map((a) => encodeURIComponent(a)).join("/");
-        const res = await fetch(`${this.baseUrl}/${path}`, {
-            headers: { Authorization: `Bearer ${this.token}` },
+        const res = await fetch(this.baseUrl, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(args.map(String)),
         });
 
         if (!res.ok) {
@@ -54,6 +58,25 @@ class UpstashStore {
         } catch {
             return null; // corrupted/foreign value — treat as absent rather than throw
         }
+    }
+
+    /**
+     * Reads many keys in ONE round trip (MGET). Each Upstash call is an
+     * HTTPS request, so reading a library's seats one by one cost a
+     * request per seat — seconds per check-in once there are dozens.
+     * Returns values in key order, null where absent.
+     */
+    async getMany(keys) {
+        if (!keys.length) return [];
+        const raws = await this.command("MGET", ...keys);
+        return (Array.isArray(raws) ? raws : []).map((raw) => {
+            if (raw == null) return null;
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        });
     }
 
     async put(key, value, opts = {}) {

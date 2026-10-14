@@ -1,6 +1,6 @@
 "use strict";
 
-const { SeatState, getSeat, saveSeat } = require("./scan");
+const { SeatState, getSeats, saveSeat } = require("./scan");
 // Imported as a module object (not destructured) so tests can
 // monkeypatch push.sendPush without a real VAPID/web-push round trip.
 const push = require("./push");
@@ -24,8 +24,9 @@ const config = require("./config");
 async function sendExpiryReminders(libraryId, seatIds, now = Date.now()) {
     const reminded = [];
 
-    for (const seatId of seatIds) {
-        const seat = await getSeat(libraryId, seatId);
+    const seats = await getSeats(libraryId, seatIds);
+    for (const seat of seats) {
+        const seatId = seat.id;
         if (!seat.holderToken || seat.reminderSent) continue;
 
         const expiry =
