@@ -28,15 +28,11 @@ class UpstashStore {
         this.token = token;
     }
 
-    /**
-     * Runs a single Redis command via Upstash's REST API, sent as a JSON
-     * array in a POST body (no URL-length limit, so a many-key MGET fits).
-     */
+    /** Runs a single Redis command via Upstash's REST API (path style). */
     async command(...args) {
-        const res = await fetch(this.baseUrl, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(args.map(String)),
+        const path = args.map((a) => encodeURIComponent(a)).join("/");
+        const res = await fetch(`${this.baseUrl}/${path}`, {
+            headers: { Authorization: `Bearer ${this.token}` },
         });
 
         if (!res.ok) {
@@ -68,8 +64,17 @@ class UpstashStore {
      */
     async getMany(keys) {
         if (!keys.length) return [];
-        const raws = await this.command("MGET", ...keys);
-        return (Array.isArray(raws) ? raws : []).map((raw) => {
+        let raws;
+        try {
+            raws = await this.command("MGET", ...keys);
+        } catch (err) {
+            // Never let the faster path take the app down: fall back to
+            // one GET per key (slow, but what always worked) and say why.
+            console.warn(`[store] MGET failed, reading keys one by one: ${err.message}`);
+            return Promise.all(keys.map((key) => this.get(key)));
+        }
+        return keys.map((_, i) => {
+            const raw = Array.isArray(raws) ? raws[i] : null;
             if (raw == null) return null;
             try {
                 return JSON.parse(raw);
