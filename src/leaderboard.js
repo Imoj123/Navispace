@@ -18,8 +18,8 @@ async function getLeaderboard(libraryId, topN = 10, now = Date.now()) {
   const entries = [];
 
   const studentKeys = await store.listKeys(`student:${libraryId}:`);
-  for (const key of studentKeys) {
-    const student = await store.get(key);
+  const students = await store.getMany(studentKeys);
+  for (const student of students) {
     if (!student) continue;
 
     const inWindow = now - student.windowStart <= windowMs;

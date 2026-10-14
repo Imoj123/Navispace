@@ -48,22 +48,34 @@ function currentCheckInDurationMs(now = Date.now()) {
     : config.CHECK_IN_DURATION_MS;
 }
 
+function freshSeat(libraryId, seatId) {
+  return {
+    id: seatId,
+    libraryId,
+    state: SeatState.AVAILABLE,
+    checkInExpiry: null,
+    stepAwayExpiry: null,
+    lastConfirmTime: null,
+    confirmStreak: 0,
+    holderToken: null,
+    holderNickname: null,
+    reminderSent: false,
+  };
+}
+
 async function getSeat(libraryId, seatId) {
   const seat = await store.get(seatKey(libraryId, seatId));
-  return (
-    seat ?? {
-      id: seatId,
-      libraryId,
-      state: SeatState.AVAILABLE,
-      checkInExpiry: null,
-      stepAwayExpiry: null,
-      lastConfirmTime: null,
-      confirmStreak: 0,
-      holderToken: null,
-      holderNickname: null,
-      reminderSent: false,
-    }
-  );
+  return seat ?? freshSeat(libraryId, seatId);
+}
+
+/**
+ * Every listed seat of a library in one store read (see getMany) —
+ * use this, never a loop of getSeat, whenever more than one seat is
+ * needed: each read is a network round trip on a real store.
+ */
+async function getSeats(libraryId, seatIds) {
+  const stored = await store.getMany(seatIds.map((id) => seatKey(libraryId, id)));
+  return seatIds.map((id, i) => stored[i] ?? freshSeat(libraryId, id));
 }
 
 async function saveSeat(seat) {
@@ -119,17 +131,15 @@ async function creditSessionDay(libraryId, token, nickname, seatId, now = Date.n
  * seat is never mistaken for holding "another" seat.
  */
 async function findHeldSeat(libraryId, token, seatIds, excludeSeatId = null) {
-  for (const id of seatIds) {
-    if (id === excludeSeatId) continue;
-    const seat = await getSeat(libraryId, id);
-    if (
-      seat.holderToken === token &&
-      (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY)
-    ) {
-      return seat;
-    }
-  }
-  return null;
+  const ids = seatIds.filter((id) => id !== excludeSeatId);
+  const seats = await getSeats(libraryId, ids);
+  return (
+    seats.find(
+      (seat) =>
+        seat.holderToken === token &&
+        (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY)
+    ) || null
+  );
 }
 
 /**
@@ -263,6 +273,7 @@ module.exports = {
   dayKeyFor,
   currentCheckInDurationMs,
   getSeat,
+  getSeats,
   saveSeat,
   creditSessionDay,
   handleScan,
