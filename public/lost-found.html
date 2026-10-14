@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#10182b" />
+    <meta name="theme-color" content="#121614" />
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
     <link rel="icon" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-        href="https://fonts.googleapis.com/css2?family=Galada&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap"
         rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
     <title>NaviSpace — Lost &amp; Found</title>
@@ -54,12 +54,15 @@
             font-size: 0.78rem;
             color: var(--slate);
         }
+
+        /* --- Lamp over the floor ------------------------------------------ */
+        .lf-claim-note { font: 400 italic 14px/1.4 var(--font-serif); }
     </style>
 </head>
 
-<body data-room="library">
+<body>
     <header class="topbar">
-        <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+        <a class="wordmark" href="/"><span class="wordmark-mark"></span>NaviSpace</a>
         <nav class="topnav" id="topnav"></nav>
     </header>
     <div class="context-bar">
@@ -70,7 +73,7 @@
     <main>
         <div class="lf-toolbar">
             <div>
-                <h1 class="page-title">Lost &amp; found</h1>
+                <h1 class="page-title">Lost <em>&amp;</em> found</h1>
                 <p class="page-subtitle" style="margin-bottom:0;">Found something? Post it here. Missing something?
                     Check below.</p>
             </div>
@@ -114,9 +117,10 @@
         let claimTargetId = null;
 
         document.getElementById("topnav").innerHTML = `
+      <a href="/">Home</a>
       <a href="${libraryUrl("/library.html", libraryId)}">Map</a>
-      <a href="${libraryUrl("/leaderboard.html", libraryId)}">Leaderboard</a>
-      <a href="${libraryUrl("/lost-found.html", libraryId)}" class="current">Lost &amp; Found</a>
+      <a href="${libraryUrl("/leaderboard.html", libraryId)}">Study board</a>
+      <a href="${libraryUrl("/lost-found.html", libraryId)}" class="current">Lost &amp; found</a>
     `;
         getLibraries().then((libs) => {
             const lib = libs.find((l) => l.id === libraryId);
