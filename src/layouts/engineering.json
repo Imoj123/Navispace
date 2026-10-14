@@ -658,5 +658,15 @@
     "x": 750,
     "y": 140,
     "label": "Enter"
+  },
+  "hours": {
+    "busiest": "11:00\u201314:00",
+    "closes": "22:00"
+  },
+  "zoneNames": {
+    "W": "West end",
+    "S": "Window carrels",
+    "C": "The floor",
+    "E": "East wall"
   }
 }

@@ -72,6 +72,8 @@ test("/api/held finds the seat this token holds", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
     })).json();
+    assert.equal(typeof held.sessionStart, "number");
+    delete held.sessionStart;
     assert.deepEqual(held, { ok: true, libraryId: "engineering", seatId, state: "OCCUPIED" });
 
     const none = await (await fetch(`${base}/api/held`, {
