@@ -754,10 +754,41 @@
         // ===== Sound (generated, no files) ======================================
 
         const SOUNDS = ["Off", "Rain", "Waves", "Brown noise"];
-        let soundIdx = 0, audio = null;
+        let soundIdx = 0, audio = null, ac = null, unlockEl = null;
 
-        function noiseBuffer(ac, brown) {
-            const len = ac.sampleRate * 3, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+        // One audio context for the whole page, made on the first tap (browsers
+        // only allow sound to start from a tap). iPhones mute generated audio
+        // when the ring switch is on silent, so we ask for "playback" audio and
+        // keep a silent <audio> element looping, which puts the page in the
+        // same category as music: it plays through the silent switch.
+        function audioContext() {
+            if (!ac) {
+                try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { }
+                ac = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (!unlockEl) {
+                unlockEl = new Audio(silentWav());
+                unlockEl.loop = true;
+                unlockEl.setAttribute("playsinline", "");
+            }
+            unlockEl.play().catch(() => { });
+            if (ac.state !== "running") ac.resume().catch(() => { });
+            return ac;
+        }
+
+        function silentWav() {
+            const rate = 8000, n = rate / 2, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+            const str = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+            str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVEfmt ");
+            v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+            v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+            str(36, "data"); v.setUint32(40, n, true);
+            for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+            return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+        }
+
+        function noiseBuffer(ctx, brown) {
+            const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
             let last = 0;
             for (let i = 0; i < len; i++) {
                 const w = Math.random() * 2 - 1;
@@ -767,30 +798,48 @@
         }
 
         function stopSound() {
-            if (audio) { audio.ctx.close(); audio = null; }
+            if (!audio) return;
+            const { gain, nodes } = audio;
+            audio = null;
+            const now = ac.currentTime;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(gain.gain.value, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.4);
+            setTimeout(() => nodes.forEach((n) => { try { n.stop(); } catch { } }), 500);
+            if (unlockEl) unlockEl.pause();
         }
 
         function playSound(kind) {
             stopSound();
             if (kind === "Off") return;
-            const ac = new (window.AudioContext || window.webkitAudioContext)();
-            const src = ac.createBufferSource();
-            src.buffer = noiseBuffer(ac, kind !== "Rain");
+            const ctx = audioContext();
+            const src = ctx.createBufferSource();
+            src.buffer = noiseBuffer(ctx, kind !== "Rain");
             src.loop = true;
-            const filter = ac.createBiquadFilter();
-            filter.type = "lowpass";
-            filter.frequency.value = kind === "Rain" ? 2600 : kind === "Waves" ? 700 : 500;
-            const gain = ac.createGain();
-            gain.gain.value = kind === "Rain" ? 0.07 : 0.22;
-            src.connect(filter).connect(gain).connect(ac.destination);
+            const filter = ctx.createBiquadFilter();
+            if (kind === "Rain") {
+                filter.type = "bandpass"; filter.frequency.value = 1800; filter.Q.value = 0.5;
+            } else {
+                filter.type = "lowpass"; filter.frequency.value = kind === "Waves" ? 900 : 600;
+            }
+            const level = kind === "Rain" ? 0.35 : kind === "Waves" ? 0.55 : 0.6;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(level, ctx.currentTime + 1.2);
+            src.connect(filter).connect(gain).connect(ctx.destination);
+            const nodes = [src];
             if (kind === "Waves") {
                 // Swell and fall like waves arriving.
-                const lfo = ac.createOscillator(), depth = ac.createGain();
-                lfo.frequency.value = 0.11; depth.gain.value = 0.16;
-                lfo.connect(depth).connect(gain.gain); lfo.start();
+                const swell = ctx.createGain();
+                swell.gain.value = 0.6;
+                filter.disconnect(); filter.connect(swell).connect(gain);
+                const lfo = ctx.createOscillator(), depth = ctx.createGain();
+                lfo.frequency.value = 0.11; depth.gain.value = 0.4;
+                lfo.connect(depth).connect(swell.gain); lfo.start();
+                nodes.push(lfo);
             }
             src.start();
-            audio = { ctx: ac };
+            audio = { gain, nodes };
         }
 
         $("soundBtn").addEventListener("click", () => {
@@ -837,7 +886,7 @@
 
         function chime() {
             try {
-                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                const ac = audioContext();
                 const o = ac.createOscillator(), g = ac.createGain();
                 o.frequency.value = 660; g.gain.setValueAtTime(0.0001, ac.currentTime);
                 g.gain.exponentialRampToValueAtTime(0.15, ac.currentTime + 0.05);
