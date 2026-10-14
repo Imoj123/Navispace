@@ -251,18 +251,42 @@
       toast("This code may be from an older seat layout — scan the code on your desk, or pick a seat on the map.");
     }
 
+    // Every action button shows it's working the moment it's tapped and
+    // ignores repeat taps until the server answers.
+    let busy = false;
     function makeButton(label, primary, onClick) {
       const b = document.createElement("button");
       b.textContent = label;
       b.className = "btn" + (primary ? " btn-primary" : "");
-      b.onclick = onClick;
+      b.onclick = async () => {
+        if (busy) return;
+        busy = true;
+        document.querySelectorAll("#actions .btn").forEach((btn) => btn.setAttribute("aria-busy", "true"));
+        b.textContent = label + " …";
+        try {
+          await onClick();
+        } catch {
+          toast("Couldn't reach NaviSpace — check your connection and try again.");
+          b.textContent = label;
+          document.querySelectorAll("#actions .btn").forEach((btn) => btn.removeAttribute("aria-busy"));
+        } finally {
+          busy = false;
+        }
+      };
       return b;
     }
 
     async function refresh() {
-      const seat = await getSeat(libraryId, seatId);
-      render(seat);
-      return seat;
+      try {
+        const seat = await getSeat(libraryId, seatId);
+        render(seat);
+        return seat;
+      } catch {
+        // Still unreachable after apiGet's retries: say so, and keep trying.
+        document.getElementById("status").textContent = "Connecting…";
+        setTimeout(refresh, 3000);
+        return null;
+      }
     }
 
     async function act(action) {

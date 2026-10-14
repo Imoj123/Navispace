@@ -60,6 +60,26 @@
     box-sizing: border-box;
 }
 
+/* No double-tap-to-zoom wait on controls: taps register immediately. */
+a,
+button,
+input,
+label {
+    touch-action: manipulation;
+}
+
+/* Phones and tablets: drop the glass blur (and fixed backgrounds) —
+   re-blurring on every scroll and animation frame is what made taps
+   feel sluggish. Over the plain room gradient the panes look the same. */
+@media (hover: none) {
+    *,
+    *::before,
+    *::after {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+}
+
 html,
 body {
     margin: 0;
@@ -69,7 +89,7 @@ body {
 body {
     /* Lit from above, so content in the middle of the page sits on the
        darker mid tone and text keeps its contrast. */
-    background: radial-gradient(ellipse 120% 80% at 50% -10%, var(--bg-inner) 0%, var(--bg-mid) 55%, var(--bg-outer) 100%) fixed;
+    background: radial-gradient(ellipse 120% 80% at 50% -10%, var(--bg-inner) 0%, var(--bg-mid) 55%, var(--bg-outer) 100%) no-repeat;
     background-color: var(--bg-outer);
     min-height: 100vh;
     color: var(--paper);
@@ -516,6 +536,15 @@ main {
 
 .btn:hover {
     border-color: var(--slate);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn[aria-busy="true"] {
+    opacity: 0.65;
+    pointer-events: none;
 }
 
 .btn-primary {

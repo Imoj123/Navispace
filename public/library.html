@@ -124,7 +124,7 @@
         /* --- Floor plan (libraries with src/layouts/<id>.json) -------------- */
 
         main.has-plan {
-            max-width: 1040px;
+            max-width: 1400px;
         }
 
         .plan-meta {
@@ -144,6 +144,17 @@
             margin: 0 -20px;
             padding: 0 20px 8px;
             scrollbar-width: thin;
+        }
+
+        .plan-wrap.portrait .plan-card {
+            min-width: 0;
+            max-width: 460px;
+            margin: 0 auto;
+            padding: 12px;
+        }
+
+        .plan-wrap.portrait .plan-hint {
+            display: none;
         }
 
         .plan-card {
@@ -213,7 +224,7 @@
 
         .plan-seat text {
             font-family: var(--font-display);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
             text-anchor: middle;
             dominant-baseline: central;
@@ -317,9 +328,12 @@
 
         function getLayout() {
             if (!layoutPromise) {
-                layoutPromise = fetch(`/api/library/${encodeURIComponent(libraryId)}/layout`)
-                    .then((res) => (res.ok ? res.json() : null))
-                    .catch(() => null);
+                layoutPromise = apiGet(`/api/library/${encodeURIComponent(libraryId)}/layout`)
+                    .then((layout) => (layout && Array.isArray(layout.seats) ? layout : null))
+                    .catch(() => {
+                        layoutPromise = null; // try again on the next refresh
+                        return null;
+                    });
             }
             return layoutPromise;
         }
@@ -331,53 +345,89 @@
             return el;
         }
 
-        /** Draws the building once; seats are re-coloured on every refresh. */
+        /**
+         * Draws the building; seats are re-coloured on every refresh.
+         * The plan is a long, low band, so on a narrow (phone) screen it's
+         * turned a quarter-turn to portrait and scrolls down instead of
+         * sideways. Only positions turn; every label stays upright.
+         */
         let planSeats = null;
+        let planPortrait = null;
+        let lastPaint = null;
+        const PORTRAIT_BELOW_PX = 700;
+
         function drawPlan(layout) {
             const svg = document.getElementById("plan");
             svg.innerHTML = "";
-            const [x, y, w, h] = layout.viewBox || [0, 0, 1000, 520];
-            // A little headroom for the entrance arrow above the outline.
-            svg.setAttribute("viewBox", `${x - 10} ${y - 40} ${w + 20} ${h + 60}`);
+            const [vx, vy, vw, vh] = layout.viewBox || [0, 0, 1000, 520];
+            const portrait = document.getElementById("planWrap").clientWidth < PORTRAIT_BELOW_PX;
+            planPortrait = portrait;
+            document.getElementById("planWrap").classList.toggle("portrait", portrait);
+
+            // Quarter-turn clockwise: the west end at the top, the atrium side on the right.
+            const pt = (x, y) => (portrait ? [vy + vh - y, x] : [x, y]);
+            const box = (x, y, w, h) => {
+                const [px, py] = pt(x, portrait ? y + h : y);
+                return portrait ? { x: px, y: py, w: h, h: w } : { x, y, w, h };
+            };
+            const pad = 40;
+            if (portrait) svg.setAttribute("viewBox", `${-pad / 2} ${vx - pad / 2} ${vh + pad} ${vw + pad}`);
+            else svg.setAttribute("viewBox", `${vx - 10} ${vy - pad} ${vw + 20} ${vh + pad + 20}`);
 
             for (const z of layout.zones || []) {
-                const t = svgEl("text", { x: z.x, y: z.y, class: "plan-label outside", "text-anchor": "middle" }, svg);
+                const [x, y] = pt(z.x, z.y);
+                const t = svgEl("text", { x, y, class: "plan-label outside", "text-anchor": "middle" }, svg);
                 t.textContent = z.label;
             }
-            if (layout.outline) svgEl("path", { d: layout.outline, class: "plan-floor" }, svg);
+
+            if (Array.isArray(layout.outline)) {
+                svgEl("polygon", { points: layout.outline.map(([x, y]) => pt(x, y).join(",")).join(" "), class: "plan-floor" }, svg);
+            } else if (layout.outline) {
+                svgEl("path", { d: layout.outline, class: "plan-floor" }, svg);
+            }
 
             for (const r of layout.rooms || []) {
-                svgEl("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 8, class: r.kind === "core" ? "plan-core" : "plan-room" }, svg);
-                const t = svgEl("text", { x: r.x + r.w / 2, y: r.y + r.h / 2, class: "plan-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg);
+                const b = box(r.x, r.y, r.w, r.h);
+                svgEl("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8, class: r.kind === "core" ? "plan-core" : "plan-room" }, svg);
+                const t = svgEl("text", { x: b.x + b.w / 2, y: b.y + b.h / 2, class: "plan-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg);
                 t.textContent = r.label;
             }
 
             for (const st of layout.stacks || []) {
-                // Book stacks: a run of shelf lines filling the block.
+                // Book stacks: shelf lines running the long way of the block.
                 const g = svgEl("g", {}, svg);
                 for (let ly = st.y + 6; ly <= st.y + st.h - 4; ly += 14) {
-                    svgEl("line", { x1: st.x, y1: ly, x2: st.x + st.w, y2: ly, class: "plan-stack" }, g);
+                    const [x1, y1] = pt(st.x, ly);
+                    const [x2, y2] = pt(st.x + st.w, ly);
+                    svgEl("line", { x1, y1, x2, y2, class: "plan-stack" }, g);
                 }
             }
 
             for (const t of layout.tables || []) {
                 if (t.shape === "round") {
-                    svgEl("circle", { cx: t.cx, cy: t.cy, r: t.r, class: "plan-table" }, svg);
+                    const [cx, cy] = pt(t.cx, t.cy);
+                    svgEl("circle", { cx, cy, r: t.r, class: "plan-table" }, svg);
                 } else {
-                    svgEl("rect", { x: t.x, y: t.y, width: t.w, height: t.h, rx: 4, class: "plan-table" }, svg);
+                    const b = box(t.x, t.y, t.w, t.h);
+                    svgEl("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: 4, class: "plan-table" }, svg);
                 }
             }
 
             if (layout.entrance) {
+                // An arrow pointing into the library from the atrium side.
                 const e = layout.entrance;
-                svgEl("path", { d: `M${e.x - 10} ${e.y - 26} h20 v12 h9 l-19 18 l-19 -18 h9 z`, class: "plan-entrance" }, svg);
-                const t = svgEl("text", { x: e.x + 18, y: e.y - 16, class: "plan-entrance-label" }, svg);
+                const [ex, ey] = pt(e.x, e.y);
+                const rot = portrait ? 90 : 0;
+                const g = svgEl("g", { transform: `translate(${ex} ${ey}) rotate(${rot})` }, svg);
+                svgEl("path", { d: "M-10 -26 h20 v12 h9 l-19 18 l-19 -18 h9 z", class: "plan-entrance" }, g);
+                const t = svgEl("text", { x: ex + (portrait ? 12 : 18), y: ey + (portrait ? -18 : -16), class: "plan-entrance-label" }, svg);
                 t.textContent = e.label || "Enter";
             }
 
             planSeats = new Map();
             for (const seat of layout.seats) {
-                const g = svgEl("g", { class: "plan-seat state-UNKNOWN", transform: `translate(${seat.x} ${seat.y})` }, svg);
+                const [x, y] = pt(seat.x, seat.y);
+                const g = svgEl("g", { class: "plan-seat state-UNKNOWN", transform: `translate(${x} ${y})` }, svg);
                 svgEl("rect", { x: -13, y: -13, width: 26, height: 26, rx: 7 }, g);
                 const t = svgEl("text", { x: 0, y: 0.5 }, g);
                 t.textContent = seat.id;
@@ -386,9 +436,21 @@
             }
         }
 
+        // Re-draw when the screen crosses between portrait and landscape.
+        let planLayout = null;
+        window.addEventListener("resize", () => {
+            if (!planLayout) return;
+            const portrait = document.getElementById("planWrap").clientWidth < PORTRAIT_BELOW_PX;
+            if (portrait !== planPortrait) {
+                drawPlan(planLayout);
+                if (lastPaint) paintPlan(...lastPaint);
+            }
+        });
+
         const STATE_WORDS = { AVAILABLE: "available", OCCUPIED: "occupied", STEPPED_AWAY: "stepped away" };
 
         function paintPlan(seats, config) {
+            lastPaint = [seats, config];
             const byId = new Map(seats.map((s) => [s.id, s]));
             for (const [id, { g, title }] of planSeats) {
                 const seat = byId.get(id);
@@ -413,9 +475,10 @@
             // A library with a floor plan shows its seats where they are.
             if (layout) {
                 if (!planSeats) {
-                    drawPlan(layout);
+                    planLayout = layout;
                     document.querySelector("main").classList.add("has-plan");
                     document.getElementById("planWrap").hidden = false;
+                    drawPlan(layout);
                     const meta = document.getElementById("planMeta");
                     meta.hidden = !layout.floor;
                     meta.textContent = layout.floor || "";

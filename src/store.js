@@ -25,6 +25,11 @@ class MemoryStore {
     return entry.value;
   }
 
+  /** Many keys at once (same contract as UpstashStore.getMany). */
+  async getMany(keys) {
+    return Promise.all(keys.map((key) => this.get(key)));
+  }
+
   /**
    * @param {string} key
    * @param {*} value
