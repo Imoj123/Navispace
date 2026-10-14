@@ -255,14 +255,14 @@
       const label = document.createElement("span");
       label.textContent =
         seat.state === "AVAILABLE" ? "Available" :
-        seat.state === "OCCUPIED" ? (seat.holderToken === identity.token ? "You're checked in" : "Occupied") :
+        seat.state === "OCCUPIED" ? (isMine(seat.holderHash) ? "You're checked in" : "Occupied") :
         "Stepped away (holding seat)";
       statusEl.appendChild(label);
 
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
 
-      const isHolder = seat.holderToken === identity.token;
+      const isHolder = isMine(seat.holderHash);
 
       // The holder sees how long this sitting has lasted.
       focusStart = isHolder && seat.state !== "AVAILABLE" ? seat.sessionStart || null : null;
@@ -272,6 +272,11 @@
       if (seat.state === "AVAILABLE") {
         actions.appendChild(makeButton("Check in", true, () => act("checkIn")));
       } else if (seat.state === "OCCUPIED" && isHolder) {
+        const focusLink = document.createElement("a");
+        focusLink.className = "btn btn-primary";
+        focusLink.href = `/focus.html?lib=${encodeURIComponent(libraryId)}&seat=${encodeURIComponent(seatId)}`;
+        focusLink.textContent = "Start focus session";
+        actions.appendChild(focusLink);
         actions.appendChild(makeButton("Step away (hold my seat)", false, () => act("stepAway")));
         actions.appendChild(makeButton("I'm done — check out", false, () => act("leaving")));
       } else if (seat.state === "STEPPED_AWAY" && isHolder) {

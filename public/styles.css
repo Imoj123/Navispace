@@ -452,6 +452,7 @@ main {
     text-transform: uppercase;
     text-align: center;
     text-decoration: none;
+    box-sizing: border-box;
     border: 1px solid var(--line-strong);
     background: transparent;
     color: var(--text);
