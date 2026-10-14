@@ -60,6 +60,7 @@ function freshSeat(libraryId, seatId) {
     holderToken: null,
     holderNickname: null,
     reminderSent: false,
+    sessionStart: null,
   };
 }
 
@@ -182,6 +183,9 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       seat.stepAwayExpiry = null;
       seat.lastConfirmTime = now;
       seat.confirmStreak = 0;
+      // When this sitting began — powers "your focus session" and the
+      // library's average session length. Kept through step-aways.
+      seat.sessionStart = now;
       seat.holderToken = identity.token;
       seat.holderNickname = identity.nickname;
       seat.reminderSent = false;
@@ -264,6 +268,7 @@ function resetToAvailable(seat) {
   seat.holderToken = null;
   seat.holderNickname = null;
   seat.reminderSent = false;
+  seat.sessionStart = null;
 }
 
 module.exports = {

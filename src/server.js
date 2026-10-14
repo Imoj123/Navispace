@@ -311,7 +311,9 @@ function createApp() {
     }
     for (const { libraryId, seatIds } of activeLibrarySeatGroups()) {
       const seat = await findHeldSeat(libraryId, token, seatIds);
-      if (seat) return res.json({ ok: true, libraryId, seatId: seat.id, state: seat.state });
+      if (seat) {
+        return res.json({ ok: true, libraryId, seatId: seat.id, state: seat.state, sessionStart: seat.sessionStart || null });
+      }
     }
     res.json({ ok: true, libraryId: null, seatId: null });
   });

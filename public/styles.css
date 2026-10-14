@@ -1,83 +1,71 @@
 /*
- * NaviSpace shared design system.
+ * NaviSpace — "Lamp over the floor".
  *
- * Pages sit in their library's "room": a radial gradient in that
- * library's colours (set per page by client.js paintRoom), with glass
- * surfaces, pill controls and one pink accent for the current place and
- * the primary action — the same look as the home page's bookshelf.
- *
- * Visual direction: a status board, not a dashboard. Seat occupancy is
- * exactly the kind of information a departures board or wayfinding
- * sign exists to carry — flat colour fields that mean one thing each,
- * generous dark ground, confident numerals. That's the vocabulary
- * this borrows from, rather than generic SaaS cards.
- *
- * Three signal colours (available / occupied / stepped away) are the
- * only accents in the whole system, and they always mean the same
- * thing everywhere they appear.
+ * A study-hall at night: deep green-black ground, one warm lamp glow at
+ * the top of every page, a serif voice (Newsreader) for what we say and a
+ * monospace instrument (IBM Plex Mono) for what we measure. Brass is the
+ * only decorative accent and is spent on actions. Seat states keep fixed,
+ * distinct meanings everywhere and always come with a word:
+ *   free = sage, taken = soft vermilion, stepped away = amber.
  */
 
 :root {
-    --ink: #10182b;
-    --panel: rgba(255, 255, 255, 0.06);
-    --panel-raised: rgba(255, 255, 255, 0.1);
-    --paper: #f4f3ef;
-    --line: rgba(255, 255, 255, 0.14);
-    --line-on-paper: rgba(16, 24, 43, 0.12);
-    /* Secondary text as translucent white, so it reads on every room. */
-    --slate: rgba(255, 255, 255, 0.7);
-    --slate-dim: rgba(255, 255, 255, 0.45);
+    /* Ground & ink */
+    --ground: #121614;
+    --ground-2: #171d1a;
+    --surface: rgba(236, 230, 214, 0.035);
+    --surface-2: rgba(236, 230, 214, 0.065);
+    --line: rgba(236, 230, 214, 0.1);
+    --line-strong: rgba(236, 230, 214, 0.2);
+    --text: #ece6d6;
+    --muted: #a3aa9c;
+    --faint: #737b72;
 
-    --green: #35a776;
-    --green-dim: #223c33;
-    --vermilion: #e2472b;
-    --vermilion-dim: #3a2420;
-    --amber: #e8a23d;
-    --amber-dim: #3a301f;
+    /* Accent */
+    --brass: #c4a35f;
+    --brass-hi: #d6b878;
+    --on-brass: #141812;
 
-    --font-display: "Space Grotesk", sans-serif;
-    --font-body: "IBM Plex Sans", sans-serif;
-    --font-heading: "Galada", cursive;
+    /* Seat states */
+    --free: #8cc5a4;
+    --free-dim: rgba(140, 197, 164, 0.13);
+    --taken: #e38c70;
+    --taken-dim: rgba(227, 140, 112, 0.13);
+    --away: #dcae63;
+    --away-dim: rgba(220, 174, 99, 0.14);
 
-    /* Room (overridden per library by client.js) */
-    --bg-inner: #0b8a78;
-    --bg-mid: #044e3b;
-    --bg-outer: #011411;
+    /* Type */
+    --font-serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+    --font-body: "Public Sans", system-ui, -apple-system, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-    /* Glass and accent */
-    --glass-bg: rgba(255, 255, 255, 0.06);
-    --glass-strong: rgba(255, 255, 255, 0.1);
-    --glass-border: rgba(255, 255, 255, 0.14);
+    /* Older names still used by page-level styles, mapped onto the system. */
+    --ink: var(--ground);
+    --panel: var(--surface);
+    --panel-raised: var(--surface-2);
+    --paper: var(--text);
+    --slate: var(--muted);
+    --slate-dim: var(--faint);
+    --green: var(--free);
+    --green-dim: var(--free-dim);
+    --vermilion: var(--taken);
+    --vermilion-dim: var(--taken-dim);
+    --amber: var(--away);
+    --amber-dim: var(--away-dim);
+    --accent: var(--brass);
+    --on-accent: var(--on-brass);
+    --glass-bg: var(--surface);
+    --glass-strong: var(--surface-2);
+    --glass-border: var(--line);
     --well: rgba(0, 0, 0, 0.28);
-    --accent: #fbcfe8;
-    --accent-hover: #fde4f2;
-    --on-accent: #011d17;
+    --font-display: var(--font-serif);
+    --font-heading: var(--font-serif);
 
     color-scheme: dark;
 }
 
 * {
     box-sizing: border-box;
-}
-
-/* No double-tap-to-zoom wait on controls: taps register immediately. */
-a,
-button,
-input,
-label {
-    touch-action: manipulation;
-}
-
-/* Phones and tablets: drop the glass blur (and fixed backgrounds) —
-   re-blurring on every scroll and animation frame is what made taps
-   feel sluggish. Over the plain room gradient the panes look the same. */
-@media (hover: none) {
-    *,
-    *::before,
-    *::after {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
 }
 
 html,
@@ -87,20 +75,25 @@ body {
 }
 
 body {
-    /* Lit from above, so content in the middle of the page sits on the
-       darker mid tone and text keeps its contrast. */
-    background: radial-gradient(ellipse 120% 80% at 50% -10%, var(--bg-inner) 0%, var(--bg-mid) 55%, var(--bg-outer) 100%) no-repeat;
-    background-color: var(--bg-outer);
     min-height: 100vh;
-    color: var(--paper);
-    font-family: var(--font-body);
-    font-size: 16px;
-    line-height: 1.5;
+    background:
+        radial-gradient(ellipse 55% 38% at 50% -6%, rgba(228, 192, 118, 0.11), transparent 72%) no-repeat,
+        var(--ground);
+    color: var(--text);
+    font: 400 16px/1.55 var(--font-body);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
 a {
     color: inherit;
+}
+
+a,
+button,
+input,
+label {
+    touch-action: manipulation;
 }
 
 button {
@@ -108,254 +101,198 @@ button {
 }
 
 :focus-visible {
-    outline: 2px solid var(--amber);
-    outline-offset: 2px;
+    outline: 2px solid var(--brass);
+    outline-offset: 3px;
 }
 
-/* --- Top bar: the one piece of chrome every page shares ------------- */
+::selection {
+    background: rgba(196, 163, 95, 0.35);
+}
+
+/* --- Top bar ---------------------------------------------------------- */
 
 .topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 14px 16px;
-    padding: 22px 4%;
+    gap: 14px 24px;
+    padding: 20px max(20px, env(safe-area-inset-right, 0px)) 20px max(20px, env(safe-area-inset-left, 0px));
+    border-bottom: 1px solid var(--line);
 }
 
 .wordmark {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 9px;
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.05rem;
-    letter-spacing: 0.01em;
+    gap: 10px;
+    font: 500 19px/1 var(--font-serif);
+    letter-spacing: 0.005em;
     text-decoration: none;
-    color: var(--paper);
+    color: var(--text);
     white-space: nowrap;
 }
 
 .wordmark-mark {
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    background: var(--paper);
-    position: relative;
-    flex-shrink: 0;
-}
-
-.wordmark-mark::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    margin: auto;
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    background: var(--green);
+    background: var(--free);
+    box-shadow: 0 0 0 4px rgba(140, 197, 164, 0.14), 0 0 14px rgba(140, 197, 164, 0.45);
+    flex-shrink: 0;
 }
 
 .topnav {
     display: flex;
-    gap: 0.35rem;
-    padding: 0.35rem;
-    border-radius: 100px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.topnav::-webkit-scrollbar {
-    display: none;
+    gap: 6px 26px;
+    flex-wrap: wrap;
 }
 
 .topnav a {
-    font-family: var(--font-display);
-    font-size: 0.85rem;
-    font-weight: 500;
+    font: 400 12px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
     text-decoration: none;
-    color: var(--slate);
-    padding: 0.45rem 1.05rem;
-    border-radius: 100px;
-    white-space: nowrap;
-    transition: background 0.25s ease, color 0.25s ease;
+    padding: 6px 0;
+    border-bottom: 1px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .topnav a:hover {
-    color: var(--paper);
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
 }
 
 .topnav a.current {
-    background: var(--accent);
-    color: var(--on-accent);
+    color: var(--text);
+    border-bottom-color: var(--brass);
 }
 
 @media (max-width: 560px) {
     .topbar {
-        padding: 16px;
+        padding-top: 16px;
+        padding-bottom: 14px;
     }
 
     .topnav {
         order: 3;
         width: 100%;
+        gap: 22px;
+        overflow-x: auto;
+        scrollbar-width: none;
     }
 
-    .topnav a {
-        padding: 0.45rem 0.85rem;
-        font-size: 0.8rem;
+    .topnav::-webkit-scrollbar {
+        display: none;
     }
 }
 
-/* --- Page shell ------------------------------------------------------ */
+/* --- Page shell ---------------------------------------------------------- */
 
 main {
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 28px 20px 64px;
+    padding: 34px max(20px, env(safe-area-inset-right, 0px)) 72px max(20px, env(safe-area-inset-left, 0px));
 }
 
 .page-title {
-    font-family: var(--font-heading);
-    font-weight: 400;
-    font-size: clamp(2.8rem, 9vw, 4.4rem);
-    line-height: 0.95;
-    margin: 0 0 10px;
+    font: 400 clamp(38px, 7vw, 58px)/1.02 var(--font-serif);
+    letter-spacing: -0.012em;
+    margin: 0 0 12px;
+    text-wrap: balance;
+}
+
+.page-title em {
+    color: var(--brass);
 }
 
 .page-subtitle {
-    color: var(--slate);
-    font-size: 0.95rem;
-    margin: 0 0 30px;
+    color: var(--muted);
+    font-size: 15.5px;
+    max-width: 52ch;
+    margin: 0 0 32px;
 }
 
-/* --- Library context bar: which library a page belongs to, and a ---- */
-/* --- quick way back to the picker. Every per-library page shows one. - */
+.eyebrow {
+    font: 400 11.5px/1 var(--font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
 
+/* The library a page belongs to, and the way back to the picker. */
 .context-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 4px 20px 0;
-    font-size: 0.85rem;
+    padding: 18px max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px));
 }
 
 .context-bar .library-name {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: 0.12em;
+    font: 400 11.5px/1 var(--font-mono);
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    font-size: 0.75rem;
-    color: var(--paper);
+    color: var(--brass);
 }
 
 .context-bar a {
-    color: var(--slate);
+    font: 400 11.5px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
     text-decoration: none;
-    padding: 6px 12px;
-    border-radius: 100px;
-    border: 1px solid var(--glass-border);
-    transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 .context-bar a:hover {
-    color: var(--paper);
+    color: var(--text);
 }
 
-/* --- Library picker cards -------------------------------------------- */
+/* --- Readouts: the instrument panel ------------------------------------- */
 
-.library-grid {
+.readout {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 10px 36px;
+    font: 400 11px/1.2 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
 }
 
-.library-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 20px 22px;
-    border-radius: 28px;
-    border: 1px solid var(--glass-border);
-    background: var(--glass-bg);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    text-decoration: none;
-    color: var(--paper);
-    transition: border-color 0.15s ease;
-}
-
-.library-card:hover {
-    border-color: var(--slate);
-}
-
-.library-card.is-soon {
-    opacity: 0.55;
-    cursor: default;
-}
-
-.library-card-name {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.1rem;
+.readout b {
+    display: block;
+    text-transform: none;
+    font: 500 26px/1.15 var(--font-mono);
+    letter-spacing: -0.01em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
     margin-bottom: 4px;
 }
 
-.library-card-meta {
-    font-size: 0.85rem;
-    color: var(--slate);
+.readout b.free {
+    color: var(--free);
 }
 
-.library-card-status {
-    font-size: 0.78rem;
-    font-weight: 500;
-    padding: 5px 10px;
-    border-radius: 20px;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.library-card-status.active {
-    background: var(--green-dim);
-    color: var(--green);
-}
-
-.library-card-status.soon {
-    background: var(--panel-raised);
-    color: var(--slate);
-}
-
-/* --- Lost & Found ------------------------------------------------------ */
+/* --- Lost & Found -------------------------------------------------------- */
 
 .lf-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
 }
 
 .lf-card {
-    border: 1px solid var(--glass-border);
-    border-radius: 24px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--line);
+    background: var(--surface);
     overflow: hidden;
     display: flex;
     flex-direction: column;
 }
 
 .lf-card.is-claimed {
-    opacity: 0.6;
+    opacity: 0.55;
 }
 
 .lf-card img {
@@ -363,7 +300,7 @@ main {
     aspect-ratio: 1 / 1;
     object-fit: cover;
     display: block;
-    background: var(--panel-raised);
+    background: var(--surface-2);
 }
 
 .lf-card-body {
@@ -375,48 +312,46 @@ main {
 }
 
 .lf-card-desc {
-    font-weight: 500;
-    font-size: 0.9rem;
-    line-height: 1.3;
+    font: 400 17px/1.25 var(--font-serif);
 }
 
 .lf-card-meta {
-    font-size: 0.76rem;
-    color: var(--slate);
+    font: 400 11.5px/1.4 var(--font-mono);
+    color: var(--muted);
 }
 
 .lf-chip {
     align-self: flex-start;
-    font-size: 0.72rem;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 20px;
-    background: var(--amber-dim);
-    color: var(--amber);
+    font: 400 10.5px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 8px;
+    border: 1px solid rgba(196, 163, 95, 0.5);
+    color: var(--brass);
 }
 
 .lf-empty {
     text-align: center;
-    color: var(--slate);
-    padding: 40px 0;
+    color: var(--muted);
+    font: 400 italic 18px/1.4 var(--font-serif);
+    padding: 48px 0;
     grid-column: 1 / -1;
 }
 
 .lf-form {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: 28px;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: var(--surface);
+    border: 1px solid var(--line);
     padding: 22px;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
 }
 
 .lf-form label {
     display: block;
-    font-size: 0.82rem;
-    color: var(--slate);
-    margin: 12px 0 6px;
+    font: 400 11px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 18px 0 8px;
 }
 
 .lf-form label:first-child {
@@ -427,49 +362,41 @@ main {
 .lf-form textarea {
     width: 100%;
     font-family: var(--font-body);
-    background: var(--well);
-    border: 1px solid var(--glass-border);
-    color: var(--paper);
-    border-radius: 14px;
-    padding: 11px 14px;
-    font-size: 0.9rem;
     resize: vertical;
 }
 
 .lf-form input[type="file"] {
-    font-family: var(--font-body);
-    font-size: 0.85rem;
-    color: var(--slate);
+    font: 400 13px var(--font-body);
+    color: var(--muted);
     max-width: 100%;
 }
 
 .lf-form input[type="file"]::file-selector-button {
-    font-family: var(--font-body);
-    font-weight: 500;
+    font: 400 11.5px var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     margin-right: 12px;
-    padding: 9px 16px;
-    border-radius: 100px;
-    border: 1px solid var(--glass-border);
-    background: var(--glass-strong);
-    color: var(--paper);
+    padding: 10px 14px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--text);
     cursor: pointer;
 }
 
 .lf-photo-preview {
     width: 100%;
-    max-width: 220px;
-    border-radius: 8px;
-    margin-top: 10px;
+    max-width: 240px;
+    margin-top: 12px;
     display: none;
 }
 
-/* --- Modal (shared: still-studying prompt, claim form, etc.) --------- */
+/* --- Modal ----------------------------------------------------------------- */
 
 .modal-overlay {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(8, 11, 20, 0.72);
+    background: rgba(6, 8, 7, 0.78);
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -477,130 +404,192 @@ main {
 }
 
 .modal-box {
-    background: rgba(12, 18, 32, 0.88);
-    border: 1px solid var(--glass-border);
-    border-radius: 28px;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    padding: 26px;
-    max-width: 340px;
+    background: var(--ground-2);
+    border: 1px solid var(--line-strong);
+    padding: 28px;
+    max-width: 380px;
     width: 100%;
-    text-align: left;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 
 .modal-box p {
-    margin: 0 0 16px;
-    font-size: 0.95rem;
+    margin: 0 0 18px;
+    font: 400 19px/1.35 var(--font-serif);
 }
 
-/* --- Status language, shared by seat tiles and the seat card -------- */
+/* --- Seat states ------------------------------------------------------------- */
 
 .signal-dot {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
 }
 
 .signal-AVAILABLE {
-    background: var(--green);
+    background: var(--free);
+    box-shadow: 0 0 10px rgba(140, 197, 164, 0.6);
 }
 
 .signal-OCCUPIED {
-    background: var(--vermilion);
+    background: var(--taken);
 }
 
 .signal-STEPPED_AWAY {
-    background: var(--amber);
+    background: var(--away);
 }
 
-/* --- Buttons ---------------------------------------------------------- */
+/* --- Buttons ---------------------------------------------------------------- */
 
 .btn {
     display: block;
     width: 100%;
-    padding: 13px 16px;
-    margin: 8px 0;
-    font-family: var(--font-body);
-    font-weight: 500;
-    font-size: 0.95rem;
+    padding: 15px 18px;
+    margin: 10px 0;
+    font: 500 12.5px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     text-align: center;
-    border-radius: 100px;
-    border: 1px solid var(--glass-border);
-    background: var(--well);
-    color: var(--paper);
+    text-decoration: none;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--text);
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease, transform 0.2s ease;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 .btn:hover {
-    border-color: var(--slate);
+    border-color: var(--brass);
 }
 
 .btn:active {
-    transform: scale(0.98);
+    transform: scale(0.985);
 }
 
 .btn[aria-busy="true"] {
-    opacity: 0.65;
+    opacity: 0.6;
     pointer-events: none;
 }
 
 .btn-primary {
-    background: var(--accent);
-    color: var(--on-accent);
-    border-color: var(--accent);
-    font-weight: 600;
+    background: var(--brass);
+    border-color: var(--brass);
+    color: var(--on-brass);
+    font-weight: 500;
 }
 
 .btn-primary:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
-    transform: translateY(-2px);
+    background: var(--brass-hi);
+    border-color: var(--brass-hi);
+}
+
+.btn-tinted {
+    background: var(--surface-2);
+    border-color: var(--line);
 }
 
 .btn-quiet {
     background: none;
     border: none;
-    color: var(--slate);
-    font-size: 0.82rem;
-    font-weight: 400;
+    color: var(--muted);
+    font: 400 italic 15px var(--font-serif);
     text-decoration: underline;
-    text-underline-offset: 2px;
-    padding: 6px;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 4px;
+    padding: 6px 0;
     width: auto;
     display: inline-block;
+    cursor: pointer;
 }
 
-.btn-tinted {
-    background: var(--glass-strong);
-    border-color: var(--line);
-    color: var(--paper);
-    font-size: 0.88rem;
+.btn-quiet:hover {
+    color: var(--text);
 }
 
-/* --- Form controls ----------------------------------------------------- */
+/* The "→" link-style action used across pages. */
+.cta-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border: 1px solid var(--brass);
+    color: var(--text);
+    text-decoration: none;
+    font: 500 12.5px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: background 0.2s ease, color 0.2s ease;
+}
 
-input[type="text"] {
-    font-family: var(--font-body);
+.cta-link::after {
+    content: "→";
+    color: var(--brass);
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.cta-link:hover {
+    background: var(--brass);
+    color: var(--on-brass);
+}
+
+.cta-link:hover::after {
+    color: var(--on-brass);
+    transform: translateX(3px);
+}
+
+/* --- Form controls ---------------------------------------------------------- */
+
+input[type="text"],
+textarea {
+    font: 400 15px var(--font-body);
     background: var(--well);
-    border: 1px solid var(--glass-border);
-    color: var(--paper);
-    border-radius: 100px;
-    padding: 11px 16px;
-    font-size: 0.9rem;
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 0;
+    padding: 13px 14px;
+}
+
+input[type="text"]:focus,
+textarea:focus {
+    border-color: var(--brass);
+    outline: none;
 }
 
 input[type="text"]::placeholder {
-    color: var(--slate-dim);
+    color: var(--faint);
 }
 
-/* --- Toast -------------------------------------------------------------- */
+/* --- Toast ------------------------------------------------------------------- */
 
 .toast {
     margin-top: 14px;
-    font-size: 0.85rem;
-    color: var(--slate);
+    font: 400 italic 15px/1.45 var(--font-serif);
+    color: var(--muted);
     min-height: 1.4em;
+}
+
+/* --- Footer ------------------------------------------------------------------ */
+
+.sitefoot {
+    border-top: 1px solid var(--line);
+    padding: 22px max(20px, env(safe-area-inset-right, 0px)) 30px max(20px, env(safe-area-inset-left, 0px));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px 24px;
+    font: 400 11px/1.4 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

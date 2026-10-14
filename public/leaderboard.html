@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#10182b" />
+<meta name="theme-color" content="#121614" />
 <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
 <link rel="icon" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="NaviSpace" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Galada&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/styles.css" />
 <title>NaviSpace — Leaderboard</title>
 <meta name="description" content="See who's logged the most study time this week." />
@@ -71,11 +71,22 @@
   .top3 .points { color: var(--paper); }
 
   #empty { text-align: center; color: var(--slate); margin-top: 40px; }
+
+  /* --- Lamp over the floor ------------------------------------------------ */
+  main { max-width: 620px; }
+  .board { border-top-color: var(--line); }
+  .board-row { border-bottom-color: var(--line); padding: 16px 4px; }
+  .board-row.top3 { background: var(--surface); border-radius: 0; margin: 0; padding-left: 14px; padding-right: 14px; border-bottom: 1px solid var(--line); }
+  .board-row + .board-row.top3 { margin-top: 0; }
+  .rank, .points { font-family: var(--font-mono); font-weight: 500; font-size: 14px; }
+  .top3 .rank { color: var(--brass); }
+  .name { font: 400 20px/1.2 var(--font-serif); }
+  #empty { font: 400 italic 19px/1.4 var(--font-serif); }
 </style>
 </head>
-<body data-room="library">
+<body>
   <header class="topbar">
-    <a class="wordmark" href="/"><span class="wordmark-mark"></span>navispace</a>
+    <a class="wordmark" href="/"><span class="wordmark-mark"></span>NaviSpace</a>
     <nav class="topnav" id="topnav"></nav>
   </header>
   <div class="context-bar">
@@ -84,8 +95,8 @@
   </div>
 
   <main>
-    <h1 class="page-title">Study leaderboard</h1>
-    <p class="page-subtitle">One point per seat per day — this week</p>
+    <h1 class="page-title">This week's <em>study board.</em></h1>
+    <p class="page-subtitle">One point for each day you study at a seat. The board starts fresh every week.</p>
 
     <div class="board" id="list"></div>
     <p id="empty" style="display:none;">No sessions yet this week — check in to get on the board.</p>
@@ -96,9 +107,10 @@
     const libraryId = getLibraryIdFromUrl();
 
     document.getElementById("topnav").innerHTML = `
+      <a href="/">Home</a>
       <a href="${libraryUrl("/library.html", libraryId)}">Map</a>
-      <a href="${libraryUrl("/leaderboard.html", libraryId)}" class="current">Leaderboard</a>
-      <a href="${libraryUrl("/lost-found.html", libraryId)}">Lost &amp; Found</a>
+      <a href="${libraryUrl("/leaderboard.html", libraryId)}" class="current">Study board</a>
+      <a href="${libraryUrl("/lost-found.html", libraryId)}">Lost &amp; found</a>
     `;
     getLibraries().then((libs) => {
       const lib = libs.find((l) => l.id === libraryId);
