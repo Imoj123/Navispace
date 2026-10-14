@@ -175,7 +175,7 @@
             meta.textContent = [item.location, timeAgo(item.createdAt)].filter(Boolean).join(" · ");
             body.appendChild(meta);
 
-            const isMine = item.reporterToken === identity.token;
+            const isMine = isMine(item.reporterHash);
 
             if (item.status === "claimed") {
                 const chip = document.createElement("div");

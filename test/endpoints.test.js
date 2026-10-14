@@ -105,3 +105,38 @@ test("a seat id that isn't in the library is reported, not shown as free", async
     assert.equal(ok.status, 200);
   });
 });
+
+test("seat and lost & found APIs never return raw device tokens", async () => {
+  await withServer(async (base) => {
+    const crypto = require("crypto");
+    const token = "123e4567-e89b-12d3-a456-426614174000";
+    const other = "223e4567-e89b-12d3-a456-426614174000";
+    const hash = (t) => crypto.createHash("sha256").update(t).digest("hex").slice(0, 16);
+    const seatId = getSeatIds("engineering")[0];
+    const post = (url, body) =>
+      fetch(`${base}${url}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+    const scan = await (await post(`/api/library/engineering/scan/${seatId}`, { action: "checkIn", token, nickname: "Thandi" })).json();
+    assert.equal(scan.ok, true);
+    assert.equal(scan.seat.holderHash, hash(token));
+
+    const one = await (await fetch(`${base}/api/library/engineering/seat/${seatId}`)).json();
+    const all = await (await fetch(`${base}/api/library/engineering/seats`)).json();
+    assert.equal(one.holderHash, hash(token));
+    assert.equal(all.find((s) => s.id === seatId).holderHash, hash(token));
+    assert.equal(all.find((s) => s.id !== seatId).holderHash, null);
+
+    const tiny = "data:image/jpeg;base64," + Buffer.from("x").toString("base64");
+    const report = await (await post(`/api/library/engineering/lostfound`, { description: "Blue flask", photoDataUrl: tiny, token, nickname: "Thandi" })).json();
+    assert.equal(report.ok, true);
+    assert.equal(report.item.reporterHash, hash(token));
+    const claim = await (await post(`/api/library/engineering/lostfound/${report.item.id}/claim`, { token: other, nickname: "Sipho" })).json();
+    assert.equal(claim.item.claim.claimantHash, hash(other));
+    const items = await (await fetch(`${base}/api/library/engineering/lostfound`)).json();
+
+    const everything = JSON.stringify([scan, one, all, report, claim, items]);
+    assert.ok(!everything.includes(token), "holder token leaked");
+    assert.ok(!everything.includes(other), "claimant token leaked");
+    assert.ok(!/holderToken|reporterToken|claimantToken|holderNickname/.test(everything));
+  });
+});

@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -19,6 +20,32 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const BASE_MANIFEST = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, "manifest.json"), "utf8"));
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A device token is a bearer credential: anyone who has it can step
+ * away, release or keep someone else's seat. Public responses carry a
+ * short SHA-256 of it instead, which a device can compare against its
+ * own token's hash without the raw value ever leaving the server. */
+function tokenHash(token) {
+  if (!token) return null;
+  return crypto.createHash("sha256").update(String(token)).digest("hex").slice(0, 16);
+}
+
+function publicSeat(seat) {
+  if (!seat) return seat;
+  const { holderToken, holderNickname, ...rest } = seat;
+  return { ...rest, holderHash: tokenHash(holderToken) };
+}
+
+function publicItem(item) {
+  if (!item) return item;
+  const { reporterToken, ...rest } = item;
+  const out = { ...rest, reporterHash: tokenHash(reporterToken) };
+  if (item.claim) {
+    const { claimantToken, ...claim } = item.claim;
+    out.claim = { ...claim, claimantHash: tokenHash(claimantToken) };
+  }
+  return out;
+}
 
 /** Every active library's { libraryId, seatIds } — what the sweep and
  * reminder loops need to check every library in one pass. */
@@ -150,7 +177,7 @@ function createApp() {
       return res.status(404).json({ ok: false, reason: "unknown_seat" });
     }
     const seat = await getSeat(libId, req.params.id);
-    res.json(seat);
+    res.json(publicSeat(seat));
   });
 
   app.get("/api/library/:libId/seats", async (req, res) => {
@@ -158,7 +185,7 @@ function createApp() {
     if (!getLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "unknown_library" });
     }
-    res.json(await getSeats(libId, getSeatIds(libId)));
+    res.json((await getSeats(libId, getSeatIds(libId))).map(publicSeat));
   });
 
   // --- Scan actions ----------------------------------------------------------
@@ -188,6 +215,7 @@ function createApp() {
       seatIds
     );
 
+    if (result.seat) result.seat = publicSeat(result.seat);
     res.status(result.ok ? 200 : 409).json(result);
   });
 
@@ -237,7 +265,7 @@ function createApp() {
       return res.status(404).json({ ok: false, reason: "unknown_library" });
     }
     const items = await listItems(libId);
-    res.json(items);
+    res.json(items.map(publicItem));
   });
 
   app.post("/api/library/:libId/lostfound", async (req, res) => {
@@ -253,6 +281,7 @@ function createApp() {
       reporterToken: token,
       reporterNickname: nickname,
     });
+    if (result.item) result.item = publicItem(result.item);
     res.status(result.ok ? 200 : 400).json(result);
   });
 
@@ -268,6 +297,7 @@ function createApp() {
       claimantNickname: nickname,
       note,
     });
+    if (result.item) result.item = publicItem(result.item);
     res.status(result.ok ? 200 : 409).json(result);
   });
 
