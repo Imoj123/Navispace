@@ -71,10 +71,15 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now()) {
  */
 function startReminderLoop(getLibrarySeatGroups, intervalMs, onReminder) {
     const run = async () => {
-        const groups = await getLibrarySeatGroups();
-        for (const { libraryId, seatIds } of groups) {
-            const reminded = await sendExpiryReminders(libraryId, seatIds);
-            if (reminded.length && onReminder) onReminder(libraryId, reminded);
+        // Same as the sweep: a failed pass is logged and retried, never fatal.
+        try {
+            const groups = await getLibrarySeatGroups();
+            for (const { libraryId, seatIds } of groups) {
+                const reminded = await sendExpiryReminders(libraryId, seatIds);
+                if (reminded.length && onReminder) onReminder(libraryId, reminded);
+            }
+        } catch (err) {
+            console.error(`[reminders] pass failed, will retry: ${err.message}`);
         }
     };
 

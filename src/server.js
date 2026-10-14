@@ -345,6 +345,13 @@ function createApp() {
 }
 
 function start() {
+  // Last line of defence: a stray rejected promise is logged, not fatal.
+  // (Node exits on an unhandled rejection by default — on Render that
+  // reads as "Service Unavailable" until the next restart.)
+  process.on("unhandledRejection", (err) => {
+    console.error("[server] unhandled rejection:", err && err.message ? err.message : err);
+  });
+
   const app = createApp();
   // Surfaces a missing or malformed VAPID setup in the logs at boot,
   // rather than at the first reminder.
