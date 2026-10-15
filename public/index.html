@@ -875,14 +875,14 @@
 
         // --- Your session ----------------------------------------------------
 
-        let focusStart = null;
+        let focusHeld = null;
         async function refreshHeld() {
             const token = safeGet("navispace_token");
             if (!token) return;
             try {
                 const held = await getHeldSeat(token);
                 if (!held || !held.seatId) {
-                    focusStart = null;
+                    focusHeld = null;
                     $("focus").removeAttribute("href");
                     $("heldPill").hidden = true;
                     $("focus").classList.remove("live");
@@ -895,8 +895,8 @@
                 pill.querySelector(".signal-dot").className = "signal-dot signal-" + (held.state === "STEPPED_AWAY" ? "STEPPED_AWAY" : "OCCUPIED");
                 pill.hidden = false;
                 $("installBtn").hidden = true;
-                focusStart = held.sessionStart || null;
-                $("focus").classList.toggle("live", Boolean(focusStart));
+                focusHeld = held.sessionStart ? held : null;
+                $("focus").classList.toggle("live", Boolean(focusHeld) && held.state === "OCCUPIED");
                 if (held.state === "OCCUPIED") {
                     $("focus").href = `/focus.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`;
                 } else {
@@ -907,7 +907,9 @@
         }
 
         function tickFocus() {
-            if (focusStart) $("focusTime").textContent = hms(Date.now() - focusStart);
+            if (!focusHeld) return;
+            const t = hms(focusElapsedMs(focusHeld));
+            $("focusTime").textContent = focusHeld.state === "STEPPED_AWAY" ? `${t} · paused` : t;
         }
 
         // --- Study board & libraries -------------------------------------------

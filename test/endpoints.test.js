@@ -74,7 +74,7 @@ test("/api/held finds the seat this token holds", async () => {
     })).json();
     assert.equal(typeof held.sessionStart, "number");
     delete held.sessionStart;
-    assert.deepEqual(held, { ok: true, libraryId: "engineering", seatId, state: "OCCUPIED" });
+    assert.deepEqual(held, { ok: true, libraryId: "engineering", seatId, state: "OCCUPIED", awayMs: 0, awayStart: null });
 
     const none = await (await fetch(`${base}/api/held`, {
       method: "POST",
@@ -139,4 +139,36 @@ test("seat and lost & found APIs never return raw device tokens", async () => {
     assert.ok(!everything.includes(other), "claimant token leaked");
     assert.ok(!/holderToken|reporterToken|claimantToken|holderNickname/.test(everything));
   });
+});
+
+test("time stepped away is recorded so focus timers can leave it out", async () => {
+  const { handleScan } = require("../src/scan");
+  const id = { token: "123e4567-e89b-12d3-a456-426614174000", nickname: "Thandi" };
+  const seatId = getSeatIds("engineering")[0];
+  const t0 = Date.UTC(2026, 9, 15, 8, 0, 0);
+  const min = 60 * 1000;
+
+  let r = await handleScan("engineering", seatId, "checkIn", id, t0);
+  assert.equal(r.seat.awayMs, 0);
+  r = await handleScan("engineering", seatId, "stepAway", id, t0 + 30 * min);
+  assert.equal(r.seat.awayStart, t0 + 30 * min);
+  r = await handleScan("engineering", seatId, "imBack", id, t0 + 40 * min);
+  assert.equal(r.seat.awayStart, null);
+  assert.equal(r.seat.awayMs, 10 * min);
+  r = await handleScan("engineering", seatId, "stepAway", id, t0 + 50 * min);
+  r = await handleScan("engineering", seatId, "imBack", id, t0 + 55 * min);
+  assert.equal(r.seat.awayMs, 15 * min);
+
+  await withServer(async (base) => {
+    const held = await (await fetch(`${base}/api/held`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: id.token }),
+    })).json();
+    assert.equal(held.awayMs, 15 * min);
+    assert.equal(held.awayStart, null);
+  });
+
+  r = await handleScan("engineering", seatId, "leaving", id, t0 + 60 * min);
+  assert.equal(r.seat.awayMs, 0);
 });
