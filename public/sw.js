@@ -19,7 +19,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v10";
+const CACHE_NAME = "navispace-shell-v11";
 const SHELL_FILES = [
     "/",
     "/index.html",
