@@ -172,3 +172,22 @@ test("time stepped away is recorded so focus timers can leave it out", async () 
   r = await handleScan("engineering", seatId, "leaving", id, t0 + 60 * min);
   assert.equal(r.seat.awayMs, 0);
 });
+
+test("pages stamp their stylesheet and script by version, and those can be kept for a year", async () => {
+  await withServer(async (base) => {
+    const page = await fetch(`${base}/`);
+    assert.equal(page.headers.get("cache-control"), "no-cache");
+    const html = await page.text();
+    const css = html.match(/\/styles\.css\?v=([a-f0-9]{10})/);
+    const js = html.match(/\/client\.js\?v=([a-f0-9]{10})/);
+    assert.ok(css && js, "stylesheet and script are versioned");
+    const asset = await fetch(`${base}${css[0]}`);
+    assert.equal(asset.status, 200);
+    assert.match(asset.headers.get("cache-control"), /max-age=31536000, immutable/);
+    assert.ok(!html.includes("fonts.googleapis.com"), "fonts are served by NaviSpace itself");
+
+
+    const scenes = await (await fetch(`${base}/api/scenes`)).json();
+    assert.ok(Array.isArray(scenes) && scenes.includes("koi"));
+  });
+});

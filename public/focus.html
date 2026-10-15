@@ -12,13 +12,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NaviSpace" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap"
-        rel="stylesheet" />
+    <link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/styles.css" />
     <title>NaviSpace — Focus</title>
+    <meta name="description" content="Focus mode: a calm timer over a real scene while NaviSpace keeps your library seat." />
     <style>
         /* Focus mode: one number, one scene, nothing else. The scene is drawn
            live on a canvas; the controls fade away when you stop touching the
@@ -344,6 +343,7 @@
             }
         }
     </style>
+    <script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/focus.html*"}},{"not":{"href_matches":"/api/*"}}]},"eagerness":"moderate"}]}</script>
 </head>
 
 <body>
@@ -426,7 +426,7 @@
             rain: {
                 name: "Rain",
                 video: "/media/rain.mp4",
-                poster: "/media/rain.jpg",
+                poster: "/media/rain.webp",
                 swatch: "linear-gradient(160deg,#2c3a4a,#11161d)",
                 init(w, h) {
                     this.drops = Array.from({ length: Math.round(w * h / 5000) }, () => ({ x: rand(0, w), y: rand(0, h), l: rand(10, 26), v: rand(9, 16) }));
@@ -462,7 +462,7 @@
             forest: {
                 name: "Forest",
                 video: "/media/forest.mp4",
-                poster: "/media/forest.jpg",
+                poster: "/media/forest.webp",
                 swatch: "linear-gradient(180deg,#183a33,#0a1512)",
                 init(w, h) {
                     this.layers = [0.55, 0.68, 0.82].map((base, li) => {
@@ -504,7 +504,7 @@
             ocean: {
                 name: "Ocean",
                 video: "/media/ocean.mp4",
-                poster: "/media/ocean.jpg",
+                poster: "/media/ocean.webp",
                 swatch: "linear-gradient(180deg,#e2a37a,#5a4a78 45%,#16314a)",
                 init(w, h) { this.glints = Array.from({ length: 60 }, () => ({ x: rand(0, w), y: rand(h * 0.58, h), p: rand(0, 6.28) })); },
                 draw(c, w, h, t) {
@@ -537,7 +537,7 @@
             stars: {
                 name: "Night sky",
                 video: "/media/stars.mp4",
-                poster: "/media/stars.jpg",
+                poster: "/media/stars.webp",
                 swatch: "radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),linear-gradient(180deg,#0b1430,#04060d)",
                 init(w, h) {
                     this.stars = Array.from({ length: Math.round(w * h / 2600) }, () => ({ x: rand(0, w), y: rand(0, h * 0.85), r: rand(0.3, 1.5), p: rand(0, 6.28) }));
@@ -571,7 +571,7 @@
             koi: {
                 name: "Koi pond",
                 video: "/media/koi.mp4",
-                poster: "/media/koi.jpg",
+                poster: "/media/koi.webp",
                 swatch: "radial-gradient(ellipse at 40% 50%,#e8743b 0 18%,transparent 19%),linear-gradient(160deg,#16443f,#0a201e)",
                 init(w, h) {
                     const cols = [["#e8743b", "#f6efe4"], ["#f6efe4", "#e0482f"], ["#f2a23a", "#f6efe4"], ["#f6efe4", "#2a2a2a"], ["#e05a2a", "#e05a2a"]];
@@ -615,7 +615,7 @@
                 name: "Study with me",
                 swatch: "linear-gradient(160deg,#3a3226,#121614)",
                 video: "/media/study.mp4",
-                poster: "/media/study.jpg",
+                poster: "/media/study.webp",
                 init() { },
                 draw(c, w, h) { c.fillStyle = "#121614"; c.fillRect(0, 0, w, h); },
             },
@@ -680,16 +680,14 @@
             document.querySelectorAll(".scene-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
         }
 
-        // Which clips are actually on the server. A cheap HEAD per scene; a
-        // scene without its clip is left out of the picker.
+        // Which clips are deployed: the server lists public/media in one small
+        // request. A scene without its clip is left out of the picker.
         const available = new Set();
         async function findClips() {
-            await Promise.all(Object.entries(SCENES).map(async ([key, sc]) => {
-                try {
-                    const r = await fetch(sc.video, { method: "HEAD", cache: "no-store" });
-                    if (r.ok) available.add(key);
-                } catch { }
-            }));
+            try {
+                const keys = await apiGet("/api/scenes");
+                for (const key of keys || []) if (SCENES[key]) available.add(key);
+            } catch { }
         }
 
         function buildPicker() {
