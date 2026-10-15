@@ -16,7 +16,7 @@ PITCH = 36          # distance between neighbouring seats on one table
 SEAT_GAP = 18       # seat centre to table edge
 
 outline = [
-    [0, 70], [140, 70], [140, 110], [265, 110], [265, 175],
+    [0, 14], [190, 14], [190, 110], [265, 110], [265, 175],
     [1145, 175], [1145, 5], [1570, 5], [1570, 465], [0, 465],
 ]
 
@@ -61,12 +61,12 @@ def column_table(zone, x, y, n, side="left"):
 
 
 # ---- West end: three straight columns ------------------------------------
-shelf(10, 78, 125, 8)                                   # shelf strip along the top
+shelf(10, 26, 50, 8)                                    # shelf strip in the top corner
 column_table("W", 12, 118, 4, side="right")            # wall table, 4 computers
 column_table("W", 12, 270, 3, side="right")            # wall table, 3 computers
 for y in (118, 210, 302):                               # three small tables for two
     column_table("W", 118, y, 2, side="left")
-row_table("W", 170, 150, 2)                             # bench in the notch
+row_table("W", 79, 72, 2)                               # bench above W8-W9
 room("Office", 8, 400, 130, 58)
 
 # ---- Window wall: every table on one straight line -------------------------
@@ -118,9 +118,9 @@ for y in (222, 290, 358):                               # three tables for two, 
     row_table("C", 1314, y, 2)
 
 # ---- East wall: corner table, then two wall tables in one line ------------
-rect(1446, 22, 16, 72)                                  # corner table by Room 3, 2 + 2
-for y in (40, 76):
-    seats["E"].append((1424, y)); seats["E"].append((1484, y))
+rect(1476, 22, 16, 72)                                  # corner table by Room 3, 2 + 2;
+for y in (40, 76):                                      # its right seats line up with E5-E11
+    seats["E"].append((1454, y)); seats["E"].append((1514, y))
 y = column_table("E", 1536, 110, 4, side="left")       # E5-E8
 bottom = column_table("E", 1536, y + 30, 3, side="left")  # E9-E11, a clear gap above
 assert bottom < 400, "the east wall tables must stop above the office"
@@ -128,8 +128,8 @@ assert bottom < 400, "the east wall tables must stop above the office"
 # ---- ids --------------------------------------------------------------------
 out_seats = []
 for zone, pts in seats.items():
-    if zone == "W":      # column by column, top to bottom
-        pts.sort(key=lambda p: (p[0] // 40, p[1]))
+    if zone == "W":      # in layout order: wall tables, small tables, then the bench
+        pass
     elif zone == "E":    # top to bottom, left to right
         pts.sort(key=lambda p: (p[1] // 30, p[0]))
     elif zone == "C":    # left to right; a table's two seats read across
