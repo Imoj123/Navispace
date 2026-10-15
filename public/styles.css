@@ -729,3 +729,110 @@ main > :nth-child(n + 6) { animation-delay: 0.3s; }
     color: var(--faint);
     text-align: right;
 }
+
+/* --- Welcome: the first-visit nickname card ----------------------------- */
+
+.welcome {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(6, 8, 7, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: welcome-in 0.35s ease both;
+}
+
+.welcome.leaving {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+html.welcome-open {
+    overflow: hidden;
+}
+
+@keyframes welcome-in {
+    from {
+        opacity: 0;
+    }
+}
+
+.welcome-card {
+    position: relative;
+    width: min(100%, 420px);
+    display: grid;
+    gap: 10px;
+    padding: 34px 28px 22px;
+    background:
+        radial-gradient(ellipse 80% 55% at 50% 0%, rgba(228, 192, 118, 0.12), transparent 70%),
+        #181c1a;
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.welcome-mark {
+    justify-self: start;
+    font: 500 italic 34px/1 var(--font-serif);
+    color: var(--brass);
+    margin-bottom: 4px;
+}
+
+.welcome-eyebrow {
+    margin: 0;
+    font: 400 11.5px/1 var(--font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass);
+}
+
+.welcome-card h2 {
+    margin: 2px 0 0;
+    font: 400 clamp(28px, 6vw, 34px)/1.08 var(--font-serif);
+    letter-spacing: -0.01em;
+}
+
+.welcome-text {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 15px;
+}
+
+.welcome-label {
+    font: 400 11px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.welcome-card input {
+    width: 100%;
+    font-size: 18px;
+}
+
+.welcome-error {
+    margin: 0;
+    color: var(--taken);
+    font-size: 13.5px;
+}
+
+.welcome-card .btn-primary {
+    margin: 8px 0 0;
+}
+
+.welcome-later {
+    justify-self: center;
+    background: none;
+    border: 0;
+    padding: 10px 12px;
+    color: var(--muted);
+    font: 400 italic 15px/1 var(--font-serif);
+    cursor: pointer;
+}
+
+.welcome-later:hover {
+    color: var(--text);
+}

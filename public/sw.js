@@ -19,7 +19,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v14";
+const CACHE_NAME = "navispace-shell-v15";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -30,6 +30,7 @@ const SHELL_FILES = [
     "/lost-found.html",
     "/client.js",
     "/styles.css",
+    "/icons/favicon.svg",
     "/icons/icon-192.png",
     "/icons/icon-512.png",
     "/icons/badge-96.png",
