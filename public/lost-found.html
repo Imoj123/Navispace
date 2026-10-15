@@ -96,7 +96,10 @@
         </form>
 
         <div class="lf-grid" id="grid"></div>
-        <p class="lf-empty" id="empty" style="display:none;">Nothing posted yet.</p>
+        <div class="empty-state" id="empty" style="display:none;">
+            <h2>Nothing lost, nothing found.</h2>
+            <p>Found a charger, a flask or a student card at your desk? Post a photo and where you left it, so its owner can find it.</p>
+        </div>
     </main>
 
     <div id="claimModal" class="modal-overlay">
@@ -143,7 +146,7 @@
             grid.innerHTML = "";
 
             if (!items.length) {
-                empty.style.display = "block";
+                empty.style.display = "";
                 return;
             }
             empty.style.display = "none";
