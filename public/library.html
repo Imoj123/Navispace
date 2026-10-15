@@ -305,6 +305,9 @@
         /* The map runs wider than other pages; keep its library bar aligned. */
         body:has(main.has-plan) .context-bar { max-width: 1400px; }
         .plan-label { font-size: 10px; letter-spacing: 0.06em; }
+        /* The floor outline is the frame; no box around the box. */
+        .plan-card { background: transparent; border: 0; padding: 0; }
+        .plan-meta { color: var(--muted); font-weight: 400; letter-spacing: 0.08em; }
     </style>
 </head>
 
