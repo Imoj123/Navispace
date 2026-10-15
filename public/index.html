@@ -12,11 +12,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NaviSpace" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap"
-        rel="stylesheet" />
+    <link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/styles.css" />
     <title>NaviSpace — Find a seat</title>
     <meta name="description" content="Live seat status, study board, and lost & found for Wits libraries." />
@@ -33,6 +31,7 @@
 
         .home-wrap {
             /* The tilted model's corners reach past its box; never let them widen the page. */
+            overflow-x: hidden; /* iOS 15 */
             overflow-x: clip;
             max-width: 1240px;
             margin: 0 auto;
@@ -95,6 +94,7 @@
             align-items: center;
             padding: 44px 0 40px;
             min-height: min(640px, calc(100vh - 80px));
+            min-height: min(640px, calc(100dvh - 80px));
         }
 
         .hero-copy {
@@ -588,6 +588,7 @@
             }
         }
     </style>
+    <script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/focus.html*"}},{"not":{"href_matches":"/api/*"}}]},"eagerness":"moderate"}]}</script>
 </head>
 
 <body>
@@ -861,10 +862,10 @@
             $("areasMeta").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
         }
 
-        async function refreshSeats() {
+        async function refreshSeats(prefetched) {
             if (!library || library.status !== "active") return;
             try {
-                const seats = await getAllSeats(library.id);
+                const seats = await (prefetched || getAllSeats(library.id));
                 if (!Array.isArray(seats)) return;
                 seatsById = new Map(seats.map((s) => [String(s.id), s]));
                 paintNumbers(seats);
@@ -990,9 +991,20 @@
 
         // --- Boot ------------------------------------------------------------------
 
+        // The floor plan only changes with a deploy, so keep a copy and draw
+        // it at once on the next visit while a fresh one loads.
+        const layoutKey = (id) => "navispace_layout_" + id;
+        function cachedLayout(id) {
+            try { const l = JSON.parse(localStorage.getItem(layoutKey(id))); return l && Array.isArray(l.seats) ? l : null; } catch { return null; }
+        }
+
         async function boot() {
+            // Use the saved library list straight away and refresh it in the
+            // background; only a first visit waits for it.
             let list = cachedLibraries();
-            try { list = await getLibraries(); } catch { }
+            const freshList = getLibraries().catch(() => null);
+            if (Array.isArray(list) && list.length) freshList.then((l) => { if (Array.isArray(l) && l.length) renderLibraries(l); });
+            else list = await freshList;
             if (!Array.isArray(list) || !list.length) {
                 $("lede").textContent = "NaviSpace is waking up. The live floor will appear in a moment.";
                 setTimeout(boot, 4000);
@@ -1005,16 +1017,33 @@
             wireNav();
             $("lede").textContent = `The ${library.name}, live. Check in at your desk, and the library keeps your seat while you work.`;
 
-            try { layout = await apiGet(`/api/library/${encodeURIComponent(library.id)}/layout`); } catch { layout = null; }
+            // Ask for the plan, the seats, your seat and the board all at once.
+            const layoutUrl = `/api/library/${encodeURIComponent(library.id)}/layout`;
+            const freshLayout = apiGet(layoutUrl).catch(() => null);
+            const seatsNow = library.status === "active" ? getAllSeats(library.id) : null;
+            if (seatsNow) seatsNow.catch(() => { });
+            refreshHeld();
+            refreshBoard();
+            layout = cachedLayout(library.id);
+            if (layout) {
+                freshLayout.then((l) => {
+                    if (!l || !Array.isArray(l.seats)) return;
+                    try { localStorage.setItem(layoutKey(library.id), JSON.stringify(l)); } catch { }
+                    if (JSON.stringify(l) !== JSON.stringify(layout)) { layout = l; buildFloor(); refreshSeats(); }
+                });
+            } else {
+                layout = await freshLayout;
+                if (layout && Array.isArray(layout.seats)) {
+                    try { localStorage.setItem(layoutKey(library.id), JSON.stringify(layout)); } catch { }
+                }
+            }
             if (!layout || !Array.isArray(layout.seats)) layout = null;
             if (layout && layout.hours) {
                 if (layout.hours.busiest) $("busiest").textContent = layout.hours.busiest;
                 if (layout.hours.closes) $("closes").textContent = layout.hours.closes;
             }
             buildFloor();
-            await refreshSeats();
-            refreshHeld();
-            refreshBoard();
+            await refreshSeats(seatsNow);
 
             setInterval(() => { if (!document.hidden) refreshSeats(); }, 15000);
             setInterval(() => { if (!document.hidden) refreshHeld(); }, 60000);

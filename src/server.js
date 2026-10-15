@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
+const compression = require("compression");
 
 const config = require("./config");
 const { LIBRARIES, getLibrary, isActiveLibrary } = require("./libraries");
@@ -116,8 +117,50 @@ function buildManifest(req) {
   return manifest;
 }
 
+/* --- Fast pages --------------------------------------------------------------
+ * Every page links /styles.css and /client.js. Pages are served with each of
+ * those stamped ?v=<hash of its contents>, so a phone can keep the files for a
+ * year and still fetch fresh ones the moment a deploy changes them. Pages
+ * themselves are always revalidated, so a deploy shows up on the next load. */
+const VERSIONED_ASSETS = ["/styles.css", "/client.js"];
+const fileCache = new Map(); // path -> { mtimeMs, value }
+
+function cachedByMtime(file, build) {
+  const { mtimeMs } = fs.statSync(file);
+  const hit = fileCache.get(file);
+  if (hit && hit.mtimeMs === mtimeMs) return hit.value;
+  const value = build(fs.readFileSync(file));
+  fileCache.set(file, { mtimeMs, value });
+  return value;
+}
+
+function assetVersion(urlPath) {
+  return cachedByMtime(path.join(PUBLIC_DIR, urlPath), (buf) =>
+    crypto.createHash("sha256").update(buf).digest("hex").slice(0, 10));
+}
+
+function pageWithVersions(file) {
+  let html = cachedByMtime(file, (buf) => buf.toString("utf8"));
+  for (const asset of VERSIONED_ASSETS) {
+    html = html.split(`"${asset}"`).join(`"${asset}?v=${assetVersion(asset)}"`);
+  }
+  return html;
+}
+
+/** Focus-mode scenes whose clip is deployed (public/media/<key>.mp4). */
+function availableScenes() {
+  try {
+    return fs.readdirSync(path.join(PUBLIC_DIR, "media"))
+      .filter((f) => f.endsWith(".mp4"))
+      .map((f) => f.slice(0, -4));
+  } catch {
+    return [];
+  }
+}
+
 function createApp() {
   const app = express();
+  app.use(compression());
   app.use(express.json({ limit: "3mb" })); // lost & found photos ride in the JSON body
 
   // Uptime pings (cron-job.org / UptimeRobot) hit this to keep the
@@ -139,7 +182,29 @@ function createApp() {
       .send(JSON.stringify(buildManifest(req)));
   });
 
+  // Pages, with their stylesheet and script stamped by version.
+  app.get(/^\/(?:[\w-]+\.html)?$/, (req, res, next) => {
+    const name = req.path === "/" ? "index.html" : req.path.slice(1);
+    const file = path.join(PUBLIC_DIR, name);
+    if (!fs.existsSync(file)) return next();
+    res.set("Cache-Control", "no-cache").type("html").send(pageWithVersions(file));
+  });
+
+  // How long a phone may keep each kind of file without asking again.
+  app.use((req, res, next) => {
+    if (req.query.v || req.path.startsWith("/fonts/")) {
+      res.set("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (req.path.startsWith("/icons/") || req.path.startsWith("/media/")) {
+      res.set("Cache-Control", "public, max-age=86400");
+    }
+    next();
+  });
+
   app.use(express.static(PUBLIC_DIR));
+
+  app.get("/api/scenes", (_req, res) => {
+    res.set("Cache-Control", "no-cache").json(availableScenes());
+  });
 
   // --- Libraries ---------------------------------------------------------
 

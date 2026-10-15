@@ -203,10 +203,19 @@ async function enablePushReminders(identity) {
   }
 }
 
+/** RFC 4122 v4 id for browsers without crypto.randomUUID (iOS 15.0-15.3). */
+function uuidFallback() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 function getOrCreateIdentity() {
   let token = localStorage.getItem("navispace_token");
   if (!token) {
-    token = crypto.randomUUID();
+    token = crypto.randomUUID ? crypto.randomUUID() : uuidFallback();
     localStorage.setItem("navispace_token", token);
   }
   updateManifestHandoff();
@@ -238,8 +247,11 @@ function showWelcome() {
   const wrap = document.createElement("div");
   wrap.className = "welcome";
   wrap.id = "welcome";
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.setAttribute("aria-labelledby", "welcomeTitle");
   wrap.innerHTML = `
-    <form class="welcome-card" novalidate role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+    <form class="welcome-card" novalidate>
       <span class="welcome-mark" aria-hidden="true">N</span>
       <p class="welcome-eyebrow">Welcome to NaviSpace</p>
       <h2 id="welcomeTitle">What should we call you?</h2>
