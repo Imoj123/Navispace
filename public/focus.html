@@ -119,7 +119,7 @@
             justify-items: center;
             text-align: center;
             gap: 14px;
-            text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 30px rgba(0, 0, 0, 0.55);
         }
 
         .where {
@@ -239,6 +239,26 @@
         }
 
         /* "Keep your seat" — appears before the check-in would run out. */
+        /* Stepped away: the clock and the scene hold still until you're back. */
+        body.away .motion {
+            filter: grayscale(0.5) brightness(0.55);
+            transition: filter 0.8s ease, opacity 1.2s ease;
+        }
+
+        body.away .clock {
+            opacity: 0.55;
+        }
+
+        body.away.idle .chrome {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .ctl.back {
+            border-color: var(--brass);
+            color: var(--brass);
+        }
+
         .keep {
             position: fixed;
             left: 50%;
@@ -618,7 +638,7 @@
                 motionEl.poster = sc.poster || "";
                 motionEl.src = sc.video;
             }
-            motionEl.play().catch(() => { });
+            if (!isAway()) motionEl.play().catch(() => { });
         }
 
         function setScene(key) {
@@ -779,8 +799,17 @@
         $("modePomo").addEventListener("click", () => setMode("pomo"));
 
         let lastPhase = null;
+        const isAway = () => Boolean(seat && seat.state === "STEPPED_AWAY");
+
         function tick() {
-            const elapsed = Math.max(0, Math.floor((Date.now() - sessionStart) / 1000));
+            const elapsed = Math.floor(focusElapsedMs(seat || { sessionStart }) / 1000);
+            if (isAway()) {
+                // The clock stays where it stopped; the line says how long the seat is held.
+                const left = seat.stepAwayExpiry ? Math.max(0, Math.floor((seat.stepAwayExpiry - Date.now()) / 1000)) : 0;
+                if (mode === "open") $("clock").textContent = hms(elapsed);
+                $("sub").textContent = left ? `Paused · your seat is held for ${ms2(left)}` : "Paused";
+                return;
+            }
             if (mode === "open") {
                 $("clock").textContent = hms(elapsed);
                 $("sub").textContent = elapsed < 60 ? "Settle in. The clock is yours." : "Studied this sitting";
@@ -821,11 +850,9 @@
                     showGate("Your check-in has ended.", "This seat isn't held by you any more. Scan the code on your desk to check in again.");
                     return;
                 }
-                if (seat.state === "STEPPED_AWAY") {
-                    location.href = `/seat.html?lib=${encodeURIComponent(libraryId)}&seat=${encodeURIComponent(seatId)}`;
-                    return;
-                }
                 sessionStart = seat.sessionStart || seat.lastConfirmTime || sessionStart;
+                applyAway();
+                if (isAway()) return;
                 const left = seat.checkInExpiry ? seat.checkInExpiry - Date.now() : Infinity;
                 $("keep").hidden = !(left < 5 * 60 * 1000);
             } catch { }
@@ -855,13 +882,39 @@
         });
         if (!document.documentElement.requestFullscreen) $("fullBtn").hidden = true;
 
+        // Step away pauses everything here (clock, footage, sound) and the
+        // same button brings you back; the server holds the seat meanwhile.
+        function applyAway() {
+            const away = isAway();
+            document.body.classList.toggle("away", away);
+            $("awayBtn").textContent = away ? "I'm back" : "Step away";
+            $("awayBtn").classList.toggle("back", away);
+            if (away) {
+                $("keep").hidden = true;
+                motionEl.pause();
+                if (ac && ac.state === "running") ac.suspend().catch(() => { });
+            } else {
+                if (motionOn || available.has(current)) motionEl.play().catch(() => { });
+                if (ac && audio && ac.state === "suspended") ac.resume().catch(() => { });
+            }
+            tick();
+        }
+
         $("awayBtn").addEventListener("click", async () => {
-            const r = await postScan(libraryId, seatId, "stepAway", identity).catch(() => null);
-            if (r && r.ok) location.href = `/seat.html?lib=${encodeURIComponent(libraryId)}&seat=${encodeURIComponent(seatId)}`;
+            const btn = $("awayBtn");
+            if (btn.getAttribute("aria-busy")) return;
+            btn.setAttribute("aria-busy", "true");
+            try {
+                const r = await postScan(libraryId, seatId, isAway() ? "imBack" : "stepAway", identity);
+                if (r && r.seat) seat = r.seat;
+                applyAway();
+            } catch { } finally {
+                btn.removeAttribute("aria-busy");
+            }
         });
 
         $("endBtn").addEventListener("click", async () => {
-            const studied = Math.max(0, Math.floor((Date.now() - sessionStart) / 1000));
+            const studied = Math.floor(focusElapsedMs(seat || { sessionStart }) / 1000);
             const r = await postScan(libraryId, seatId, "leaving", identity).catch(() => null);
             if (!r || !r.ok) return;
             stopSound();

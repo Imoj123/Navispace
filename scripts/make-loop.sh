@@ -18,7 +18,7 @@ dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$in")
 offset=$(awk -v d="$dur" -v f="$fade" 'BEGIN { print d - 2 * f }')
 
 ffmpeg -v error -y -i "$in" -filter_complex "\
-[0:v]scale='min(1280,iw)':-2,fps=25,split[a][b];\
+[0:v]scale='if(gte(iw,ih),min(1280,iw),-2)':'if(gte(iw,ih),-2,min(1280,ih))',fps=25,split[a][b];\
 [a]trim=0:$fade,setpts=PTS-STARTPTS[head];\
 [b]trim=$fade:$dur,setpts=PTS-STARTPTS[body];\
 [body][head]xfade=transition=fade:duration=$fade:offset=$offset,format=yuv420p[v]" \
