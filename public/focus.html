@@ -54,6 +54,22 @@
             opacity: 1;
         }
 
+        /* Real footage for scenes that have it; sits over the photo. */
+        .motion {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 1.2s ease;
+            pointer-events: none;
+        }
+
+        .motion.on {
+            opacity: 1;
+        }
+
         @keyframes drift {
             from { transform: scale(1.02) translate(0, 0); }
             to { transform: scale(1.1) translate(-1.5%, -1%); }
@@ -324,6 +340,7 @@
 
 <body>
     <div class="photo" id="photo" aria-hidden="true"></div>
+    <video class="motion" id="motion" muted loop playsinline preload="none" aria-hidden="true"></video>
     <canvas id="scene" aria-hidden="true"></canvas>
     <a class="credit chrome" href="https://unsplash.com" target="_blank" rel="noopener">Photo · Unsplash</a>
     <div class="veil"></div>
@@ -393,6 +410,8 @@
         // photos are Unsplash ids, tried in order. When one loads it fills the
         // screen and overlay() draws the moving layer on a clear canvas; if
         // none loads (offline, blocked), draw() paints the whole scene instead.
+        // A scene with `video` (a looping clip in /public/media) plays that
+        // first, over its photo; overlay() is skipped while footage shows.
 
         const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -578,6 +597,8 @@
             koi: {
                 name: "Koi pond",
                 photos: [],
+                video: "/media/koi.mp4",
+                poster: "/media/koi.jpg",
                 swatch: "radial-gradient(ellipse at 40% 50%,#e8743b 0 18%,transparent 19%),linear-gradient(160deg,#16443f,#0a201e)",
                 init(w, h) {
                     const cols = [["#e8743b", "#f6efe4"], ["#f6efe4", "#e0482f"], ["#f2a23a", "#f6efe4"], ["#f6efe4", "#2a2a2a"], ["#e05a2a", "#e05a2a"]];
@@ -644,7 +665,9 @@
             },
 
             fox: {
-                name: "Fox in snow",
+                name: "Fox",
+                video: "/media/fox.mp4",
+                poster: "/media/fox.jpg",
                 swatch: "radial-gradient(ellipse at 50% 60%,#d06a2c 0 16%,transparent 17%),linear-gradient(180deg,#9fb0c0,#e9eef2)",
                 photos: ["1474511320723-9a56873867b5"],
                 init(w, h) { this.flakes = Array.from({ length: Math.round(w * h / 9000) }, () => ({ x: rand(0, w), y: rand(0, h), r: rand(0.8, 2.6), v: rand(0.3, 1.1), p: rand(0, 6.28) })); },
@@ -702,9 +725,14 @@
             return (loaded[key] = null);
         }
 
+        const motionEl = $("motion");
+        let motionOn = false;
+
         function paint(t) {
             const sc = SCENES[current];
-            if (loaded[current]) {
+            if (motionOn) {
+                ctx.clearRect(0, 0, W, H);
+            } else if (loaded[current]) {
                 ctx.clearRect(0, 0, W, H);
                 sc.overlay(ctx, W, H, t);
             } else {
@@ -717,9 +745,40 @@
             if (!reduceMotion) requestAnimationFrame(frame);
         }
 
+        // Footage that fails (missing file, unsupported, data saver) just
+        // leaves the photo or drawing in place.
+        const noVideo = new Set();
+        function showVideo(key) {
+            motionOn = false;
+            motionEl.classList.remove("on");
+            motionEl.pause();
+            const sc = SCENES[key];
+            if (!sc.video || noVideo.has(key)) return;
+            const fail = () => {
+                noVideo.add(key);
+                if (current !== key) return;
+                motionOn = false;
+                motionEl.classList.remove("on");
+                if (!loaded[key]) document.body.classList.remove("has-photo");
+            };
+            motionEl.onerror = fail;
+            motionEl.onplaying = () => {
+                if (current !== key) return;
+                motionOn = true;
+                motionEl.classList.add("on");
+                document.body.classList.add("has-photo");
+            };
+            if (motionEl.dataset.src !== sc.video) {
+                motionEl.dataset.src = sc.video;
+                motionEl.poster = sc.poster || "";
+                motionEl.src = sc.video;
+            }
+            motionEl.play().catch(() => { if (motionEl.error) fail(); });
+        }
+
         async function showPhoto(key) {
             photoEl.classList.remove("on");
-            document.body.classList.remove("has-photo");
+            if (!SCENES[key].video || noVideo.has(key)) document.body.classList.remove("has-photo");
             const url = await photoFor(key);
             if (key !== current || !url) return;
             photoEl.style.backgroundImage = `url("${url}")`;
@@ -732,6 +791,7 @@
             current = key;
             store("navispace_scene", key);
             SCENES[key].init(W, H);
+            showVideo(key);
             showPhoto(key);
             if (reduceMotion) paint(0);
             document.querySelectorAll(".scene-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
@@ -743,7 +803,9 @@
             b.className = "scene-btn";
             b.dataset.key = key;
             b.innerHTML = '<span class="sw"></span><span></span>';
-            b.querySelector(".sw").style.background = sc.photos && sc.photos[0]
+            b.querySelector(".sw").style.background = sc.poster
+                ? `url("${sc.poster}") center / cover, ${sc.swatch}`
+                : sc.photos && sc.photos[0]
                 ? `url("${photoUrl(sc.photos[0], 120, 120)}") center / cover, ${sc.swatch}`
                 : sc.swatch;
             b.lastChild.textContent = sc.name;
