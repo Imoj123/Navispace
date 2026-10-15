@@ -594,3 +594,138 @@ input[type="text"]::placeholder {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* --- Polish ---------------------------------------------------------------- */
+
+html {
+    scroll-behavior: smooth;
+}
+
+p {
+    text-wrap: pretty;
+}
+
+h1,
+h2,
+h3 {
+    text-wrap: balance;
+}
+
+/* A fine grain over everything, so the dark ground reads as paper under a
+   lamp rather than a flat screen. */
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* One header on every page: name left, sections centred, actions right. */
+@media (min-width: 561px) {
+    .topbar {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+    }
+
+    .topbar > .wordmark {
+        justify-self: start;
+    }
+
+    .topbar > .topnav {
+        justify-self: center;
+    }
+
+    .topbar > .nav-actions {
+        justify-self: end;
+    }
+}
+
+/* Pages settle in rather than appearing all at once. */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+main > *,
+.context-bar {
+    animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+main > :nth-child(2) { animation-delay: 0.06s; }
+main > :nth-child(3) { animation-delay: 0.12s; }
+main > :nth-child(4) { animation-delay: 0.18s; }
+main > :nth-child(5) { animation-delay: 0.24s; }
+main > :nth-child(n + 6) { animation-delay: 0.3s; }
+
+/* Empty pages: a composed invitation instead of a lone grey sentence. */
+.empty-state {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding: 40px 24px 36px;
+    border: 1px dashed var(--line-strong);
+    background: radial-gradient(ellipse 70% 90% at 50% 0%, rgba(196, 163, 95, 0.07), transparent 70%);
+    text-align: center;
+}
+
+.empty-state[style*="display: none"] {
+    display: none;
+}
+
+.empty-state h2 {
+    margin: 0;
+    font: 400 clamp(24px, 4vw, 30px)/1.15 var(--font-serif);
+    letter-spacing: -0.01em;
+}
+
+.empty-state p {
+    margin: 0;
+    max-width: 42ch;
+    color: var(--muted);
+}
+
+.empty-state .cta-link {
+    margin-top: 8px;
+}
+
+/* Faint placeholder rows hinting at what will fill the space. */
+.ghost-rows {
+    display: grid;
+    gap: 10px;
+    width: min(100%, 340px);
+    margin-bottom: 10px;
+}
+
+.ghost-rows span {
+    display: grid;
+    grid-template-columns: 28px 1fr 24px;
+    align-items: center;
+    gap: 14px;
+    font: 400 12px/1 var(--font-mono);
+    color: var(--brass);
+    opacity: 0.55;
+}
+
+.ghost-rows span::before {
+    content: "";
+    grid-column: 2;
+    grid-row: 1;
+    height: 10px;
+    background: linear-gradient(90deg, rgba(236, 230, 214, 0.1), rgba(236, 230, 214, 0.02));
+}
+
+.ghost-rows span:nth-child(2)::before { margin-right: 18%; }
+.ghost-rows span:nth-child(3)::before { margin-right: 34%; }
+
+.ghost-rows span::after {
+    content: "·";
+    grid-column: 3;
+    color: var(--faint);
+    text-align: right;
+}
