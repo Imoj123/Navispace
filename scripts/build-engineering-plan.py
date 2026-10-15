@@ -1,251 +1,169 @@
-# Builds src/layouts/engineering.json from points read off the hand sketch
-# (the photo turned upright, positions in its pixel coordinates).
+# Builds src/layouts/engineering.json: the Engineering Library floor plan.
 #
-#   python3 scripts/build-engineering-plan.py src/layouts/engineering.json /tmp/new.json
+#   python3 scripts/build-engineering-plan.py src/layouts/engineering.json src/layouts/engineering.json
 #
-# The first file supplies the name, floor, hours and area names to keep. To move
-# a table or seat, change its sketch coordinates below and rebuild. The drawing's bottom wall slopes a little,
-# so y is normalised between the top wall and that sloping bottom line.
-import json, sys
+# The first file supplies the name, floor, hours and area names to keep.
+#
+# Everything is laid out on a clean grid in plan units (the plan is 1570 x 470),
+# following the hand sketch: rows are straight, and seats that share a table sit
+# PITCH apart so their badges never touch. To move something, change its numbers
+# here and rebuild. Seat ids are given per area (W, S, C, E) in reading order.
+import itertools
+import json
+import sys
 
-def bottom(px):            # sketch bottom wall, sloping from left to right
-    return 662 - 0.094 * px
-
-TOP = 65
-W_OUT, H_OUT = 1580, 470
-
-def P(px, py):
-    x = (px - 40) * 0.88
-    y = (py - TOP) / (bottom(px) - TOP) * (H_OUT - 10) + 5
-    return [round(x), round(y)]
-
-def box(px1, py1, px2, py2):
-    x1, y1 = P(px1, py1); x2, y2 = P(px2, py2)
-    x, y = max(6, min(x1, x2)), min(y1, y2)
-    return {"x": x, "y": y, "w": max(x1, x2) - x, "h": abs(y2 - y1)}
-
-# ---- walls (snapped to clean lines) ------------------------------------------
-Y_LEFT_TOP = 70      # top of the west wing (top-left strip)
-Y_NOTCH = 110        # step down at the top-left
-Y_FRONT = 175        # front wall with the entrance
-Y_BACK = 465         # window wall along the bottom
-X_NOTCH1 = 140
-X_NOTCH2 = 265
-X_EAST_BLOCK = 1145  # where the discussion-room block rises
-Y_EAST_TOP = 5
-X_RIGHT = 1570
+PITCH = 36          # distance between neighbouring seats on one table
+SEAT_GAP = 18       # seat centre to table edge
 
 outline = [
-    [0, Y_LEFT_TOP], [X_NOTCH1, Y_LEFT_TOP], [X_NOTCH1, Y_NOTCH], [X_NOTCH2, Y_NOTCH],
-    [X_NOTCH2, Y_FRONT], [X_EAST_BLOCK, Y_FRONT], [X_EAST_BLOCK, Y_EAST_TOP],
-    [X_RIGHT, Y_EAST_TOP], [X_RIGHT, Y_BACK], [0, Y_BACK],
+    [0, 70], [140, 70], [140, 110], [265, 110], [265, 175],
+    [1145, 175], [1145, 5], [1570, 5], [1570, 465], [0, 465],
 ]
 
-rooms, stacks, tables, seats, zones = [], [], [], [], []
+rooms, stacks, tables, zones = [], [], [], []
+seats = {"W": [], "S": [], "C": [], "E": []}
 
-def seat(zone, px, py):
-    seats.append({"zone": zone, "x": P(px, py)[0], "y": P(px, py)[1]})
 
-def rect(px1, py1, px2, py2):
-    tables.append({"shape": "rect", **box(px1, py1, px2, py2)})
+def rect(x, y, w, h):
+    tables.append({"shape": "rect", "x": x, "y": y, "w": w, "h": h})
 
-def roundt(px, py, r=14):
-    x, y = P(px, py)
-    tables.append({"shape": "round", "cx": x, "cy": y, "r": r})
 
-def stack(px1, py1, px2, py2):
-    stacks.append(box(px1, py1, px2, py2))
+def round_table(cx, cy, r=14):
+    tables.append({"shape": "round", "cx": cx, "cy": cy, "r": r})
 
-def room(label, px1, py1, px2, py2, kind="room"):
-    rooms.append({"label": label, **box(px1, py1, px2, py2), "kind": kind})
 
-# ---- West end ---------------------------------------------------------------
-stack(45, 165, 200, 190)                          # shelf strip along the top-left
-rect(170, 237, 265, 258)                          # bench in the notch
-seat("W", 190, 226); seat("W", 242, 226)
-rect(55, 255, 80, 355)                            # wall table, 4 computers
-for py in (264, 289, 315, 341): seat("W", 98, py)
-rect(42, 410, 66, 500)                            # wall table, 3 computers
-for py in (425, 456, 489): seat("W", 88, py)
-rect(170, 290, 194, 328); seat("W", 158, 298); seat("W", 158, 320)
-rect(158, 355, 182, 395); seat("W", 145, 367); seat("W", 145, 390)
-rect(155, 445, 176, 492); seat("W", 142, 455); seat("W", 142, 485)
-room("Office", 32, 535, 192, 612)
+def shelf(x, y, w, h):
+    stacks.append({"x": x, "y": y, "w": w, "h": h})
 
-# ---- Window wall (south), west half ------------------------------------------
-rect(282, 586, 366, 610); seat("S", 302, 573); seat("S", 348, 573)
-rect(436, 576, 560, 601)
-for px in (452, 487, 522, 552): seat("S", px, 563)
-rect(652, 562, 757, 587)
-for px in (667, 697, 730, 752): seat("S", px, 551)
 
-# ---- The floor (centre): the lounge row ------------------------------------
-# Laid out directly in plan units, left to right, so each shelf stands in its
-# own gap between tables instead of on top of one. Seats sit on the far side
-# of their table (towards the entrance), as in the sketch.
-ROW_Y = 312          # table centre line
-SEAT_Y = ROW_Y - 22  # seats just above their table
-GAP = 24             # clear space either side of a shelf
+def room(label, x, y, w, h, kind="room"):
+    rooms.append({"label": label, "x": x, "y": y, "w": w, "h": h, "kind": kind})
 
-def lounge_row(x):
-    def seat_at(sx):
-        seats.append({"zone": "C", "x": round(sx), "y": SEAT_Y})
-    def shelf(x):
-        stacks.append({"x": x, "y": ROW_Y - 22, "w": 10, "h": 56})
-        return x + 10
-    # table for two
-    tables.append({"shape": "rect", "x": x, "y": ROW_Y - 10, "w": 70, "h": 20})
-    seat_at(x + 19); seat_at(x + 51); x += 70 + GAP
-    x = shelf(x) + GAP
-    # round table for one
-    tables.append({"shape": "round", "cx": x + 14, "cy": ROW_Y, "r": 14})
-    seat_at(x + 14); x += 28 + GAP
-    x = shelf(x) + GAP
-    # long table for three, round table set into it
-    tables.append({"shape": "rect", "x": x, "y": ROW_Y - 10, "w": 100, "h": 20})
-    tables.append({"shape": "round", "cx": x + 50, "cy": ROW_Y, "r": 11})
-    seat_at(x + 18); seat_at(x + 50); seat_at(x + 82); x += 100 + GAP
-    x = shelf(x) + GAP
-    # two round tables for one, a shelf after each
-    for _ in range(2):
-        tables.append({"shape": "round", "cx": x + 15, "cy": ROW_Y, "r": 15})
-        seat_at(x + 15); x += 30 + GAP
-        x = shelf(x) + GAP
 
-lounge_row(P(428, 424)[0])
+def row_table(zone, x, y, n, side="above"):
+    """A table with n seats in a row along one long side. Returns its right edge."""
+    w = n * PITCH
+    rect(x, y, w, 18)
+    sy = y - SEAT_GAP if side == "above" else y + 18 + SEAT_GAP
+    for i in range(n):
+        seats[zone].append((x + PITCH / 2 + i * PITCH, sy))
+    return x + w
 
-# ---- Reception, entrance, discussion rooms ----------------------------------
-room("Reception", 1068, 245, 1278, 365, kind="desk")
-room("Room 1", 1384, 72, 1487, 170)
-room("Room 2", 1489, 72, 1552, 170)
-room("Room 3", 1554, 72, 1640, 170)
 
-# ---- The floor, east side ----------------------------------------------------
-stack(1380, 262, 1392, 350)
-roundt(1442, 284, 15); seat("C", 1420, 266)
-roundt(1442, 330, 15); seat("C", 1424, 314)
-roundt(1497, 232, 15); seat("C", 1497, 208)
-rect(1567, 254, 1630, 282); seat("C", 1580, 242); seat("C", 1617, 242)
-rect(1567, 322, 1632, 350); seat("C", 1576, 311); seat("C", 1612, 311)
-rect(1575, 400, 1640, 432); seat("C", 1588, 389); seat("C", 1622, 389)
+def column_table(zone, x, y, n, side="left"):
+    """A table with n seats down one long side. Returns its bottom edge."""
+    h = n * PITCH
+    rect(x, y, 16, h)
+    sx = x - SEAT_GAP - 4 if side == "left" else x + 16 + SEAT_GAP + 4
+    for i in range(n):
+        seats[zone].append((sx, y + PITCH / 2 + i * PITCH))
+    return y + h
 
-# ---- East wall ---------------------------------------------------------------
-rect(1678, 98, 1702, 157)
-seat("E", 1663, 110); seat("E", 1663, 144); seat("E", 1716, 110); seat("E", 1716, 144)
-rect(1730, 196, 1752, 284)
-for py in (210, 232, 254, 276): seat("E", 1716, py)
-rect(1748, 304, 1766, 362)
-for py in (314, 334, 354): seat("E", 1733, py)
-rect(1590, 470, 1668, 496)
-for px in (1610, 1636, 1660): seat("E", px, 456)
-room("Office", 1712, 382, 1800, 480)
 
-# ---- Window wall (south), east half -----------------------------------------
-rect(1126, 512, 1214, 542)
-for px in (1136, 1158, 1180, 1202): seat("S", px, 499)
-rect(1270, 511, 1294, 536); seat("S", 1282, 497)
-rect(1356, 498, 1437, 525)
-for px in (1364, 1384, 1405, 1426): seat("S", px, 487)
-rect(1500, 482, 1530, 505); seat("S", 1515, 470)
+# ---- West end: three straight columns ------------------------------------
+shelf(10, 78, 125, 8)                                   # shelf strip along the top
+column_table("W", 12, 118, 4, side="right")            # wall table, 4 computers
+column_table("W", 12, 270, 3, side="right")            # wall table, 3 computers
+for y in (118, 210, 302):                               # three small tables for two
+    column_table("W", 118, y, 2, side="left")
+row_table("W", 170, 150, 2)                             # bench in the notch
+room("Office", 8, 400, 130, 58)
 
-# ---- ids: per zone, left to right then top to bottom -------------------------
+# ---- Window wall: every table on one straight line -------------------------
+ROW = 432
+x = row_table("S", 180, ROW, 2)                         # S1-S2
+x = row_table("S", 300, ROW, 4)                         # S3-S6
+x = row_table("S", 500, ROW, 4)                         # S7-S10
+x = row_table("S", 880, ROW, 4)                         # S11-S14
+x = row_table("S", 1052, ROW, 1)                        # S15
+x = row_table("S", 1116, ROW, 4)                        # S16-S19
+x = row_table("S", 1290, ROW, 1)                        # S20
+row_table("E", 1346, ROW, 3)                            # E12-E14, by the east office
+room("Office", 1470, 400, 92, 58)
+
+# ---- The floor: the lounge row, a shelf in each gap ------------------------
+# Starts between S2 and S3 and ends well before the entrance.
+LOUNGE_Y = 300       # table centre line
+GAP = 22
+
+def lounge_shelf(x):
+    shelf(x, LOUNGE_Y - 24, 10, 52)
+    return x + 10 + GAP
+
+x = 274
+x = row_table("C", x, LOUNGE_Y - 9, 2) + GAP           # table for two
+x = lounge_shelf(x)
+round_table(x + 14, LOUNGE_Y); seats["C"].append((x + 14, LOUNGE_Y - 27)); x += 28 + GAP
+x = lounge_shelf(x)
+x = row_table("C", x, LOUNGE_Y - 9, 2) + GAP           # table for two
+x = lounge_shelf(x)
+for _ in range(2):                                      # two round tables for one
+    round_table(x + 15, LOUNGE_Y, 15); seats["C"].append((x + 15, LOUNGE_Y - 27)); x += 30 + GAP
+    x = lounge_shelf(x)
+LOUNGE_END = x
+
+# ---- Entrance, reception, discussion rooms --------------------------------
+ENTRANCE_X = 838
+room("Reception", 905, 182, 184, 112, kind="desk")
+room("Room 1", 1180, 12, 92, 100)
+room("Room 2", 1276, 12, 62, 100)
+room("Room 3", 1342, 12, 62, 100)
+
+# ---- The floor, east side ---------------------------------------------------
+shelf(1150, 210, 10, 120)
+round_table(1205, 248, 15); seats["C"].append((1205, 221))
+round_table(1205, 320, 15); seats["C"].append((1205, 293))
+round_table(1278, 168, 15); seats["C"].append((1278, 141))
+for y in (222, 290, 358):                               # three tables for two, one column
+    row_table("C", 1314, y, 2)
+
+# ---- East wall: corner table, then two wall tables in one line ------------
+rect(1446, 22, 16, 72)                                  # corner table by Room 3, 2 + 2
+for y in (40, 76):
+    seats["E"].append((1424, y)); seats["E"].append((1484, y))
+y = column_table("E", 1536, 110, 4, side="left")       # E5-E8
+bottom = column_table("E", 1536, y + 30, 3, side="left")  # E9-E11, a clear gap above
+assert bottom < 400, "the east wall tables must stop above the office"
+
+# ---- ids --------------------------------------------------------------------
 out_seats = []
-for z in "WSCE":
-    zs = [s for s in seats if s["zone"] == z]
-    # West end: column by column, top to bottom. East wall: top to bottom.
-    # Window wall and the floor: left to right.
-    if z == "W":
-        zs.sort(key=lambda s: (s["x"] // 60, s["y"]))
-    elif z == "E":
-        zs.sort(key=lambda s: (s["y"] // 40, s["x"]))
-    else:
-        zs.sort(key=lambda s: (round(s["x"] / 30), s["y"]))
-    for i, s in enumerate(zs, 1):
-        out_seats.append({"id": f"{z}{i}", "x": s["x"], "y": s["y"]})
+for zone, pts in seats.items():
+    if zone == "W":      # column by column, top to bottom
+        pts.sort(key=lambda p: (p[0] // 40, p[1]))
+    elif zone == "E":    # top to bottom, left to right
+        pts.sort(key=lambda p: (p[1] // 30, p[0]))
+    elif zone == "C":    # left to right; a table's two seats read across
+        pts.sort(key=lambda p: (p[0] // 60, p[1], p[0]))
+    else:                # left to right
+        pts.sort(key=lambda p: (p[0], p[1]))
+    for i, (x, y) in enumerate(pts, 1):
+        out_seats.append({"id": f"{zone}{i}", "x": round(x), "y": round(y)})
+
+# Every seat badge needs its own space.
+close = [(a["id"], b["id"]) for a, b in itertools.combinations(out_seats, 2)
+         if abs(a["x"] - b["x"]) < 32 and abs(a["y"] - b["y"]) < 32]
+assert not close, f"seats too close: {close}"
+assert LOUNGE_END < ENTRANCE_X - 30 < 905, "the lounge row must end before the entrance"
 
 old = json.load(open(sys.argv[1]))
 plan = {
     "name": old["name"],
     "floor": old["floor"],
-    "viewBox": [0, 0, X_RIGHT, Y_BACK + 5],
-    "note": f"Drawn from the detailed hand sketch of the library, with {len(out_seats)} seats. "
-            "Seat ids here are the library's seat ids (unless SEAT_IDS_ENGINEERING is set). "
-            "Move a seat by editing its x/y; add or remove seats freely, then regenerate QR codes "
-            "(npm run qr). The map turns this plan to portrait on narrow screens.",
+    "viewBox": [0, 0, 1570, 470],
+    "note": f"The Engineering Library floor, drawn from the hand sketch on a clean grid, with "
+            f"{len(out_seats)} seats. Built by scripts/build-engineering-plan.py: edit positions "
+            "there and rebuild, then regenerate QR codes (npm run qr) if seats change. "
+            "The map turns this plan to portrait on narrow screens.",
     "outline": outline,
-    "zones": [{"label": "Atrium", "x": 700, "y": 95, "kind": "outside"}] + zones,
+    "zones": [{"label": "Atrium", "x": 700, "y": 95, "kind": "outside"}],
     "rooms": rooms,
     "stacks": stacks,
     "tables": tables,
     "seats": out_seats,
-    "entrance": {"x": P(935, 260)[0], "y": Y_FRONT, "label": "Enter"},
+    "entrance": {"x": ENTRANCE_X, "y": 175, "label": "Enter"},
     "hours": old["hours"],
     "zoneNames": old["zoneNames"],
 }
 json.dump(plan, open(sys.argv[2], "w"), indent=2)
-from collections import Counter
-print(len(out_seats), Counter(s["id"][0] for s in out_seats))
-
-import itertools
-
-# ---- make room for the seat badges -------------------------------------------
-# The sketch isn't to scale: seats on one table sit closer than a tappable seat
-# badge (about 30 plan units). Seats on the same table are spread evenly along
-# the table's long side to at least MIN apart, and the table grows to fit.
-MIN = 32
-
-def near(t, s, pad=26):
-    if t["shape"] != "rect":
-        return False
-    return t["x"] - pad <= s["x"] <= t["x"] + t["w"] + pad and t["y"] - pad <= s["y"] <= t["y"] + t["h"] + pad
-
-for t in plan["tables"]:
-    group = [s for s in plan["seats"] if near(t, s)]
-    if len(group) < 2:
-        continue
-    horizontal = t["w"] >= t["h"]
-    key = "x" if horizontal else "y"
-    # Seats on opposite sides of a table (e.g. 2 + 2) share positions along it.
-    lanes = {}
-    for s in group:
-        side = "y" if horizontal else "x"
-        lanes.setdefault(round(s[side] / 20), []).append(s)
-    for lane in lanes.values():
-        lane.sort(key=lambda s: s[key])
-        n = len(lane)
-        if n < 2:
-            continue
-        span_now = lane[-1][key] - lane[0][key]
-        span = max(span_now, MIN * (n - 1))
-        mid = (lane[0][key] + lane[-1][key]) / 2
-        for i, s in enumerate(lane):
-            s[key] = round(mid - span / 2 + i * span / (n - 1))
-    lo = min(s[key] for s in group) - 16
-    hi = max(s[key] for s in group) + 16
-    if horizontal:
-        t["x"], t["w"] = min(t["x"], lo), max(t["x"] + t["w"], hi) - min(t["x"], lo)
-    else:
-        t["y"], t["h"] = min(t["y"], lo), max(t["y"] + t["h"], hi) - min(t["y"], lo)
-
-# Anything still too close (seats between two tables): nudge each pair apart
-# along whichever axis they are already more separated on.
-for _ in range(40):
-    moved = False
-    for a, b in itertools.combinations(plan["seats"], 2):
-        dx, dy = b["x"] - a["x"], b["y"] - a["y"]
-        if abs(dx) < 30 and abs(dy) < 30:
-            k = "x" if abs(dx) >= abs(dy) else "y"
-            d = dx if k == "x" else dy
-            push = (30 - abs(d)) / 2 + 1
-            sgn = 1 if d >= 0 else -1
-            a[k] = round(a[k] - sgn * push); b[k] = round(b[k] + sgn * push)
-            moved = True
-    if not moved:
-        break
-
-# report anything still too close
-import itertools
-close = [(a["id"], b["id"]) for a, b in itertools.combinations(plan["seats"], 2)
-         if abs(a["x"] - b["x"]) < 28 and abs(a["y"] - b["y"]) < 28]
-print("still overlapping:", close)
-json.dump(plan, open(sys.argv[2], "w"), indent=2)
+counts = {z: sum(1 for s in out_seats if s["id"][0] == z) for z in "WSCE"}
+print(len(out_seats), counts)
