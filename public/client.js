@@ -205,30 +205,88 @@ async function enablePushReminders(identity) {
 
 function getOrCreateIdentity() {
   let token = localStorage.getItem("navispace_token");
-  let nickname = localStorage.getItem("navispace_nickname");
-
   if (!token) {
     token = crypto.randomUUID();
     localStorage.setItem("navispace_token", token);
   }
-  if (!nickname) {
-    // window.prompt() throws (rather than returning null) in some
-    // embedded/webview browsers that don't support native dialogs
-    // (e.g. VS Code's built-in preview pane). Never let that crash
-    // the page — fall back to "Anonymous" and let the nickname
-    // banner (below) offer a normal in-page way to set it instead.
-    try {
-      nickname = (window.prompt("Pick a study nickname for the leaderboard:") || "").trim();
-    } catch (err) {
-      nickname = "";
-    }
-    if (!nickname) nickname = "Anonymous";
-    localStorage.setItem("navispace_nickname", nickname);
-  }
-
   updateManifestHandoff();
-  return { token, nickname };
+  // The nickname is read live, so a name chosen in the welcome card (or
+  // saved on the seat page) is used by the very next scan on this page.
+  return {
+    token,
+    get nickname() {
+      return savedNickname() || "Anonymous";
+    },
+    set nickname(value) {
+      setNickname(value);
+    },
+  };
 }
+
+/** The nickname this device chose, or null if it hasn't chosen one yet. */
+function savedNickname() {
+  const n = (localStorage.getItem("navispace_nickname") || "").trim();
+  return n && n !== "Anonymous" ? n : null;
+}
+
+/* --- Welcome: ask a new visitor for their NaviSpace nickname ---------------
+ * Shown once, the first time someone opens any page, as a card rather than
+ * the browser's prompt box. "Not now" lets them look around; they're asked
+ * again on their next visit, and can always set it on a seat page. */
+function showWelcome() {
+  if (document.getElementById("welcome")) return;
+  const wrap = document.createElement("div");
+  wrap.className = "welcome";
+  wrap.id = "welcome";
+  wrap.innerHTML = `
+    <form class="welcome-card" novalidate role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+      <span class="welcome-mark" aria-hidden="true">N</span>
+      <p class="welcome-eyebrow">Welcome to NaviSpace</p>
+      <h2 id="welcomeTitle">What should we call you?</h2>
+      <p class="welcome-text">Your nickname goes on the study board and on any seat you check into. No sign-up, no email.</p>
+      <label class="welcome-label" for="welcomeName">Nickname</label>
+      <input id="welcomeName" type="text" maxlength="24" autocomplete="nickname" autocapitalize="words" placeholder="e.g. Lerato" required />
+      <p class="welcome-error" id="welcomeError" hidden>Pick a name with at least two letters.</p>
+      <button class="btn btn-primary" type="submit">Continue</button>
+      <button class="welcome-later" type="button">Not now</button>
+    </form>`;
+  document.body.appendChild(wrap);
+  document.documentElement.classList.add("welcome-open");
+  const input = wrap.querySelector("input");
+  const close = () => {
+    wrap.classList.add("leaving");
+    document.documentElement.classList.remove("welcome-open");
+    setTimeout(() => wrap.remove(), 250);
+  };
+  wrap.querySelector("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (name.replace(/[^\p{L}\p{N}]/gu, "").length < 2) {
+      wrap.querySelector("#welcomeError").hidden = false;
+      input.focus();
+      return;
+    }
+    setNickname(name.slice(0, 24));
+    document.dispatchEvent(new CustomEvent("navispace:nickname", { detail: savedNickname() }));
+    close();
+  });
+  wrap.querySelector(".welcome-later").addEventListener("click", () => {
+    try { sessionStorage.setItem("navispace_welcome_later", "1"); } catch { }
+    close();
+  });
+  wrap.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") wrap.querySelector(".welcome-later").click();
+  });
+  setTimeout(() => input.focus(), 350);
+}
+
+(function welcomeNewVisitor() {
+  let later = null;
+  try { later = sessionStorage.getItem("navispace_welcome_later"); } catch { }
+  if (savedNickname() || later) return;
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", showWelcome);
+  else showWelcome();
+})();
 
 // Public APIs never return another device's raw token, only the first
 // 16 hex chars of its SHA-256 (holderHash, reporterHash, claimantHash).
