@@ -4,8 +4,9 @@
  * NaviSpace service worker: makes the app installable and handles Web
  * Push reminders. Kept deliberately simple:
  *
- * - App-shell caching is network-first (cache only as an offline /
- *   slow-network fallback) for static files, network-only for API
+ * - Pages are network-first (cache only as an offline / slow-network
+ *   fallback); versioned files (?v=hash) and fonts are cache-first,
+ *   since their URL changes whenever their content does; network-only for API
  *   calls (/api/...) — seat/leaderboard state must never be
  *   served stale from cache, that would defeat the whole point of a
  *   live status display.
@@ -19,7 +20,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v15";
+const CACHE_NAME = "navispace-shell-v16";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -28,8 +29,11 @@ const SHELL_FILES = [
     "/focus.html",
     "/leaderboard.html",
     "/lost-found.html",
-    "/client.js",
-    "/styles.css",
+    "/fonts/newsreader.woff2",
+    "/fonts/newsreader-italic.woff2",
+    "/fonts/public-sans.woff2",
+    "/fonts/ibm-plex-mono-400.woff2",
+    "/fonts/ibm-plex-mono-500.woff2",
     "/icons/favicon.svg",
     "/icons/icon-192.png",
     "/icons/icon-512.png",
@@ -83,6 +87,13 @@ self.addEventListener("fetch", (event) => {
     // else go straight to the network.
     if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
 
+    // Versioned files (?v=<content hash>) and fonts never change under the
+    // same URL, so the phone's copy is always right: no network round trip.
+    if (url.searchParams.has("v") || url.pathname.startsWith("/fonts/")) {
+        event.respondWith(cacheFirst(event.request));
+        return;
+    }
+
     // Network first, so a new deploy shows up on the very next load;
     // the cached copy is only a fallback for when the network is slow
     // (a few seconds) or gone. (Stale-while-revalidate kept showing the
@@ -91,6 +102,15 @@ self.addEventListener("fetch", (event) => {
 });
 
 const NETWORK_TIMEOUT_MS = 3500;
+
+async function cacheFirst(request) {
+    const cache = await caches.open(CACHE_NAME);
+    const hit = await cache.match(request);
+    if (hit) return hit;
+    const res = await fetch(request);
+    if (res.ok) cache.put(request, res.clone());
+    return res;
+}
 
 async function networkFirst(request) {
     const cache = await caches.open(CACHE_NAME);

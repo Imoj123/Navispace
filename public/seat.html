@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#121614" />
 <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
 <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
@@ -11,9 +11,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="NaviSpace" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="stylesheet" href="/styles.css" />
 <title>NaviSpace — Seat</title>
 <meta name="description" content="Check in or out of this seat with NaviSpace." />
@@ -144,7 +144,7 @@
 
   /* One clear next step, the rest quieter beside it. */
   .status-band.AVAILABLE, .status-band.OCCUPIED, .status-band.STEPPED_AWAY { background: transparent; }
-  .status-band { border-color: color-mix(in srgb, currentColor 45%, transparent); }
+  .status-band { border-color: currentColor; border-color: color-mix(in srgb, currentColor 45%, transparent); }
   #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
   #actions .btn { margin: 0; }
   #actions > .btn-primary, #actions > :only-child, #actions > :nth-child(2):last-child { grid-column: 1 / -1; }
@@ -157,6 +157,7 @@
   #enableReminders:hover { text-decoration: underline; text-underline-offset: 4px; }
   .nickname-row button { padding: 13px 16px; font-size: 12px; }
 </style>
+    <script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/focus.html*"}},{"not":{"href_matches":"/api/*"}}]},"eagerness":"moderate"}]}</script>
 </head>
 <body>
   <header class="topbar">

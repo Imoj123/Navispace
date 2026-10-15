@@ -9,6 +9,48 @@
  *   free = sage, taken = soft vermilion, stepped away = amber.
  */
 
+/* --- Fonts: served from NaviSpace itself, trimmed to Latin and to the weights
+   the site uses, so no page waits on a second server before it can draw. --- */
+@font-face {
+    font-family: "Newsreader";
+    font-style: normal;
+    font-weight: 400 500;
+    font-display: swap;
+    src: url("/fonts/newsreader.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Newsreader";
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/fonts/newsreader-italic.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Public Sans";
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url("/fonts/public-sans.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
+}
+
 :root {
     /* Ground & ink */
     --ground: #121614;
@@ -74,8 +116,17 @@ body {
     padding: 0;
 }
 
+html {
+    /* Keep text its designed size when an iPhone turns sideways, and drop
+       the grey flash mobile browsers paint over every tapped link. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+}
+
 body {
     min-height: 100vh;
+    min-height: 100dvh;
     background:
         radial-gradient(ellipse 55% 38% at 50% -6%, rgba(228, 192, 118, 0.11), transparent 72%) no-repeat,
         var(--ground);
@@ -117,7 +168,7 @@ button {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 14px 24px;
-    padding: 20px max(20px, env(safe-area-inset-right, 0px)) 20px max(20px, env(safe-area-inset-left, 0px));
+    padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) 20px max(20px, env(safe-area-inset-left, 0px));
     border-bottom: 1px solid var(--line);
 }
 
@@ -169,7 +220,7 @@ button {
 
 @media (max-width: 560px) {
     .topbar {
-        padding-top: 16px;
+        padding-top: max(16px, env(safe-area-inset-top, 0px));
         padding-bottom: 14px;
     }
 
@@ -543,7 +594,8 @@ main {
 
 input[type="text"],
 textarea {
-    font: 400 15px var(--font-body);
+    /* 16px: iPhones zoom the whole page into any smaller field on tap. */
+    font: 400 16px var(--font-body);
     background: var(--well);
     border: 1px solid var(--line);
     color: var(--text);
@@ -565,7 +617,7 @@ input[type="text"]::placeholder {
 
 .toast {
     margin-top: 14px;
-    font: 400 italic 15px/1.45 var(--font-serif);
+    font: 400 italic 16px/1.45 var(--font-serif);
     color: var(--muted);
     min-height: 1.4em;
 }
