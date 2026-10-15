@@ -1,3 +1,5 @@
 node_modules/
 qr-codes/
 *.log
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
