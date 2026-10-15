@@ -39,22 +39,7 @@
             display: block;
         }
 
-        /* A real photograph sits under the canvas; the canvas then only draws
-           a light moving layer (rain, fireflies, snow) over it. */
-        .photo {
-            position: fixed;
-            inset: -4%;
-            background: center / cover no-repeat;
-            opacity: 0;
-            transition: opacity 1.2s ease;
-            animation: drift 70s ease-in-out infinite alternate;
-        }
-
-        .photo.on {
-            opacity: 1;
-        }
-
-        /* Real footage for scenes that have it; sits over the photo. */
+        /* The scene's footage, full screen behind the clock. */
         .motion {
             position: fixed;
             inset: 0;
@@ -70,32 +55,8 @@
             opacity: 1;
         }
 
-        @keyframes drift {
-            from { transform: scale(1.02) translate(0, 0); }
-            to { transform: scale(1.1) translate(-1.5%, -1%); }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .photo { animation: none; }
-        }
-
-        body.has-photo .veil {
-            background: radial-gradient(ellipse 70% 55% at 50% 50%, rgba(8, 10, 9, 0.55), rgba(8, 10, 9, 0.3) 70%, rgba(8, 10, 9, 0.55));
-        }
-
-        .credit {
-            position: fixed;
-            right: max(14px, env(safe-area-inset-right, 0px));
-            bottom: max(8px, env(safe-area-inset-bottom, 0px));
-            font: 400 9.5px/1 var(--font-mono);
-            letter-spacing: 0.08em;
-            color: rgba(243, 238, 226, 0.45);
-            text-decoration: none;
-            z-index: 2;
-        }
-
-        body:not(.has-photo) .credit {
-            display: none;
+        body.has-video .veil {
+            background: radial-gradient(ellipse 70% 55% at 50% 50%, rgba(8, 10, 9, 0.5), rgba(8, 10, 9, 0.25) 70%, rgba(8, 10, 9, 0.5));
         }
 
         .veil {
@@ -339,10 +300,8 @@
 </head>
 
 <body>
-    <div class="photo" id="photo" aria-hidden="true"></div>
     <video class="motion" id="motion" muted loop playsinline preload="none" aria-hidden="true"></video>
     <canvas id="scene" aria-hidden="true"></canvas>
-    <a class="credit chrome" href="https://unsplash.com" target="_blank" rel="noopener">Photo · Unsplash</a>
     <div class="veil"></div>
 
     <div class="ui">
@@ -406,30 +365,20 @@
         let sessionStart = Date.now();
 
         // ===== Scenes ==========================================================
-        // Each scene: { name, swatch, photos, init(w,h), draw(ctx,w,h,t), overlay(ctx,w,h,t) }
-        // photos are Unsplash ids, tried in order. When one loads it fills the
-        // screen and overlay() draws the moving layer on a clear canvas; if
-        // none loads (offline, blocked), draw() paints the whole scene instead.
-        // A scene with `video` (a looping clip in /public/media) plays that
-        // first, over its photo; overlay() is skipped while footage shows.
+        // Each scene: { name, swatch, video, poster, init(w,h), draw(ctx,w,h,t) }
+        // Every scene is real footage: a looping clip in /public/media. Only
+        // scenes whose clip is on the server appear in the picker. draw() is
+        // the last resort for when no clip can load at all (offline, data
+        // saver), so the page is never blank.
 
         const rand = (a, b) => a + Math.random() * (b - a);
 
         const SCENES = {
             rain: {
                 name: "Rain",
+                video: "/media/rain.mp4",
+                poster: "/media/rain.jpg",
                 swatch: "linear-gradient(160deg,#2c3a4a,#11161d)",
-                photos: ["1515694346937-94d85e41e6f0", "1428592953211-077101b2021b"],
-                overlay(c, w, h) {
-                    c.strokeStyle = "rgba(210,225,240,0.22)"; c.lineWidth = 1;
-                    c.beginPath();
-                    for (const d of this.drops) {
-                        d.y += d.v; d.x += d.v * 0.18;
-                        if (d.y > h) { d.y = -d.l; d.x = rand(-40, w); }
-                        c.moveTo(d.x, d.y); c.lineTo(d.x - d.l * 0.18, d.y - d.l);
-                    }
-                    c.stroke();
-                },
                 init(w, h) {
                     this.drops = Array.from({ length: Math.round(w * h / 5000) }, () => ({ x: rand(0, w), y: rand(0, h), l: rand(10, 26), v: rand(9, 16) }));
                     this.bokeh = Array.from({ length: 26 }, () => ({ x: rand(0, w), y: rand(h * 0.35, h), r: rand(14, 60), c: Math.random() < 0.6 ? "255,190,120" : "150,190,255", a: rand(0.05, 0.16), dx: rand(-0.08, 0.08) }));
@@ -463,18 +412,9 @@
 
             forest: {
                 name: "Forest",
+                video: "/media/forest.mp4",
+                poster: "/media/forest.jpg",
                 swatch: "linear-gradient(180deg,#183a33,#0a1512)",
-                photos: ["1441974231531-c6227db76b6e", "1448375240586-882707db888b"],
-                overlay(c, w, h, t) {
-                    for (const f of this.flies) {
-                        f.p += 0.01 * f.s * 3;
-                        const x = f.x + Math.sin(f.p * 1.3) * 30, y = f.y + Math.cos(f.p) * 18;
-                        const a = 0.3 + 0.4 * Math.sin(t / 700 + f.p * 4);
-                        const rg = c.createRadialGradient(x, y, 0, x, y, 8);
-                        rg.addColorStop(0, `rgba(240,240,170,${Math.max(0, a)})`); rg.addColorStop(1, "rgba(240,240,170,0)");
-                        c.fillStyle = rg; c.beginPath(); c.arc(x, y, 8, 0, 7); c.fill();
-                    }
-                },
                 init(w, h) {
                     this.layers = [0.55, 0.68, 0.82].map((base, li) => {
                         const trees = [];
@@ -514,9 +454,9 @@
 
             ocean: {
                 name: "Ocean",
+                video: "/media/ocean.mp4",
+                poster: "/media/ocean.jpg",
                 swatch: "linear-gradient(180deg,#e2a37a,#5a4a78 45%,#16314a)",
-                photos: ["1507525428034-b723cf961d3e", "1505142468610-359e7d316be0"],
-                overlay() { },
                 init(w, h) { this.glints = Array.from({ length: 60 }, () => ({ x: rand(0, w), y: rand(h * 0.58, h), p: rand(0, 6.28) })); },
                 draw(c, w, h, t) {
                     const sky = c.createLinearGradient(0, 0, 0, h * 0.58);
@@ -547,24 +487,9 @@
 
             stars: {
                 name: "Night sky",
+                video: "/media/stars.mp4",
+                poster: "/media/stars.jpg",
                 swatch: "radial-gradient(circle at 30% 30%,#fff 1px,transparent 2px),linear-gradient(180deg,#0b1430,#04060d)",
-                photos: ["1519681393784-d8e5b5a4570e", "1419242902214-272b3f66ee7a"],
-                overlay(c, w, h, t) {
-                    for (let i = 0; i < this.stars.length; i += 6) {
-                        const s = this.stars[i];
-                        const a = 0.5 * Math.max(0, Math.sin(t / 900 + s.p * 3));
-                        c.fillStyle = `rgba(255,255,255,${a})`; c.beginPath(); c.arc(s.x, s.y * 0.6, s.r, 0, 7); c.fill();
-                    }
-                    if (!this.shoot && Math.random() < 0.004) this.shoot = { x: rand(w * 0.1, w * 0.8), y: rand(0, h * 0.3), life: 0 };
-                    if (this.shoot) {
-                        const s = this.shoot; s.life += 1;
-                        const x = s.x + s.life * 9, y = s.y + s.life * 4;
-                        const lg = c.createLinearGradient(x - 90, y - 40, x, y);
-                        lg.addColorStop(0, "rgba(255,255,255,0)"); lg.addColorStop(1, `rgba(255,255,255,${1 - s.life / 45})`);
-                        c.strokeStyle = lg; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - 90, y - 40); c.lineTo(x, y); c.stroke();
-                        if (s.life > 45) this.shoot = null;
-                    }
-                },
                 init(w, h) {
                     this.stars = Array.from({ length: Math.round(w * h / 2600) }, () => ({ x: rand(0, w), y: rand(0, h * 0.85), r: rand(0.3, 1.5), p: rand(0, 6.28) }));
                     this.ridge = []; let y = h * 0.8;
@@ -596,7 +521,6 @@
 
             koi: {
                 name: "Koi pond",
-                photos: [],
                 video: "/media/koi.mp4",
                 poster: "/media/koi.jpg",
                 swatch: "radial-gradient(ellipse at 40% 50%,#e8743b 0 18%,transparent 19%),linear-gradient(160deg,#16443f,#0a201e)",
@@ -637,60 +561,20 @@
                 },
             },
 
-            lamp: {
-                name: "Library",
-                swatch: "radial-gradient(circle at 50% 20%,#6b5a35,#121614 70%)",
-                photos: ["1507842217343-583bb7270b66", "1481627834876-b7833e8f5570"],
-                overlay(c, w, h, t) {
-                    for (const m of this.motes) {
-                        m.y -= m.v; m.x += Math.sin(t / 3000 + m.p) * 0.15;
-                        if (m.y < -4) { m.y = h + 4; m.x = rand(w * 0.25, w * 0.75); }
-                        const a = 0.35 * (1 - Math.abs(m.x - w / 2) / (w * 0.4));
-                        c.fillStyle = `rgba(250,225,170,${Math.max(0, a)})`; c.beginPath(); c.arc(m.x, m.y, m.r, 0, 7); c.fill();
-                    }
-                },
-                init(w, h) { this.motes = Array.from({ length: 70 }, () => ({ x: rand(w * 0.25, w * 0.75), y: rand(0, h), r: rand(0.6, 1.8), v: rand(0.05, 0.25), p: rand(0, 6.28) })); },
-                draw(c, w, h, t) {
-                    c.fillStyle = "#101412"; c.fillRect(0, 0, w, h);
-                    const rg = c.createRadialGradient(w / 2, -h * 0.05, 0, w / 2, -h * 0.05, h * 0.95);
-                    rg.addColorStop(0, "rgba(232,196,120,0.38)"); rg.addColorStop(0.45, "rgba(232,196,120,0.08)"); rg.addColorStop(1, "rgba(232,196,120,0)");
-                    c.fillStyle = rg; c.fillRect(0, 0, w, h);
-                    for (const m of this.motes) {
-                        m.y -= m.v; m.x += Math.sin(t / 3000 + m.p) * 0.15;
-                        if (m.y < -4) { m.y = h + 4; m.x = rand(w * 0.25, w * 0.75); }
-                        const a = 0.25 * (1 - Math.abs(m.x - w / 2) / (w * 0.4));
-                        c.fillStyle = `rgba(240,215,160,${Math.max(0, a)})`; c.beginPath(); c.arc(m.x, m.y, m.r, 0, 7); c.fill();
-                    }
-                },
-            },
 
-            fox: {
-                name: "Fox",
-                video: "/media/fox.mp4",
-                poster: "/media/fox.jpg",
-                swatch: "radial-gradient(ellipse at 50% 60%,#d06a2c 0 16%,transparent 17%),linear-gradient(180deg,#9fb0c0,#e9eef2)",
-                photos: ["1474511320723-9a56873867b5"],
-                init(w, h) { this.flakes = Array.from({ length: Math.round(w * h / 9000) }, () => ({ x: rand(0, w), y: rand(0, h), r: rand(0.8, 2.6), v: rand(0.3, 1.1), p: rand(0, 6.28) })); },
-                overlay(c, w, h, t) {
-                    c.fillStyle = "rgba(255,255,255,0.75)";
-                    for (const f of this.flakes) {
-                        f.y += f.v; f.x += Math.sin(t / 1600 + f.p) * 0.4;
-                        if (f.y > h + 4) { f.y = -4; f.x = rand(0, w); }
-                        c.beginPath(); c.arc(f.x, f.y, f.r, 0, 7); c.fill();
-                    }
-                },
-                draw(c, w, h, t) {
-                    const g = c.createLinearGradient(0, 0, 0, h);
-                    g.addColorStop(0, "#2a3442"); g.addColorStop(0.7, "#56657a"); g.addColorStop(1, "#8a98aa");
-                    c.fillStyle = g; c.fillRect(0, 0, w, h);
-                    this.overlay(c, w, h, t);
-                },
+            study: {
+                name: "Study with me",
+                swatch: "linear-gradient(160deg,#3a3226,#121614)",
+                video: "/media/study.mp4",
+                poster: "/media/study.jpg",
+                init() { },
+                draw(c, w, h) { c.fillStyle = "#121614"; c.fillRect(0, 0, w, h); },
             },
         };
 
         const canvas = $("scene");
         const ctx = canvas.getContext("2d");
-        let current = SCENES[store("navispace_scene")] ? store("navispace_scene") : "rain";
+        let current = SCENES[store("navispace_scene")] ? store("navispace_scene") : "koi";
         let W = 0, H = 0;
 
         function resize() {
@@ -701,43 +585,12 @@
             SCENES[current].init(W, H);
         }
 
-        const photoUrl = (id, w, h) =>
-            `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&q=72&w=${w}` + (h ? `&h=${h}` : "");
-        const photoEl = $("photo");
-        const loaded = {}; // scene key -> url that loaded, or null if none would
-
-        function loadImage(url) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(url);
-                img.onerror = reject;
-                img.src = url;
-                setTimeout(reject, 12000);
-            });
-        }
-
-        async function photoFor(key) {
-            if (key in loaded) return loaded[key];
-            const w = Math.min(2400, Math.ceil((Math.max(W, H) * Math.min(2, window.devicePixelRatio || 1)) / 400) * 400);
-            for (const id of SCENES[key].photos || []) {
-                try { return (loaded[key] = await loadImage(photoUrl(id, w))); } catch { }
-            }
-            return (loaded[key] = null);
-        }
-
         const motionEl = $("motion");
         let motionOn = false;
 
         function paint(t) {
-            const sc = SCENES[current];
-            if (motionOn) {
-                ctx.clearRect(0, 0, W, H);
-            } else if (loaded[current]) {
-                ctx.clearRect(0, 0, W, H);
-                sc.overlay(ctx, W, H, t);
-            } else {
-                sc.draw(ctx, W, H, t);
-            }
+            if (motionOn) ctx.clearRect(0, 0, W, H);
+            else SCENES[current].draw(ctx, W, H, t);
         }
 
         function frame(t) {
@@ -745,46 +598,27 @@
             if (!reduceMotion) requestAnimationFrame(frame);
         }
 
-        // Footage that fails (missing file, unsupported, data saver) just
-        // leaves the photo or drawing in place.
-        const noVideo = new Set();
+        // A clip that fails to play (unsupported, data saver) leaves the
+        // drawn version of that scene in place.
         function showVideo(key) {
             motionOn = false;
             motionEl.classList.remove("on");
-            motionEl.pause();
+            document.body.classList.remove("has-video");
             const sc = SCENES[key];
-            if (!sc.video || noVideo.has(key)) return;
-            const fail = () => {
-                noVideo.add(key);
-                if (current !== key) return;
-                motionOn = false;
-                motionEl.classList.remove("on");
-                if (!loaded[key]) document.body.classList.remove("has-photo");
-            };
-            motionEl.onerror = fail;
+            if (!available.has(key)) return;
+            motionEl.onerror = () => { if (current === key) { motionOn = false; motionEl.classList.remove("on"); document.body.classList.remove("has-video"); } };
             motionEl.onplaying = () => {
                 if (current !== key) return;
                 motionOn = true;
                 motionEl.classList.add("on");
-                document.body.classList.add("has-photo");
+                document.body.classList.add("has-video");
             };
             if (motionEl.dataset.src !== sc.video) {
                 motionEl.dataset.src = sc.video;
                 motionEl.poster = sc.poster || "";
                 motionEl.src = sc.video;
             }
-            motionEl.play().catch(() => { if (motionEl.error) fail(); });
-        }
-
-        async function showPhoto(key) {
-            photoEl.classList.remove("on");
-            if (!SCENES[key].video || noVideo.has(key)) document.body.classList.remove("has-photo");
-            const url = await photoFor(key);
-            if (key !== current || !url) return;
-            photoEl.style.backgroundImage = `url("${url}")`;
-            photoEl.classList.add("on");
-            document.body.classList.add("has-photo");
-            if (reduceMotion) paint(0);
+            motionEl.play().catch(() => { });
         }
 
         function setScene(key) {
@@ -792,25 +626,44 @@
             store("navispace_scene", key);
             SCENES[key].init(W, H);
             showVideo(key);
-            showPhoto(key);
             if (reduceMotion) paint(0);
             document.querySelectorAll(".scene-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
         }
 
-        for (const [key, sc] of Object.entries(SCENES)) {
-            const b = document.createElement("button");
-            b.type = "button";
-            b.className = "scene-btn";
-            b.dataset.key = key;
-            b.innerHTML = '<span class="sw"></span><span></span>';
-            b.querySelector(".sw").style.background = sc.poster
-                ? `url("${sc.poster}") center / cover, ${sc.swatch}`
-                : sc.photos && sc.photos[0]
-                ? `url("${photoUrl(sc.photos[0], 120, 120)}") center / cover, ${sc.swatch}`
-                : sc.swatch;
-            b.lastChild.textContent = sc.name;
-            b.addEventListener("click", () => setScene(key));
-            $("scenes").appendChild(b);
+        // Which clips are actually on the server. A cheap HEAD per scene; a
+        // scene without its clip is left out of the picker.
+        const available = new Set();
+        async function findClips() {
+            await Promise.all(Object.entries(SCENES).map(async ([key, sc]) => {
+                try {
+                    const r = await fetch(sc.video, { method: "HEAD", cache: "no-store" });
+                    if (r.ok) available.add(key);
+                } catch { }
+            }));
+        }
+
+        function buildPicker() {
+            $("scenes").innerHTML = "";
+            // Offline with nothing reachable: offer the drawn scenes rather than nothing.
+            const keys = available.size ? [...available] : Object.keys(SCENES).filter((k) => k !== "study");
+            const order = Object.keys(SCENES);
+            keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+            for (const key of keys) {
+                const sc = SCENES[key];
+                const b = document.createElement("button");
+                b.type = "button";
+                b.className = "scene-btn";
+                b.dataset.key = key;
+                b.innerHTML = '<span class="sw"></span><span></span>';
+                b.querySelector(".sw").style.background = available.has(key) && sc.poster
+                    ? `url("${sc.poster}") center / cover, ${sc.swatch}`
+                    : sc.swatch;
+                b.lastChild.textContent = sc.name;
+                b.addEventListener("click", () => setScene(key));
+                $("scenes").appendChild(b);
+            }
+            $("scenes").hidden = keys.length < 2;
+            if (!keys.includes(current)) current = keys[0];
         }
 
         // ===== Sound (generated, no files) ======================================
@@ -1038,6 +891,8 @@
 
         async function boot() {
             resize();
+            await findClips();
+            buildPicker();
             setScene(current);
             setMode(mode);
             requestAnimationFrame(frame);
