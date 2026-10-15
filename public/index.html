@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#121614" />
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
-    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -601,7 +602,7 @@
         <div class="nav-actions">
             <a class="pill" id="heldPill" href="#" hidden><span class="signal-dot signal-OCCUPIED"></span><span
                     id="heldText">Your seat</span></a>
-            <button class="pill" id="installBtn" type="button" hidden>Install app</button>
+            <button class="pill" id="installBtn" type="button" hidden>Add to Home Screen</button>
         </div>
     </header>
     <div class="ios-hint" id="iosHint" role="status" hidden>
@@ -965,13 +966,17 @@
 
         // --- Install -------------------------------------------------------------
 
+        // NaviSpace lives on phones (scanning desk codes, seat reminders), so
+        // the offer to add it to the home screen only appears on one. A laptop
+        // browser still has its own install option in the address bar.
+        const onPhone = window.matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 820;
         let deferredInstall = null;
         window.addEventListener("beforeinstallprompt", (e) => {
             e.preventDefault();
             deferredInstall = e;
-            if ($("heldPill").hidden) $("installBtn").hidden = false;
+            if (onPhone && $("heldPill").hidden) $("installBtn").hidden = false;
         });
-        if (typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
+        if (onPhone && typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
         $("installBtn").addEventListener("click", async () => {
             if (deferredInstall) {
                 deferredInstall.prompt();
