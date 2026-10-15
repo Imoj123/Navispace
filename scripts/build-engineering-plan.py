@@ -80,18 +80,39 @@ rect(652, 562, 757, 587)
 for px in (667, 697, 730, 752): seat("S", px, 551)
 
 # ---- The floor (centre): the lounge row ------------------------------------
-rect(428, 424, 467, 447); seat("C", 436, 412); seat("C", 458, 412)
-stack(484, 400, 496, 462)
-roundt(533, 424, 13); seat("C", 533, 403)
-stack(560, 400, 572, 462)
-rect(588, 412, 637, 432); roundt(612, 422, 11)
-for px in (598, 614, 630): seat("C", px, 398)
-stack(646, 400, 658, 462)
-roundt(713, 410, 15); seat("C", 713, 386)
-stack(745, 400, 757, 462)
-roundt(791, 412, 15); seat("C", 791, 388)
-stack(822, 400, 834, 462)
-zones.append({"label": "Open space", "x": P(955, 410)[0], "y": P(955, 410)[1], "kind": "inside"})
+# Laid out directly in plan units, left to right, so each shelf stands in its
+# own gap between tables instead of on top of one. Seats sit on the far side
+# of their table (towards the entrance), as in the sketch.
+ROW_Y = 312          # table centre line
+SEAT_Y = ROW_Y - 22  # seats just above their table
+GAP = 24             # clear space either side of a shelf
+
+def lounge_row(x):
+    def seat_at(sx):
+        seats.append({"zone": "C", "x": round(sx), "y": SEAT_Y})
+    def shelf(x):
+        stacks.append({"x": x, "y": ROW_Y - 22, "w": 10, "h": 56})
+        return x + 10
+    # table for two
+    tables.append({"shape": "rect", "x": x, "y": ROW_Y - 10, "w": 70, "h": 20})
+    seat_at(x + 19); seat_at(x + 51); x += 70 + GAP
+    x = shelf(x) + GAP
+    # round table for one
+    tables.append({"shape": "round", "cx": x + 14, "cy": ROW_Y, "r": 14})
+    seat_at(x + 14); x += 28 + GAP
+    x = shelf(x) + GAP
+    # long table for three, round table set into it
+    tables.append({"shape": "rect", "x": x, "y": ROW_Y - 10, "w": 100, "h": 20})
+    tables.append({"shape": "round", "cx": x + 50, "cy": ROW_Y, "r": 11})
+    seat_at(x + 18); seat_at(x + 50); seat_at(x + 82); x += 100 + GAP
+    x = shelf(x) + GAP
+    # two round tables for one, a shelf after each
+    for _ in range(2):
+        tables.append({"shape": "round", "cx": x + 15, "cy": ROW_Y, "r": 15})
+        seat_at(x + 15); x += 30 + GAP
+        x = shelf(x) + GAP
+
+lounge_row(P(428, 424)[0])
 
 # ---- Reception, entrance, discussion rooms ----------------------------------
 room("Reception", 1068, 245, 1278, 365, kind="desk")
