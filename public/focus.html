@@ -53,6 +53,7 @@
 
         .motion.on {
             opacity: 1;
+            background: #0c0f0e;
         }
 
         body.has-video .veil {
@@ -239,6 +240,31 @@
         }
 
         /* "Keep your seat" — appears before the check-in would run out. */
+        /* Milestones and personal bests: a short note under the top bar. */
+        .cheer {
+            position: fixed;
+            top: max(64px, calc(env(safe-area-inset-top, 0px) + 56px));
+            left: 50%;
+            transform: translate(-50%, -8px);
+            width: max-content;
+            max-width: min(90vw, 460px);
+            padding: 12px 18px;
+            background: rgba(14, 17, 16, 0.86);
+            border: 1px solid var(--brass);
+            color: #f3eee2;
+            font: 400 italic 17px/1.35 var(--font-serif);
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            z-index: 4;
+        }
+
+        .cheer.show {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
         /* Stepped away: the clock and the scene hold still until you're back. */
         body.away .motion {
             filter: grayscale(0.5) brightness(0.55);
@@ -349,6 +375,8 @@
             </div>
         </div>
     </div>
+
+    <div class="cheer" id="cheer" role="status" aria-live="polite"></div>
 
     <div class="keep" id="keep" hidden role="alertdialog" aria-labelledby="keepText">
         <p id="keepText">Still studying? Keep your seat for another stretch.</p>
@@ -620,18 +648,19 @@
 
         // A clip that fails to play (unsupported, data saver) leaves the
         // drawn version of that scene in place.
+        // A scene with a clip shows that clip's first frame (its poster) at
+        // once and plays as soon as enough has loaded, so the drawn fallback
+        // never flashes in between. Only a clip that fails falls back to it.
         function showVideo(key) {
-            motionOn = false;
-            motionEl.classList.remove("on");
-            document.body.classList.remove("has-video");
             const sc = SCENES[key];
-            if (!available.has(key)) return;
-            motionEl.onerror = () => { if (current === key) { motionOn = false; motionEl.classList.remove("on"); document.body.classList.remove("has-video"); } };
-            motionEl.onplaying = () => {
-                if (current !== key) return;
-                motionOn = true;
-                motionEl.classList.add("on");
-                document.body.classList.add("has-video");
+            const on = available.has(key);
+            motionOn = on;
+            motionEl.classList.toggle("on", on);
+            document.body.classList.toggle("has-video", on);
+            if (!on) { motionEl.pause(); return; }
+            motionEl.onerror = () => {
+                available.delete(key);
+                if (current === key) showVideo(key);
             };
             if (motionEl.dataset.src !== sc.video) {
                 motionEl.dataset.src = sc.video;
@@ -683,6 +712,8 @@
                 $("scenes").appendChild(b);
             }
             $("scenes").hidden = keys.length < 2;
+            // Warm the posters so a switch shows its first frame instantly.
+            for (const key of available) if (SCENES[key].poster) new Image().src = SCENES[key].poster;
             if (!keys.includes(current)) current = keys[0];
         }
 
@@ -798,6 +829,101 @@
         $("modeOpen").addEventListener("click", () => setMode("open"));
         $("modePomo").addEventListener("click", () => setMode("pomo"));
 
+        // ===== Encouragement ======================================================
+        // What the line under the clock says depends on how long this sitting
+        // has lasted, and talks to the student by their nickname. Each stage
+        // has a few lines; one is picked per sitting so it doesn't flicker.
+
+        function who(sep = ", ") {
+            const n = identity && identity.nickname;
+            return n && n !== "Anonymous" ? sep + n : "";
+        }
+
+        function spoken(sec) {
+            const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60;
+            if (!h) return `${m} minute${m === 1 ? "" : "s"}`;
+            return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? "" : "s"}`;
+        }
+
+        const lateNight = () => { const h = new Date().getHours(); return h >= 22 || h < 5; };
+
+        const STAGES = [
+            [1, (m, n) => [`Settle in${n}. Phone face down, one thing at a time.`, `Deep breath${n}. Let's begin.`]],
+            [15, (m, n) => lateNight()
+                ? [`Late one${n}? Make these minutes count.`, `Only ${m} min. The night is young${n}. Lock in.`]
+                : [`Only ${m} min? Lock in${n}.`, `${m} minutes. Warm-up's over${n}. Lock in.`, `Just getting started${n}. Leave the phone alone.`]],
+            [30, (m, n) => [`${m} minutes in. You're finding your rhythm${n}.`, `Past the hardest part${n}. Keep going.`]],
+            [45, (m, n) => [`Half an hour deep${n}. This is where it sticks.`, `${m} minutes of real focus. Most people never get this far.`]],
+            [60, (m, n) => [`Almost an hour${n}. Push through.`, `${m} minutes. Hour one is right there${n}.`]],
+            [90, (m, n, t) => [`An hour down${n}. That's proper work.`, `${t}. You're in the zone${n}. Stay there.`]],
+            [120, (m, n, t) => [`${t}${n}. Stand, stretch, drink some water, then back to it.`, `Deep work. Future you is grateful${n}.`]],
+            [180, (m, n, t) => [`Two hours${n}. That's what top students do.`, `${t}. Seriously impressive${n}.`]],
+            [Infinity, (m, n, t) => [`${t}${n}. Legendary. Don't forget to eat.`, `Marathon mode${n}. Rest is part of the work too.`]],
+        ];
+
+        function focusLine(sec) {
+            const m = Math.floor(sec / 60);
+            const i = STAGES.findIndex(([upTo]) => m < upTo);
+            const lines = STAGES[i][1](m, who(), spoken(sec));
+            const seed = Math.floor((seat && seat.sessionStart) || sessionStart) + i;
+            return lines[seed % lines.length];
+        }
+
+        // Personal best: the longest sitting this device has finished.
+        const bestSec = () => Number(store("navispace_best_focus")) || 0;
+
+        // Milestones fire once each, when the clock passes them (not on load
+        // for ones already behind you). 15, 30, 45, 60, then every half hour.
+        const MILESTONES = [15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 270, 300];
+        let passed = null, bestCheered = false;
+        function milestoneText(min) {
+            const n = who();
+            if (min === 15) return `15 minutes. You're in${n}.`;
+            if (min === 30) return `30 minutes of real focus${n}. Keep it rolling.`;
+            if (min === 45) return `45 minutes. Don't break the streak now${n}.`;
+            if (min === 60) return `One full hour${n}. Proud of you.`;
+            if (min === 90) return `90 minutes. That's elite focus${n}.`;
+            return `${spoken(min * 60)}${n}. You're unstoppable.`;
+        }
+        function checkMilestones(sec) {
+            if (!seat) return; // wait for the real session time before counting
+            const min = Math.floor(sec / 60);
+            const reached = MILESTONES.filter((x) => x <= min).length;
+            const best = bestSec();
+            if (passed === null) { passed = reached; bestCheered = best > 0 && sec >= best; return; }
+            if (reached > passed) {
+                passed = reached;
+                cheer(milestoneText(MILESTONES[reached - 1]));
+            } else if (!bestCheered && best >= 600 && sec > best) {
+                bestCheered = true;
+                cheer(`New personal best${who()}! Past your ${spoken(best)}.`);
+            }
+        }
+
+        let cheerTimer = null;
+        function cheer(text) {
+            const el = $("cheer");
+            el.textContent = text;
+            el.classList.add("show");
+            if (audio) chime();
+            clearTimeout(cheerTimer);
+            cheerTimer = setTimeout(() => el.classList.remove("show"), 6000);
+        }
+
+        function endingFor(sec) {
+            const n = who(), best = bestSec(), t = spoken(sec), min = sec / 60;
+            const record = sec >= 600 && sec > best;
+            let title, text;
+            if (min < 5) { title = `${t}.`; text = `A short one${n}. Next time, aim for 25 minutes. You've got it.`; }
+            else if (min < 15) { title = `${t}.`; text = `It's a start${n}. Tomorrow, go for half an hour.`; }
+            else if (min < 45) { title = `${t}. Solid.`; text = `That's real work${n}. Go and enjoy your break.`; }
+            else if (min < 90) { title = `${t}. Well done${n}.`; text = "That's a proper study block. Take a real break, you earned it."; }
+            else { title = `${t}. Outstanding${n}.`; text = "Focus like this is how exams get won. Rest up."; }
+            if (record) text = `New personal best! ${text}`;
+            else if (best >= 600) text += ` Your best is ${spoken(best)}.`;
+            return { title, text: `${text} Your seat is free for the next person.`, record };
+        }
+
         let lastPhase = null;
         const isAway = () => Boolean(seat && seat.state === "STEPPED_AWAY");
 
@@ -812,7 +938,8 @@
             }
             if (mode === "open") {
                 $("clock").textContent = hms(elapsed);
-                $("sub").textContent = elapsed < 60 ? "Settle in. The clock is yours." : "Studied this sitting";
+                $("sub").textContent = focusLine(elapsed);
+                checkMilestones(elapsed);
                 return;
             }
             // Pomodoro, counted from when you sat down: 25 minutes of focus, 5 of rest.
@@ -822,7 +949,10 @@
             const focusing = into < FOCUS_MIN * 60;
             const left = focusing ? FOCUS_MIN * 60 - into : cycle - into;
             $("clock").textContent = ms2(left);
-            $("sub").textContent = `${focusing ? "Focus" : "Break"} · round ${round} · ${hms(elapsed)} this sitting`;
+            $("sub").textContent = focusing
+                ? `Focus · round ${round} · ${hms(elapsed)} this sitting`
+                : `Break${who(", ")}. Stand up, look out the window · ${hms(elapsed)} this sitting`;
+            checkMilestones(elapsed);
             const phase = focusing ? "focus" : "break";
             if (lastPhase && phase !== lastPhase) chime();
             lastPhase = phase;
@@ -918,8 +1048,10 @@
             const r = await postScan(libraryId, seatId, "leaving", identity).catch(() => null);
             if (!r || !r.ok) return;
             stopSound();
-            const h = Math.floor(studied / 3600), m = Math.floor(studied / 60) % 60;
-            $("doneTitle").textContent = h ? `${h}h ${m}m. Well done.` : `${m} minute${m === 1 ? "" : "s"}. Well done.`;
+            const end = endingFor(studied);
+            if (end.record) store("navispace_best_focus", String(studied));
+            $("doneTitle").textContent = end.title;
+            $("doneText").textContent = end.text;
             $("done").hidden = false;
         });
 
