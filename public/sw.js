@@ -19,7 +19,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v11";
+const CACHE_NAME = "navispace-shell-v12";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -73,6 +73,10 @@ self.addEventListener("fetch", (event) => {
     // The manifest carries this device's identity (see /manifest.json in
     // server.js), so it must always come from the server, never a cache.
     if (url.pathname === "/manifest.json") return;
+
+    // Video is streamed in byte ranges, which Safari needs straight from the
+    // server; a cached whole-file copy won't play there. Leave media alone.
+    if (url.pathname.startsWith("/media/") || event.request.headers.has("range")) return;
 
     // Only same-origin GETs are cached; fonts, CDN scripts and anything
     // else go straight to the network.
