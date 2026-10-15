@@ -70,10 +70,11 @@
   }
   .top3 .points { color: var(--paper); }
 
-  #empty { text-align: center; color: var(--slate); margin-top: 40px; }
+
 
   /* --- Lamp over the floor ------------------------------------------------ */
   main { max-width: 620px; }
+  .context-bar { max-width: 620px; }
   .board { border-top-color: var(--line); }
   .board-row { border-bottom-color: var(--line); padding: 16px 4px; }
   .board-row.top3 { background: var(--surface); border-radius: 0; margin: 0; padding-left: 14px; padding-right: 14px; border-bottom: 1px solid var(--line); }
@@ -81,7 +82,7 @@
   .rank, .points { font-family: var(--font-mono); font-weight: 500; font-size: 14px; }
   .top3 .rank { color: var(--brass); }
   .name { font: 400 20px/1.2 var(--font-serif); }
-  #empty { font: 400 italic 19px/1.4 var(--font-serif); }
+
 </style>
 </head>
 <body>
@@ -99,7 +100,12 @@
     <p class="page-subtitle">One point for each day you study at a seat. The board starts fresh every week.</p>
 
     <div class="board" id="list"></div>
-    <p id="empty" style="display:none;">No sessions yet this week — check in to get on the board.</p>
+    <div class="empty-state" id="empty" style="display:none;">
+      <div class="ghost-rows" aria-hidden="true"><span>01</span><span>02</span><span>03</span></div>
+      <h2>The board is wide open.</h2>
+      <p>Nobody has studied here yet this week. Check in at a seat today and your name goes straight to the top.</p>
+      <a class="cta-link" id="emptyMap" href="/library.html">Find a free seat</a>
+    </div>
   </main>
 
   <script src="/client.js"></script>
@@ -124,7 +130,8 @@
       list.innerHTML = "";
 
       if (!entries.length) {
-        empty.style.display = "block";
+        empty.style.display = "";
+        document.getElementById("emptyMap").href = libraryUrl("/library.html", libraryId);
         return;
       }
       empty.style.display = "none";
