@@ -258,6 +258,15 @@ function isMine(hash) {
   return !!hash && hash === myHash;
 }
 
+/** Focus time of a sitting, in ms: since check-in, minus every step-away
+ * (including one in progress, so the clock holds still while you're away).
+ * Takes a seat or an /api/held answer; both carry the same fields. */
+function focusElapsedMs(s, now = Date.now()) {
+  if (!s || !s.sessionStart) return 0;
+  const away = (s.awayMs || 0) + (s.awayStart ? Math.max(0, now - s.awayStart) : 0);
+  return Math.max(0, now - s.sessionStart - away);
+}
+
 function setNickname(nickname) {
   const clean = (nickname || "").trim() || "Anonymous";
   localStorage.setItem("navispace_nickname", clean);
