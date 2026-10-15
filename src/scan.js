@@ -61,6 +61,8 @@ function freshSeat(libraryId, seatId) {
     holderNickname: null,
     reminderSent: false,
     sessionStart: null,
+    awayMs: 0,
+    awayStart: null,
   };
 }
 
@@ -186,6 +188,10 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       // When this sitting began — powers "your focus session" and the
       // library's average session length. Kept through step-aways.
       seat.sessionStart = now;
+      // Time spent stepped away doesn't count as focus time: awayStart
+      // marks the current step-away, awayMs totals the finished ones.
+      seat.awayMs = 0;
+      seat.awayStart = null;
       seat.holderToken = identity.token;
       seat.holderNickname = identity.nickname;
       seat.reminderSent = false;
@@ -218,6 +224,7 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       }
       seat.state = SeatState.STEPPED_AWAY;
       seat.stepAwayExpiry = now + config.STEP_AWAY_DURATION_MS;
+      seat.awayStart = now;
       seat.reminderSent = false;
       await saveSeat(seat);
       return { ok: true, seat };
@@ -234,6 +241,8 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       seat.checkInExpiry = now + currentCheckInDurationMs(now);
       seat.stepAwayExpiry = null;
       seat.lastConfirmTime = now;
+      if (seat.awayStart) seat.awayMs = (seat.awayMs || 0) + Math.max(0, now - seat.awayStart);
+      seat.awayStart = null;
       seat.reminderSent = false;
       await saveSeat(seat);
       return { ok: true, seat };
@@ -269,6 +278,8 @@ function resetToAvailable(seat) {
   seat.holderNickname = null;
   seat.reminderSent = false;
   seat.sessionStart = null;
+  seat.awayMs = 0;
+  seat.awayStart = null;
 }
 
 module.exports = {

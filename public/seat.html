@@ -265,8 +265,8 @@
       const isHolder = isMine(seat.holderHash);
 
       // The holder sees how long this sitting has lasted.
-      focusStart = isHolder && seat.state !== "AVAILABLE" ? seat.sessionStart || null : null;
-      document.getElementById("seatFocus").hidden = !focusStart;
+      focusSeat = isHolder && seat.state !== "AVAILABLE" && seat.sessionStart ? seat : null;
+      document.getElementById("seatFocus").hidden = !focusSeat;
       tickSeatFocus();
 
       if (seat.state === "AVAILABLE") {
@@ -321,12 +321,13 @@
     // Every action button shows it's working the moment it's tapped and
     // ignores repeat taps until the server answers.
     let busy = false;
-    let focusStart = null;
+    let focusSeat = null;
     function tickSeatFocus() {
-      if (!focusStart) return;
-      const s = Math.max(0, Math.floor((Date.now() - focusStart) / 1000));
+      if (!focusSeat) return;
+      const s = Math.floor(focusElapsedMs(focusSeat) / 1000);
       const p = (n) => String(n).padStart(2, "0");
-      document.getElementById("seatFocusTime").textContent = `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`;
+      const t = `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`;
+      document.getElementById("seatFocusTime").textContent = focusSeat.state === "STEPPED_AWAY" ? `${t} · paused` : t;
     }
     setInterval(tickSeatFocus, 1000);
 
