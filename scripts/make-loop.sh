@@ -4,7 +4,7 @@
 # first frame, shown the instant a scene is picked while the video loads.
 #
 #   scripts/make-loop.sh <input video> <scene key>
-#   scripts/make-loop.sh ~/Downloads/koi.mp4 koi   ->  public/media/koi.mp4 + koi.jpg
+#   scripts/make-loop.sh ~/Downloads/koi.mp4 koi   ->  public/media/koi.mp4 + koi.webp
 #
 # Scene keys used by public/focus.html: rain, forest, ocean, stars, koi, study.
 set -euo pipefail
@@ -26,6 +26,6 @@ ffmpeg -v error -y -i "$in" -filter_complex "\
   -map "[v]" -an -c:v libx264 -preset slow -crf 29 -profile:v high -movflags +faststart \
   "$out/$key.mp4"
 
-ffmpeg -v error -y -i "$out/$key.mp4" -frames:v 1 -vf "scale='if(gte(iw,ih),960,-2)':'if(gte(iw,ih),-2,960)'" -q:v 5 "$out/$key.jpg"
+ffmpeg -v error -y -i "$out/$key.mp4" -frames:v 1 -vf "scale='if(gte(iw,ih),960,-2)':'if(gte(iw,ih),-2,960)'" -c:v libwebp -quality 72 "$out/$key.webp"
 
-ls -la "$out/$key.mp4" "$out/$key.jpg"
+ls -la "$out/$key.mp4" "$out/$key.webp"
