@@ -20,7 +20,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v18";
+const CACHE_NAME = "navispace-shell-v19";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -141,6 +141,13 @@ self.addEventListener("push", (event) => {
         }
     }
 
+    // Tell any open page whether the notification arrived and was handed
+    // to the system, so the page's notification test can say where a
+    // missing one went missing (the browser, or the computer's settings).
+    const report = (shown, error) =>
+        self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) =>
+            cs.forEach((c) => c.postMessage({ type: "navispace-push", shown, error: error || null })));
+
     event.waitUntil(
         self.registration.showNotification(payload.title, {
             body: payload.body,
@@ -150,7 +157,7 @@ self.addEventListener("push", (event) => {
             vibrate: [120, 60, 120],
             data: { seatId: payload.seatId || null, libraryId: payload.libraryId || null, url: payload.url || null },
             tag: payload.tag || (payload.seatId ? `navispace-${payload.libraryId}-${payload.seatId}` : "navispace"),
-        })
+        }).then(() => report(true), (err) => report(false, String((err && err.message) || err)))
     );
 });
 
