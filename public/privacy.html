@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121614" />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NaviSpace" />
+    <link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>NaviSpace — Privacy</title>
+    <meta name="description" content="What NaviSpace keeps about you, for how long, and how to delete it." />
+    <style>
+        main {
+            max-width: 720px;
+        }
+
+        .privacy h2 {
+            margin: 40px 0 12px;
+            font: 400 clamp(24px, 3vw, 30px)/1.15 var(--font-serif);
+        }
+
+        .privacy p,
+        .privacy li {
+            line-height: 1.6;
+        }
+
+        .privacy p {
+            margin: 0 0 14px;
+            max-width: 62ch;
+        }
+
+        .privacy ul {
+            margin: 0 0 14px;
+            padding-left: 20px;
+        }
+
+        .keep {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8px 0 6px;
+            font-size: 15px;
+        }
+
+        .keep th,
+        .keep td {
+            text-align: left;
+            vertical-align: top;
+            padding: 12px 12px 12px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .keep th {
+            font: 400 11px/1.3 var(--font-mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border-bottom-color: var(--line-strong);
+        }
+
+        .keep td:first-child {
+            color: var(--text);
+            width: 26%;
+        }
+
+        .keep td:last-child {
+            white-space: nowrap;
+            color: var(--brass);
+            font: 400 13px/1.6 var(--font-mono);
+        }
+
+        .forget {
+            margin-top: 18px;
+            padding: 22px;
+            border: 1px solid var(--line-strong);
+            background: var(--panel);
+        }
+
+        .forget p {
+            margin: 0 0 16px;
+        }
+
+        .forget .btn {
+            width: auto;
+            display: inline-block;
+            margin: 0;
+        }
+
+        .forget .result {
+            margin: 14px 0 0;
+            font: 400 italic 16px/1.45 var(--font-serif);
+        }
+
+        .forget .result:empty {
+            display: none;
+        }
+
+        @media (max-width: 560px) {
+
+            .keep,
+            .keep tbody,
+            .keep tr,
+            .keep td {
+                display: block;
+                width: auto !important;
+            }
+
+            .keep thead {
+                display: none;
+            }
+
+            .keep tr {
+                padding: 12px 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .keep td {
+                border: 0;
+                padding: 2px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="topbar">
+        <a class="wordmark" href="/"><span class="wordmark-mark"></span>NaviSpace</a>
+        <nav class="topnav" aria-label="Sections">
+            <a href="/">Home</a>
+            <a href="/library.html">Map</a>
+            <a href="/leaderboard.html">Study board</a>
+            <a href="/lost-found.html">Lost &amp; found</a>
+        </nav>
+    </header>
+
+    <main class="privacy">
+        <p class="eyebrow">Privacy</p>
+        <h1 class="page-title">What NaviSpace <em>keeps.</em></h1>
+        <p class="page-subtitle">No accounts, no email addresses, no phone numbers, no location and no tracking. Here is
+            everything NaviSpace does keep, why, and for how long.</p>
+
+        <h2>Your device and your nickname</h2>
+        <p>The first time you open NaviSpace, your phone or computer makes up a random code for itself. It isn't linked to
+            your name, student number, email or phone. It's how NaviSpace knows this seat, this post or this conversation
+            is yours. Other students never see it: the site only shares a scrambled version.</p>
+        <p>Your nickname is whatever you typed. It appears next to your seat, on the study board, and on things you post
+            or claim in Lost &amp; Found. Use a nickname rather than your full name if you prefer.</p>
+
+        <h2>What's kept, and for how long</h2>
+        <table class="keep">
+            <thead>
+                <tr>
+                    <th>What</th>
+                    <th>Why</th>
+                    <th>How long</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>The seat you hold</td>
+                    <td>So the map shows it's taken and the library keeps it for you.</td>
+                    <td>Until you leave</td>
+                </tr>
+                <tr>
+                    <td>Your sittings</td>
+                    <td>When you sat, where, and for how long: "Your week" on the home page.</td>
+                    <td>8 weeks</td>
+                </tr>
+                <tr>
+                    <td>Study board points</td>
+                    <td>The days you studied this week, with your nickname.</td>
+                    <td>2 weeks after you last studied</td>
+                </tr>
+                <tr>
+                    <td>Notification sign-up</td>
+                    <td>The address your browser gives NaviSpace for sending seat reminders and Lost &amp; Found
+                        replies.</td>
+                    <td>Until you turn them off</td>
+                </tr>
+                <tr>
+                    <td>Lost &amp; Found posts</td>
+                    <td>The photo, description and place you post. Everyone can see these.</td>
+                    <td>30 days, or until returned</td>
+                </tr>
+                <tr>
+                    <td>Lost &amp; Found messages</td>
+                    <td>Only the finder and the claimant can read them. If either of you reports the conversation,
+                        library staff can read it too.</td>
+                    <td>Until returned, at most 30 days</td>
+                </tr>
+                <tr>
+                    <td>Usage counts</td>
+                    <td>How many check-ins a day, and how many different devices, using scrambled codes only. Shows the
+                        library how the space is used.</td>
+                    <td>120 days</td>
+                </tr>
+                <tr>
+                    <td>How full the library is</td>
+                    <td>Averages per hour, for "Busiest" on the home page. About no one in particular.</td>
+                    <td>Ongoing</td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="muted" style="font-size:14px;color:var(--muted)">Your browser also keeps your nickname, your device code
+            and a few settings on your own device.</p>
+
+        <h2>Who handles it</h2>
+        <p>NaviSpace runs on Render (the server) and Upstash (the database), which store it on NaviSpace's behalf.
+            Notifications travel through Apple's, Google's or Mozilla's push service, depending on your browser. Nothing is
+            sold, shared for advertising, or used to track you across other websites. The site loads nothing from other
+            websites: no ads, no analytics, no outside fonts.</p>
+        <p>Library staff can see who holds which seat (by nickname), free a seat someone forgot, see Lost &amp; Found posts
+            and read a conversation only after it's reported.</p>
+
+        <h2>Your rights</h2>
+        <p>Under South Africa's Protection of Personal Information Act (POPIA) you can ask what's kept about you, have it
+            corrected, or have it deleted. Your nickname can be changed on any seat page. To delete everything kept under
+            this device, use the button below.</p>
+        <p id="contact">Questions? Ask at the library's front desk.</p>
+
+        <div class="forget" id="forgetBox">
+            <p><b>Delete my data on this device.</b> This frees any seat you hold, deletes your sittings, study board points
+                and notification sign-up, removes your Lost &amp; Found posts and claims with their conversations, and
+                forgets your nickname here. It can't be undone.</p>
+            <button class="btn" type="button" id="forget">Delete my data</button>
+            <p class="result" id="forgetResult" role="status"></p>
+        </div>
+    </main>
+
+    <footer class="sitefoot">
+        <span>NaviSpace · Wits study spaces</span>
+        <span>Privacy</span>
+    </footer>
+
+    <script src="/client.js"></script>
+    <script>
+        getServerConfig().then((cfg) => {
+            if (cfg && cfg.PRIVACY_CONTACT) {
+                const c = document.getElementById("contact");
+                c.textContent = "Questions or requests: ";
+                const a = document.createElement(/@/.test(cfg.PRIVACY_CONTACT) ? "a" : "span");
+                if (a.tagName === "A") a.href = `mailto:${cfg.PRIVACY_CONTACT}`;
+                a.textContent = cfg.PRIVACY_CONTACT;
+                c.append(a, ".");
+            }
+        }).catch(() => { });
+
+        document.getElementById("forget").onclick = async () => {
+            if (!confirm("Delete everything NaviSpace keeps about this device? This can't be undone.")) return;
+            const btn = document.getElementById("forget");
+            const out = document.getElementById("forgetResult");
+            btn.disabled = true;
+            let token = null;
+            try { token = localStorage.getItem("navispace_token"); } catch { }
+            try {
+                if (token) {
+                    const res = await fetch("/api/me/forget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) });
+                    const r = await res.json();
+                    if (!r.ok) throw new Error(r.reason || "failed");
+                }
+                // This device too: its notification sign-up, then its local storage.
+                if ("serviceWorker" in navigator) {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+                    if (sub) await sub.unsubscribe().catch(() => { });
+                }
+                try {
+                    Object.keys(localStorage).filter((k) => k.startsWith("navispace_")).forEach((k) => localStorage.removeItem(k));
+                } catch { }
+                document.cookie = "ns_handoff=; path=/; max-age=0";
+                out.textContent = "Done. Everything kept under this device has been deleted. If you use NaviSpace again, it starts fresh.";
+                btn.hidden = true;
+            } catch (err) {
+                out.textContent = err.message === "slow_down" ? "Too many tries. Wait a while and try again." : "Couldn't delete it right now. Check your connection and try again.";
+                btn.disabled = false;
+            }
+        };
+    </script>
+</body>
+
+</html>

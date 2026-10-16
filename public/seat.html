@@ -409,6 +409,10 @@
 
     async function act(action) {
       const result = await postScan(libraryId, seatId, action, identity);
+      if (result.reason === "slow_down") {
+        toast(`That's a lot of taps. Try again in ${result.retryAfter || 30} seconds.`);
+        return;
+      }
       if (!result.ok) {
         if (result.reason === "library_closed") {
           const h = result.hours || {};
@@ -484,7 +488,9 @@
 
     document.getElementById("reportLink").onclick = async () => {
       const result = await reportSeatWrong(libraryId, seatId, identity);
-      if (result.corrected) {
+      if (result.reason === "slow_down") {
+        toast("You've reported a lot of seats. Try again in a few minutes.");
+      } else if (result.corrected) {
         toast("Thanks — enough reports came in, seat corrected to AVAILABLE.");
         refresh();
       } else {
