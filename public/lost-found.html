@@ -558,56 +558,35 @@
             markSeen(threadItem.id, last ? last.at : 0);
         }
 
-        // Sends a test and follows it all the way: did the server send it, did
-        // this browser receive it, and did the system accept it? A browser
-        // that never receives it gets a fresh subscription and a second try.
-        function pushArrives(ms) {
-            return new Promise((resolve) => {
-                if (!navigator.serviceWorker) return resolve(null);
-                const done = (v) => { navigator.serviceWorker.removeEventListener("message", on); clearTimeout(timer); resolve(v); };
-                const on = (e) => { if (e.data && e.data.type === "navispace-push") done(e.data); };
-                const timer = setTimeout(() => done(null), ms);
-                navigator.serviceWorker.addEventListener("message", on);
-            });
-        }
-        async function testNotifications() {
-            const mac = /Macintosh/.test(navigator.userAgent);
-            const where = mac
-                ? "your Mac is hiding it. Open System Settings → Notifications, find NaviSpace (and your browser) and turn on Allow notifications with the Banners style. Banners don't show for the app you're using, so switch to another app and try again, or check Notification Centre (click the clock)."
-                : "this device is hiding it. Allow notifications for NaviSpace and your browser in the device's settings, and check Do Not Disturb.";
-            for (const fresh of [false, true]) {
-                const arrived = pushArrives(15000);
-                const r = await enablePushReminders(identity, { fresh });
-                if (!r.ok) return "Couldn't sign this device up for notifications.";
-                if (!r.testSent) return `The server couldn't send it (${r.testReason || "unknown reason"}).`;
-                const got = await arrived;
-                if (got && got.shown) return `It reached this browser and was handed to the system. If you didn't see it, ${where}`;
-                if (got) return `It reached this browser, but the system refused to show it (${got.error}). Allow notifications for this site in your browser settings.`;
-                // Never arrived: try once more with a brand-new subscription.
-            }
-            return "The server sent it twice, but this browser never received it. Its connection to the push service may be blocked (a VPN or firewall can do this), or try another browser.";
-        }
-
-        // Replies arrive as notifications on phones that allow them.
+        // Replies arrive as notifications on devices that allow them. The full
+        // walkthrough for this device lives on the home page (/#notifications).
         function offerNotifications() {
             const tip = document.getElementById("threadTip");
             tip.textContent = "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
-            if (!("Notification" in window) && !isIosNotInstalled()) return;
-            // Already allowed: make sure this device is signed up, without asking
-            // again, and offer a test so a silent computer can be diagnosed.
-            if ("Notification" in window && Notification.permission === "granted") {
+            const state = notificationState();
+            const help = document.createElement("a");
+            help.href = "/#notifications";
+            help.textContent = "How to turn them on";
+            if (state === "unsupported") return;
+            if (state === "on") {
+                // Already allowed: make sure this device is signed up, quietly.
                 enablePushReminders(identity, { quiet: true }).catch(() => { });
                 const t = document.createElement("button");
                 t.type = "button";
-                t.textContent = "Send me a test notification";
+                t.textContent = "send a test";
                 t.onclick = async () => {
-                    t.disabled = true;
                     const out = document.createElement("span");
                     t.replaceWith(out);
-                    out.textContent = "Sending a test…";
-                    out.textContent = await testNotifications();
+                    out.textContent = "sending a test…";
+                    const r = await testPushNotifications(identity);
+                    out.textContent = r.hidden ? "it reached this device but is being hidden. " : r.message + " ";
+                    if (r.hidden) out.append(help);
                 };
-                tip.append(" Notifications are on for this device. ", t, ".");
+                tip.append(" Notifications are on for this device: ", t, ".");
+                return;
+            }
+            if (state === "blocked" || state === "needs_home_screen") {
+                tip.append(` ${state === "blocked" ? "Notifications are blocked here." : "On iPhone, add NaviSpace to your Home Screen to get notifications."} `, help, ".");
                 return;
             }
             const b = document.createElement("button");
@@ -615,13 +594,12 @@
             b.textContent = "Get a notification when they reply";
             b.onclick = async () => {
                 const r = await enablePushReminders(identity);
-                // Say what really happened: a test notification is sent now.
-                b.replaceWith(document.createTextNode(
-                    r.ok && r.testSent ? "Notifications are on. You should have just got a test one." :
-                    r.ok ? "Saved, but the test notification didn't go through. Try again in a minute." :
-                    r.reason === "ios_not_installed" ? "On iPhone, add NaviSpace to your Home Screen first." :
-                    r.reason === "permission_denied" ? "Notifications are blocked for this site in your browser settings." :
-                    "Notifications aren't available in this browser."));
+                const out = document.createElement("span");
+                b.replaceWith(out);
+                out.textContent = r.ok && r.testSent ? "Notifications are on. You should have just got a test one. " :
+                    r.ok ? "Saved, but the test notification didn't go through. " :
+                    r.reason === "permission_denied" ? "Notifications were blocked. " : "Notifications aren't available here. ";
+                if (!(r.ok && r.testSent)) out.append(help);
             };
             tip.append(" ", b, ".");
         }
