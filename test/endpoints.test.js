@@ -21,7 +21,7 @@ async function withServer(fn) {
   }
 }
 
-test.beforeEach(() => store.clear());
+test.beforeEach(() => { store.clear(); require("../src/ratelimit").reset(); });
 
 test("/healthz answers without touching the store", async () => {
   await withServer(async (base) => {
@@ -319,5 +319,47 @@ test("a quiet push re-sync saves the subscription without a test notification", 
     assert.equal(body.ok, true);
     assert.equal(body.testReason, "quiet");
     assert.equal((await store.get("push:tok-sync")).endpoint, "https://push.example/x");
+  });
+});
+
+test("speed limits: a device that keeps scanning is told to slow down", async () => {
+  await withServer(async (base) => {
+    const [id] = getSeatIds("engineering");
+    const scan = () => fetch(`${base}/api/library/engineering/scan/${id}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "stillHere", token: "tok-spam", nickname: "Spam" }),
+    });
+    const statuses = [];
+    for (let i = 0; i < 22; i++) statuses.push((await scan()).status);
+    assert.ok(!statuses.slice(0, 20).includes(429), "the first 20 a minute are fine");
+    const last = await scan();
+    assert.equal(last.status, 429);
+    const body = await last.json();
+    assert.equal(body.reason, "slow_down");
+    assert.ok(body.retryAfter > 0);
+    assert.ok(Number(last.headers.get("retry-after")) > 0);
+  });
+});
+
+test("delete my data: frees the seat and removes history, sign-up, posts and claims", async () => {
+  await withServer(async (base) => {
+    const post = (p, body) => fetch(`${base}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+    const me = "tok-forget-me";
+    const [seat] = getSeatIds("engineering");
+    await post(`/api/library/engineering/scan/${seat}`, { action: "checkIn", token: me, nickname: "Gone" });
+    await store.put(`history:${me}`, [{ seat, start: 1, end: 2, ms: 1 }]);
+    await store.put(`push:${me}`, { endpoint: "https://push.example/x" });
+    const mine = (await post("/api/library/engineering/lostfound", { description: "Mine", photoDataUrl: "data:image/jpeg;base64,AAAA", token: me, nickname: "Gone" })).item;
+    const theirs = (await post("/api/library/engineering/lostfound", { description: "Theirs", photoDataUrl: "data:image/jpeg;base64,BBBB", token: "tok-other", nickname: "Other" })).item;
+    await post(`/api/library/engineering/lostfound/${theirs.id}/claim`, { token: me, nickname: "Gone", note: "mine!" });
+
+    const r = await post("/api/me/forget", { token: me });
+    assert.deepEqual(r.removed, { seats: 1, items: 1, claims: 1 });
+    assert.equal((await post("/api/held", { token: me })).seatId, null);
+    assert.equal(await store.get(`history:${me}`), null);
+    assert.equal(await store.get(`push:${me}`), null);
+    const board = await (await fetch(`${base}/api/library/engineering/lostfound`)).json();
+    assert.deepEqual(board.map((i) => [i.description, i.status]), [["Theirs", "unclaimed"]]);
+    assert.equal(board.some((i) => i.id === mine.id), false);
   });
 });

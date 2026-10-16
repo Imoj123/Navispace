@@ -88,4 +88,11 @@ function reset() {
   current.clear();
 }
 
-module.exports = { observe, busiestWindow, reset };
+/** How full the library usually is per hour of the day: { "9": 0.42, ... } (0–1). */
+async function hourlyAverages(libraryId) {
+  const stats = await store.get(busyKey(libraryId));
+  if (!stats) return {};
+  return Object.fromEntries(Object.entries(stats.hours).map(([h, s]) => [h, Math.round(s.avg * 100) / 100]));
+}
+
+module.exports = { observe, busiestWindow, hourlyAverages, reset };

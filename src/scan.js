@@ -116,7 +116,9 @@ async function creditSessionDay(libraryId, token, nickname, seatId, now = Date.n
 
   student.weeklySessionDays += 1;
   student.nickname = nickname; // keep nickname fresh in case it changed
-  await store.put(sKey, student);
+  // Gone two weeks after the last study day (the privacy page promises a
+  // rolling week; the extra week covers the window that's still counting).
+  await store.put(sKey, student, { expirationTtl: 2 * config.LEADERBOARD_WINDOW_DAYS * 24 * 60 * 60 });
   return true;
 }
 

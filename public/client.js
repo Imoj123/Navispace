@@ -389,7 +389,7 @@ function showWelcome() {
       <span class="welcome-mark" aria-hidden="true">N</span>
       <p class="welcome-eyebrow">Welcome to NaviSpace</p>
       <h2 id="welcomeTitle">What should we call you?</h2>
-      <p class="welcome-text">Your nickname goes on the study board and on any seat you check into. No sign-up, no email.</p>
+      <p class="welcome-text">Your nickname goes on the study board and on any seat you check into. No sign-up, no email. <a href="/privacy.html">What's kept</a>.</p>
       <label class="welcome-label" for="welcomeName">Nickname</label>
       <input id="welcomeName" type="text" maxlength="24" autocomplete="nickname" autocapitalize="words" placeholder="e.g. Lerato" required />
       <p class="welcome-error" id="welcomeError" hidden>Pick a name with at least two letters.</p>
@@ -430,6 +430,8 @@ function showWelcome() {
   let later = null;
   try { later = sessionStorage.getItem("navispace_welcome_later"); } catch { }
   if (savedNickname() || later) return;
+  // Someone reading the privacy notice shouldn't be asked for a name first.
+  if (window.location.pathname === "/privacy.html") return;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", showWelcome);
   else showWelcome();
 })();
@@ -717,6 +719,11 @@ function markLostFoundAtDesk(libraryId, itemId, identity) {
 /** The private finder–owner thread for a claimed item. */
 function getLostFoundThread(libraryId, itemId, identity) {
   return lostFoundPost(libraryId, itemId, "thread", { token: identity.token });
+}
+
+/** Either person in a thread reports it to library staff. */
+function reportLostFoundThread(libraryId, itemId, identity) {
+  return lostFoundPost(libraryId, itemId, "thread/report", { token: identity.token });
 }
 
 function sendLostFoundMessage(libraryId, itemId, identity, text) {
