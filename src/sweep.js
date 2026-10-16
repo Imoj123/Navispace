@@ -2,6 +2,7 @@
 
 const { store } = require("./store");
 const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
+const { recordSitting } = require("./history");
 
 /**
  * Reclaims seats whose expiry has passed without a confirming scan —
@@ -33,6 +34,8 @@ async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
       now > seat.stepAwayExpiry;
 
     if (occupiedExpired || stepAwayExpired) {
+      // The sitting ended when its hold ran out, not when the sweep noticed.
+      await recordSitting(libraryId, seat, occupiedExpired ? seat.checkInExpiry : seat.stepAwayExpiry);
       resetToAvailable(seat);
       await saveSeat(seat);
       reclaimed.push(seatId);
