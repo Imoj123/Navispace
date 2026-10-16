@@ -17,7 +17,7 @@ test.beforeEach(() => {
     store.clear();
 });
 
-test("sends exactly one reminder within the lead window, and only once", async (t) => {
+test("a check inside the last 5 minutes sends one reminder, not two, and only once", async (t) => {
     const sent = [];
     t.mock.method(push, "sendPush", async (token, payload) => {
         sent.push({ token, payload });
@@ -37,7 +37,7 @@ test("sends exactly one reminder within the lead window, and only once", async (
     // constant since the actual duration used depends on whether "now"
     // falls in peak hours (see config.js / scan.js).
     const duration = currentCheckInDurationMs(now);
-    const nearExpiry = now + duration - config.REMINDER_LEAD_MS + 1000;
+    const nearExpiry = now + duration - config.REMINDER_LEADS_MS[1] + 1000;
     reminded = await sendExpiryReminders(LIB, [SEAT_ID], nearExpiry);
     assert.deepEqual(reminded, [SEAT_ID]);
     assert.equal(sent.length, 1);
@@ -51,10 +51,10 @@ test("sends exactly one reminder within the lead window, and only once", async (
     assert.equal(sent.length, 1, "should not double-send within the same expiry window");
 
     const seat = await getSeat(LIB, SEAT_ID);
-    assert.equal(seat.reminderSent, true);
+    assert.equal(seat.remindersSent, 2);
 });
 
-test("re-confirming resets reminderSent so a new reminder can go out later", async (t) => {
+test("re-confirming resets remindersSent so a new reminder can go out later", async (t) => {
     const sent = [];
     t.mock.method(push, "sendPush", async (token, payload) => {
         sent.push({ token, payload });
@@ -65,17 +65,17 @@ test("re-confirming resets reminderSent so a new reminder can go out later", asy
     await handleScan(LIB, SEAT_ID, "checkIn", alice, now);
 
     const duration = currentCheckInDurationMs(now);
-    const nearExpiry = now + duration - config.REMINDER_LEAD_MS + 1000;
+    const nearExpiry = now + duration - config.REMINDER_LEADS_MS[1] + 1000;
     await sendExpiryReminders(LIB, [SEAT_ID], nearExpiry);
     assert.equal(sent.length, 1);
 
     // Confirming ("stillHere") pushes expiry out again and clears the flag.
     await handleScan(LIB, SEAT_ID, "stillHere", alice, nearExpiry);
     let seat = await getSeat(LIB, SEAT_ID);
-    assert.equal(seat.reminderSent, false);
+    assert.equal(seat.remindersSent, 0);
 
     const duration2 = currentCheckInDurationMs(nearExpiry);
-    const nextNearExpiry = nearExpiry + duration2 - config.REMINDER_LEAD_MS + 1000;
+    const nextNearExpiry = nearExpiry + duration2 - config.REMINDER_LEADS_MS[1] + 1000;
     const reminded = await sendExpiryReminders(LIB, [SEAT_ID], nextNearExpiry);
     assert.deepEqual(reminded, [SEAT_ID]);
     assert.equal(sent.length, 2, "a fresh confirmation should allow a fresh reminder");
@@ -91,4 +91,26 @@ test("never sends for an AVAILABLE (unheld) seat", async (t) => {
     const reminded = await sendExpiryReminders(LIB, [SEAT_ID], Date.now());
     assert.deepEqual(reminded, []);
     assert.equal(sent.length, 0);
+});
+
+test("reminds at 10 minutes and again at 5 minutes before the seat frees up", async (t) => {
+    const sent = [];
+    t.mock.method(push, "sendPush", async (token, payload) => {
+        sent.push(payload.body);
+        return { sent: true };
+    });
+
+    const now = Date.now();
+    await handleScan(LIB, SEAT_ID, "checkIn", alice, now);
+    const expiry = now + config.CHECK_IN_DURATION_MS;
+    const min = 60 * 1000;
+
+    assert.deepEqual(await sendExpiryReminders(LIB, [SEAT_ID], expiry - 11 * min), []);
+    assert.deepEqual(await sendExpiryReminders(LIB, [SEAT_ID], expiry - 10 * min), [SEAT_ID]);
+    assert.deepEqual(await sendExpiryReminders(LIB, [SEAT_ID], expiry - 8 * min), []);
+    assert.deepEqual(await sendExpiryReminders(LIB, [SEAT_ID], expiry - 5 * min), [SEAT_ID]);
+    assert.deepEqual(await sendExpiryReminders(LIB, [SEAT_ID], expiry - 2 * min), []);
+    assert.equal(sent.length, 2);
+    assert.match(sent[0], /in 10 min/);
+    assert.match(sent[1], /in 5 min/);
 });

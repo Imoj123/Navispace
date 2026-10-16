@@ -2,8 +2,8 @@
 
 /**
  * When a library is open: weekdays between its plan's hours.opens and
- * hours.closes, in the library's own time zone, except South African
- * public holidays. Everything here works from the library's local clock,
+ * hours.closes (or an earlier close for one day, e.g. hours.closesOn.Fri),
+ * in the library's own time zone, except South African public holidays. Everything here works from the library's local clock,
  * never the server's (Render runs in UTC).
  *
  * Extra closed days (a university recess, an election day) can be added
@@ -84,6 +84,12 @@ function extraClosedDays() {
   return new Set(String(process.env.CLOSED_DAYS || "").split(",").map((s) => s.trim()).filter(Boolean));
 }
 
+/** Closing time on a weekday (0 is Monday), e.g. "17:00" on Fridays. */
+function closesOn(hours, weekday) {
+  const special = hours && hours.closesOn && hours.closesOn[WEEKDAYS[weekday]];
+  return special || (hours && hours.closes) || DEFAULT_CLOSES;
+}
+
 /** Why the library is closed all day on this local date, or null. */
 function closedDayReason(parts) {
   if (parts.weekday >= 5) return "Weekend";
@@ -100,8 +106,8 @@ function closedDayReason(parts) {
  */
 function openStatus(hours, ms = Date.now()) {
   const opens = (hours && hours.opens) || DEFAULT_OPENS;
-  const closes = (hours && hours.closes) || DEFAULT_CLOSES;
   const p = localParts(ms);
+  const closes = closesOn(hours, p.weekday);
   const closedFor = closedDayReason(p);
   const inHours = p.minutes >= toMinutes(opens) && p.minutes < toMinutes(closes, DEFAULT_CLOSES);
   const regularOpen = !closedFor && inHours;
@@ -126,7 +132,7 @@ function openStatus(hours, ms = Date.now()) {
  */
 function closedAtToday(hours, ms = Date.now()) {
   const p = localParts(ms);
-  const close = toMinutes((hours && hours.closes) || DEFAULT_CLOSES, DEFAULT_CLOSES);
+  const close = toMinutes(closesOn(hours, p.weekday), DEFAULT_CLOSES);
   if (closedDayReason(p) || p.minutes < close) return null;
   return ms - (p.minutes - close) * 60 * 1000 - (ms % 60000);
 }

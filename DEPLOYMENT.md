@@ -39,13 +39,13 @@ Generate the VAPID keys once and keep them. Changing them invalidates every exis
    - The installed app takes over your Safari identity and opens on your seat. Tap **Enable seat reminders** there.
    - If the app shows the seat as just "Occupied" instead of "You're checked in", the identity didn't carry over. Delete the icon, reload the seat page in Safari, and add it again.
    - If the test notification doesn't arrive, check Render → Logs for a `[push] VAPID_SUBJECT ... malformed` warning. It must be exactly `mailto:you@domain`, with no spaces.
-3. A reminder arrives 5 minutes before a seat would free up (`REMINDER_LEAD_MS` in `src/config.js`).
+3. Reminders arrive 10 minutes and again 5 minutes before a seat would free up (`REMINDER_LEADS_MS` in `src/config.js`). A check-in holds the seat for 2 hours, and stepping away holds it for 1 hour 15 minutes.
 
 ## Opening hours
 
-The library is open on weekdays from 08:00 to 20:00, Johannesburg time. It's closed on weekends and South African public holidays, including Good Friday, Family Day, and Sunday holidays moved to the Monday. Outside those hours, check-ins are refused and every held seat is freed at closing time.
+The library is open on weekdays from 08:00, Johannesburg time. It closes at 20:00, and at 17:00 on Fridays. It's closed on weekends and South African public holidays, including Good Friday, Family Day, and Sunday holidays moved to the Monday. Outside those hours, check-ins are refused and every held seat is freed at closing time.
 
-- **Times:** `hours.opens` / `hours.closes` in `src/layouts/engineering.json`.
+- **Times:** `hours.opens`, `hours.closes` and `hours.closesOn` (e.g. `{"Fri": "17:00"}`) in `src/layouts/engineering.json`.
 - **Busiest hours:** learned from how full the library really is. The plan's `hours.busiest` is shown until every open hour has about three days of data.
 - **Optional environment variables:**
 

@@ -435,9 +435,9 @@
 
     function scheduleNextPrompt() {
       clearTimeout(promptTimer);
-      // 15 min in config.js; kept short here isn't necessary since this
-      // is just the client timer — server owns the real expiry.
-      promptTimer = setTimeout(showStillStudyingPrompt, 15 * 60 * 1000);
+      // STILL_HERE_PROMPT_INTERVAL_MS in config.js. Just the client timer:
+      // the server owns the real expiry.
+      promptTimer = setTimeout(showStillStudyingPrompt, 50 * 60 * 1000);
     }
 
     function showStillStudyingPrompt() {

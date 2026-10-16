@@ -9,25 +9,17 @@
 
 module.exports = {
   // How long a checked-in seat stays OCCUPIED without a "still here"
-  // confirmation before the sweep reclaims it.
-  // Real deployment: several hours (a full study session).
-  CHECK_IN_DURATION_MS: 60 * 60 * 1000, // 1 hour
+  // confirmation before the sweep reclaims it. The same all day: there's
+  // no shorter hold at busy times.
+  CHECK_IN_DURATION_MS: 2 * 60 * 60 * 1000, // 2 hours
 
-  // Shorter check-in window during peak hours (extension #5),
-  // applied on top of CHECK_IN_DURATION_MS.
-  PEAK_CHECK_IN_DURATION_MS: 20 * 60 * 1000, // 20 min
-  PEAK_HOURS_START: 10, // 10am local
-  PEAK_HOURS_END: 18, // 6pm local
+  // How long a seat stays STEPPED_AWAY (a scanned "I'm stepping away",
+  // long enough for a lecture or lunch) before the sweep frees it.
+  STEP_AWAY_DURATION_MS: 75 * 60 * 1000, // 1 h 15 min
 
-  // How long a seat stays STEPPED_AWAY (belongings-style hold, minus
-  // the desk sensor — here it's purely a scanned "I'm stepping away")
-  // before the sweep frees it.
-  // Real deployment: 20-30 min.
-  STEP_AWAY_DURATION_MS: 10 * 60 * 1000, // 10 min
-
-  // How often the client prompts "still studying?" while checked in.
-  // Real deployment: ~45 min.
-  STILL_HERE_PROMPT_INTERVAL_MS: 15 * 60 * 1000, // 15 min
+  // How often the seat page asks "still studying?" while checked in.
+  // Answering confirms the seat, so the 2-hour hold starts again.
+  STILL_HERE_PROMPT_INTERVAL_MS: 50 * 60 * 1000, // 50 min
 
   // How long a "still here" prompt stays actionable client-side
   // before it's just dismissed (backend sweep is the real safety net).
@@ -52,12 +44,10 @@ module.exports = {
 
   // Web Push reminders (extension #5): send a "your seat is about to
   // free up" push this long before checkInExpiry/stepAwayExpiry hits,
-  // and check for seats needing one this often. One reminder per
-  // expiry window (see seat.reminderSent in scan.js), so nobody gets
-  // spammed while sitting there.
-  // Real deployment: lead time around 10 min is probably more useful
-  // than this short testing default.
-  REMINDER_LEAD_MS: 5 * 60 * 1000, // 5 min
+  // and check for seats needing one this often. One reminder at each
+  // lead time per expiry window (see seat.remindersSent in scan.js), so
+  // nobody gets spammed while sitting there.
+  REMINDER_LEADS_MS: [10 * 60 * 1000, 5 * 60 * 1000], // 10 min, then 5 min
   REMINDER_CHECK_INTERVAL_MS: 60 * 1000, // 1 min
 
   // Lost & Found: items auto-expire after this long so a forgotten

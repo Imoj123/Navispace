@@ -29,6 +29,16 @@ test("open on weekdays from 08:00 to 20:00, Johannesburg time", () => {
   assert.equal(openStatus(HOURS, sast(2026, 10, 15, 21)).nextOpen, "tomorrow");
 });
 
+test("closes at 17:00 on Fridays", () => {
+  const withFriday = { ...HOURS, closesOn: { Fri: "17:00" } };
+  assert.equal(openStatus(withFriday, sast(2026, 10, 16, 16, 59)).open, true);
+  const friday = openStatus(withFriday, sast(2026, 10, 16, 17));
+  assert.equal(friday.open, false);
+  assert.equal(friday.nextOpen, "Monday");
+  assert.equal(openStatus(withFriday, sast(2026, 10, 15, 19)).closes, "20:00"); // Thursday
+  assert.equal(openStatus(withFriday, sast(2026, 10, 16, 12)).closes, "17:00");
+});
+
 test("closed on weekends and South African public holidays", () => {
   assert.equal(openStatus(HOURS, sast(2026, 10, 17, 11)).closedFor, "Weekend");
   assert.equal(openStatus(HOURS, sast(2026, 9, 24, 11)).closedFor, "Heritage Day");
@@ -106,7 +116,7 @@ test("check-ins are refused while the library is closed; /hours says why", async
     assert.equal((await res.json()).reason, "library_closed");
     const hours = await (await fetch(`${base}/api/library/engineering/hours`)).json();
     assert.equal(hours.open, false);
-    assert.equal(hours.closes, "20:00");
+    assert.equal(hours.opens, "08:00");
     assert.equal(hours.busiest, "11:00–14:00"); // the plan's estimate until there's data
     assert.equal(hours.busiestLearned, false);
   } finally {

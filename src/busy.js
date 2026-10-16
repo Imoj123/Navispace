@@ -61,7 +61,9 @@ async function observe(libraryId, seats, now = Date.now(), hours = null) {
 async function busiestWindow(libraryId, hours) {
   const stats = await store.get(busyKey(libraryId));
   if (!stats) return null;
-  const { opens, closes } = openStatus(hours);
+  // The usual weekday hours (a shorter Friday doesn't narrow the window).
+  const opens = (hours && hours.opens) || "08:00";
+  const closes = (hours && hours.closes) || "20:00";
   const first = Math.floor(toMinutes(opens) / 60);
   const last = Math.ceil(toMinutes(closes) / 60); // exclusive
   const slots = [];
