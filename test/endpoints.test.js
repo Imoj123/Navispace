@@ -280,28 +280,3 @@ test("unknown pages get the not-found page; unknown API paths get JSON", async (
     assert.equal((await api.json()).reason, "not_found");
   });
 });
-
-test("the activity feed lists recent seat events, newest first, with no one's identity", async () => {
-  require("../src/activity").clear();
-  await withServer(async (base) => {
-    const [a, b] = getSeatIds("engineering");
-    const scan = (id, action, token) => fetch(`${base}/api/library/engineering/scan/${id}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, token, nickname: "Thandi" }),
-    });
-    await scan(a, "checkIn", "tok-feed-1");
-    await scan(b, "checkIn", "tok-feed-2");
-    await scan(a, "stepAway", "tok-feed-1");
-    await scan(a, "stillHere", "tok-feed-1"); // not reported (and fails: seat is away)
-    await scan(b, "leaving", "tok-feed-2");
-    await scan(b, "leaving", "tok-feed-2"); // fails: already free, so not reported
-
-    const feed = await (await fetch(`${base}/api/library/engineering/activity`)).json();
-    assert.deepEqual(feed.events.map((e) => [e.type, e.seatId]), [
-      ["freed", b], ["away", a], ["taken", b], ["taken", a],
-    ]);
-    assert.ok(feed.events.every((e) => typeof e.at === "number"));
-    const raw = JSON.stringify(feed);
-    assert.ok(!/tok-feed|Thandi/.test(raw), "no tokens or nicknames");
-  });
-});

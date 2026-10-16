@@ -426,183 +426,101 @@
             text-decoration: none;
         }
 
-        /* --- Live on the floor ------------------------------------------------
-           A rotating line about the floor right now, beside a feed of what just
-           happened. The feed is tilted away in perspective: new events drop in
-           at the front, older ones sink back and fade. Each carries a little
-           3D seat block that stands tall when taken and lies flat when free. */
-        .live-meta {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .live-meta .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--free);
-            box-shadow: 0 0 0 0 rgba(140, 197, 164, 0.6);
-            animation: live-pulse 2.4s ease-out infinite;
-        }
-
-        @keyframes live-pulse {
-            0% { box-shadow: 0 0 0 0 rgba(140, 197, 164, 0.55); }
-            70%, 100% { box-shadow: 0 0 0 9px rgba(140, 197, 164, 0); }
-        }
-
-        .live-grid {
+        .zones {
             display: grid;
-            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-            gap: 26px 48px;
-            align-items: start;
-        }
-
-        .highlight {
-            margin: 0;
-            min-height: 3.6em;
-            font: 400 clamp(24px, 2.6vw, 32px)/1.2 var(--font-serif);
-            letter-spacing: -0.005em;
-            transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-
-        .highlight.out {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-
-        .highlight em {
-            color: var(--free);
-            font-style: italic;
-        }
-
-        .highlight-dots {
-            display: flex;
-            gap: 6px;
-            margin-top: 18px;
-        }
-
-        .highlight-dots i {
-            width: 18px;
-            height: 2px;
-            background: rgba(236, 230, 214, 0.15);
-            transition: background 0.4s ease;
-        }
-
-        .highlight-dots i.on {
-            background: var(--brass);
-        }
-
-        .feed-stage {
-            perspective: 1000px;
-            perspective-origin: 50% -20%;
-            /* the tilt brings the front cards forward; leave them room */
-            padding: 0 18px;
-        }
-
-        .feed {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            transform: rotateX(12deg);
-            transform-origin: 50% 0;
-            transform-style: preserve-3d;
-        }
-
-        .feed li {
-            --i: 0;
-            display: grid;
-            grid-template-columns: 34px minmax(0, 1fr) auto;
-            align-items: center;
-            gap: 14px;
-            padding: 11px 14px;
-            margin-bottom: 6px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1px;
+            background: var(--line);
             border: 1px solid var(--line);
-            background: linear-gradient(90deg, rgba(236, 230, 214, 0.04), rgba(236, 230, 214, 0.01));
-            transform: translateZ(calc(var(--i) * -26px));
-            opacity: calc(1 - var(--i) * 0.14);
-            transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.7s ease;
         }
 
-        .feed li.fresh {
-            animation: feed-drop 0.8s cubic-bezier(0.2, 0.75, 0.25, 1) both;
-            border-color: rgba(196, 163, 95, 0.45);
-        }
-
-        @keyframes feed-drop {
-            from {
-                opacity: 0;
-                transform: translateY(-18px) translateZ(70px) rotateX(-18deg);
-            }
-        }
-
-        .feed .what {
-            min-width: 0;
+        .zone {
+            position: relative;
+            background: var(--ground);
+            padding: 18px 20px 20px;
             display: grid;
-            gap: 2px;
+            gap: 10px;
+            min-width: 0;
+            color: inherit;
+            text-decoration: none;
+            transition: background 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .feed .what b {
-            font-weight: 500;
-            color: var(--text);
+        .zone:hover,
+        .zone:focus-visible {
+            background:
+                radial-gradient(ellipse 90% 70% at 50% 0%, rgba(228, 192, 118, 0.09), transparent 70%),
+                var(--ground);
+            box-shadow: inset 0 0 0 1px rgba(196, 163, 95, 0.55);
         }
 
-        .feed .what span {
-            font: 400 16px/1.3 var(--font-serif);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        .zone .go {
+            position: absolute;
+            top: 18px;
+            right: 20px;
+            font: 400 13px/1 var(--font-mono);
+            color: var(--brass);
+            opacity: 0;
+            transform: translateX(-4px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
         }
 
-        .feed .what small {
-            font: 400 11px/1.2 var(--font-mono);
-            letter-spacing: 0.06em;
+        .zone:hover .go,
+        .zone:focus-visible .go {
+            opacity: 1;
+            transform: none;
+        }
+
+        /* A small live drawing of the area: its seats where they sit. */
+        .zone .mini {
+            display: block;
+            width: 100%;
+            height: 60px;
+            margin: 2px 0 2px;
+        }
+
+        .zone .mini rect {
+            transition: fill 0.4s ease, opacity 0.25s ease;
+        }
+
+        .zone .mini .s-AVAILABLE { fill: var(--free); opacity: 0.85; }
+        .zone .mini .s-OCCUPIED { fill: var(--taken); opacity: 0.75; }
+        .zone .mini .s-STEPPED_AWAY { fill: var(--away); opacity: 0.8; }
+
+        .zone:hover .mini rect {
+            opacity: 1;
+        }
+
+        .zone .name {
+            font: 400 19px/1.2 var(--font-serif);
+        }
+
+        .zone .num {
+            font: 400 12.5px var(--font-mono);
             color: var(--muted);
-        }
-
-        .feed time {
-            font: 400 11.5px/1 var(--font-mono);
-            color: var(--muted);
-            white-space: nowrap;
             font-variant-numeric: tabular-nums;
         }
 
-        .feed li.quiet {
-            grid-template-columns: 1fr;
-            font: 400 italic 16px/1.4 var(--font-serif);
-            color: var(--muted);
+        .zone .num b {
+            color: var(--free);
+            font-weight: 500;
         }
 
-        /* The seat block: an isometric box drawn in SVG, grown from the floor. */
-        .block3d {
-            display: block;
-            width: 34px;
-            height: 40px;
-            overflow: visible;
+        .bar {
+            height: 3px;
+            background: rgba(236, 230, 214, 0.1);
+            position: relative;
+            overflow: hidden;
         }
 
-        .block3d g {
-            transform-box: fill-box;
-            transform-origin: 50% 100%;
+        .bar span {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            background: var(--free);
+            transition: width 1s ease;
         }
 
-        .fresh .block3d g {
-            animation: block-grow 0.9s 0.25s cubic-bezier(0.3, 1.4, 0.5, 1) both;
-        }
-
-        @keyframes block-grow {
-            from { transform: scaleY(0.15); }
-        }
-
-        @media (max-width: 860px) {
-            .live-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .highlight {
-                min-height: 0;
-            }
-        }
         .steps {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -699,6 +617,9 @@
                 height: 330px;
             }
 
+            .zones {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
 
             .steps,
             .split {
@@ -774,20 +695,12 @@
             </div>
         </section>
 
-        <section class="section" aria-labelledby="liveTitle">
+        <section class="section" aria-labelledby="areasTitle">
             <div class="section-head">
-                <h2 id="liveTitle">Live on the floor</h2>
-                <span class="eyebrow live-meta" id="areasMeta"><span class="dot"></span><span id="liveMetaText">Live</span></span>
+                <h2 id="areasTitle">The floor, by area</h2>
+                <span class="eyebrow" id="areasMeta">Updated live</span>
             </div>
-            <div class="live-grid">
-                <div>
-                    <p class="highlight" id="highlight" aria-live="polite">Reading the floor…</p>
-                    <div class="highlight-dots" id="highlightDots" aria-hidden="true"></div>
-                </div>
-                <div class="feed-stage">
-                    <ol class="feed" id="feed" aria-label="Recent seat activity"></ol>
-                </div>
-            </div>
+            <div class="zones" id="zones"></div>
         </section>
 
         <section class="section" aria-labelledby="howTitle">
@@ -974,7 +887,37 @@
                 ? hm(starts.reduce((a, t) => a + (now - t), 0) / starts.length)
                 : "—";
 
-            buildHighlights(seats);
+            // By area, from the plan's seat-id prefixes.
+            const names = (layout && layout.zoneNames) || {};
+            const groups = new Map();
+            for (const seat of seats) {
+                const key = (String(seat.id).match(/^[A-Za-z]+/) || ["Seats"])[0].toUpperCase();
+                if (!groups.has(key)) groups.set(key, { total: 0, free: 0 });
+                const g = groups.get(key);
+                g.total++;
+                if (seat.state === "AVAILABLE") g.free++;
+            }
+            const zones = $("zones");
+            const mapHref = libraryUrl("/library.html", library.id);
+            const fresh = !zones.children.length;
+            zones.innerHTML = "";
+            for (const [key, g] of groups) {
+                const d = document.createElement("a");
+                d.className = "zone";
+                d.href = mapHref;
+                d.innerHTML = '<span class="name"></span><span class="go" aria-hidden="true">→</span><span class="num"><b></b> of <span class="t"></span> free</span>' + miniMap(key) + '<div class="bar"><span></span></div>';
+                d.querySelector(".name").textContent = names[key] || `Area ${key}`;
+                d.querySelector("b").textContent = g.free;
+                d.querySelector(".t").textContent = g.total;
+                d.setAttribute("aria-label", `${names[key] || "Area " + key}: ${g.free} of ${g.total} seats free. Open the map.`);
+                zones.appendChild(d);
+                const bar = d.querySelector(".bar span");
+                const pct = (g.free / g.total * 100) + "%";
+                // Grow the bar on first load only; live updates just set it.
+                if (fresh) requestAnimationFrame(() => { bar.style.width = pct; });
+                else { bar.style.transition = "none"; bar.style.width = pct; }
+            }
+            $("areasMeta").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
         }
 
         async function refreshSeats(prefetched) {
@@ -983,163 +926,11 @@
                 const seats = await (prefetched || getAllSeats(library.id));
                 if (!Array.isArray(seats)) return;
                 seatsById = new Map(seats.map((s) => [String(s.id), s]));
-                $("liveMetaText").textContent = "Live";
                 paintNumbers(seats);
                 paintFloor();
             } catch {
-                $("liveMetaText").textContent = "Reconnecting…";
+                $("areasMeta").textContent = "Reconnecting…";
             }
-        }
-
-        // --- Live on the floor ----------------------------------------------------
-
-        const areaName = (seatId) => {
-            const key = (String(seatId).match(/^[A-Za-z]+/) || [""])[0].toUpperCase();
-            const names = (layout && layout.zoneNames) || {};
-            return names[key] || "";
-        };
-        const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-
-        // Observations about the floor right now, rebuilt with every refresh
-        // and shown one at a time, so the section keeps moving even when
-        // nobody is checking in.
-        let highlights = [];
-        let highlightAt = 0;
-        function buildHighlights(seats) {
-            const out = [];
-            const groups = new Map();
-            for (const seat of seats) {
-                const key = (String(seat.id).match(/^[A-Za-z]+/) || [""])[0].toUpperCase();
-                if (!groups.has(key)) groups.set(key, { key, total: 0, free: 0 });
-                const g = groups.get(key);
-                g.total++;
-                if (seat.state === "AVAILABLE") g.free++;
-            }
-            const names = (layout && layout.zoneNames) || {};
-            const areas = [...groups.values()].filter((g) => g.total);
-            const free = seats.filter((s) => s.state === "AVAILABLE").length;
-            const inUse = seats.filter((s) => s.state === "OCCUPIED").length;
-            const away = seats.filter((s) => s.state === "STEPPED_AWAY").length;
-
-            if (areas.length > 1) {
-                const quiet = areas.slice().sort((a, b) => b.free / b.total - a.free / a.total)[0];
-                if (quiet.free) out.push(`Quietest right now: <em>${esc((names[quiet.key] || "Area " + quiet.key).toLowerCase())}</em>, ${quiet.free} of ${quiet.total} free.`);
-                const busy = areas.slice().sort((a, b) => a.free / a.total - b.free / b.total)[0];
-                if (busy.total - busy.free >= 2 && busy !== quiet) out.push(`Filling up: <em>${esc((names[busy.key] || "Area " + busy.key).toLowerCase())}</em>, ${busy.total - busy.free} of ${busy.total} taken.`);
-            }
-            if (inUse) out.push(`<em>${inUse}</em> ${inUse === 1 ? "person is" : "people are"} studying on the floor right now.`);
-            else if (free === seats.length && seats.length) out.push("The whole floor is free. <em>Take your pick.</em>");
-
-            // Two free seats side by side at the same table: good for a pair.
-            if (layout) {
-                const pos = new Map(layout.seats.map((p) => [String(p.id), p]));
-                const freeSeats = seats.filter((s) => s.state === "AVAILABLE" && pos.has(String(s.id)));
-                for (let i = 0; i < freeSeats.length && out.length < 9; i++) {
-                    const a = pos.get(String(freeSeats[i].id));
-                    const b = freeSeats.slice(i + 1).map((s) => pos.get(String(s.id)))
-                        .find((p) => Math.abs(p.y - a.y) < 4 && Math.abs(p.x - a.x) <= 40);
-                    if (b) { out.push(`Studying with a friend? <em>${esc(a.id)}</em> and <em>${esc(b.id)}</em> are free side by side.`); break; }
-                }
-            }
-            const sittings = seats.filter((s) => s.state === "OCCUPIED" && s.sessionStart).map((s) => focusElapsedMs(s));
-            const longest = Math.max(0, ...sittings);
-            if (longest > 20 * 60 * 1000) out.push(`Longest sitting right now: <em>${hm(longest)}</em> and counting.`);
-            if (away) out.push(`${away} ${away === 1 ? "seat is" : "seats are"} on hold while ${away === 1 ? "its owner takes" : "their owners take"} a break.`);
-            if (layout && layout.hours && layout.hours.busiest) out.push(`Usually busiest from <em>${esc(layout.hours.busiest.replace("–", " to "))}</em>.`);
-            highlights = out.length ? out : ["The floor is <em>quiet</em> for now."];
-            if (!$("highlight").dataset.started) showHighlight(0);
-            paintHighlightDots();
-        }
-
-        function paintHighlightDots() {
-            $("highlightDots").innerHTML = highlights.map((_, i) => `<i class="${i === highlightAt % highlights.length ? "on" : ""}"></i>`).join("");
-        }
-
-        function showHighlight(i) {
-            const el = $("highlight");
-            highlightAt = i % highlights.length;
-            el.dataset.started = "1";
-            el.classList.add("out");
-            setTimeout(() => {
-                el.innerHTML = highlights[highlightAt];
-                el.classList.remove("out");
-                paintHighlightDots();
-            }, el.textContent ? 450 : 0);
-        }
-
-        // Recent seat events from the server, newest first. New ones drop in
-        // at the front with their seat block growing from the floor.
-        const EVENT_TEXT = {
-            taken: (id) => `Someone settled in at <b>${id}</b>`,
-            back: (id) => `Back at <b>${id}</b> after a break`,
-            away: (id) => `<b>${id}</b> is on hold, back soon`,
-            freed: (id) => `<b>${id}</b> just freed up`,
-            expired: (id) => `<b>${id}</b> freed up when its hold ran out`,
-        };
-        const BLOCK = {
-            taken: { h: 22, top: "#f0a58b", left: "#c2705a", right: "#a35d4b" },
-            back: { h: 22, top: "#f0a58b", left: "#c2705a", right: "#a35d4b" },
-            away: { h: 13, top: "#ecc380", left: "#c0924d", right: "#9f7a41" },
-            freed: { h: 4, top: "#a8d9bb", left: "#6fa587", right: "#5a8a70" },
-            expired: { h: 4, top: "#a8d9bb", left: "#6fa587", right: "#5a8a70" },
-        };
-        function block3d(type) {
-            const b = BLOCK[type] || BLOCK.freed;
-            const W = 26, D = 13, base = 38, h = b.h;
-            // Isometric box: a diamond top, left and right faces dropping to the floor.
-            const top = `13,${base - h - D} ${W},${base - h - D / 2} 13,${base - h} 0,${base - h - D / 2}`;
-            const left = `0,${base - h - D / 2} 13,${base - h} 13,${base} 0,${base - D / 2}`;
-            const right = `13,${base - h} ${W},${base - h - D / 2} ${W},${base - D / 2} 13,${base}`;
-            return `<svg class="block3d" viewBox="-4 0 34 40" aria-hidden="true"><g>` +
-                `<polygon points="${left}" fill="${b.left}"/><polygon points="${right}" fill="${b.right}"/><polygon points="${top}" fill="${b.top}"/>` +
-                `</g></svg>`;
-        }
-
-        function ago(ms) {
-            const m = Math.floor(ms / 60000);
-            if (m < 1) return "just now";
-            if (m < 60) return `${m} min ago`;
-            const h = Math.floor(m / 60);
-            return `${h} h ago`;
-        }
-
-        let feedEvents = [];
-        let feedSeen = null;
-        let serverSkew = 0;
-        async function refreshActivity() {
-            if (!library) return;
-            try {
-                const data = await apiGet(`/api/library/${encodeURIComponent(library.id)}/activity`);
-                if (!data || !Array.isArray(data.events)) return;
-                serverSkew = Date.now() - data.now;
-                feedEvents = data.events.slice(0, 7);
-                paintFeed();
-            } catch { }
-        }
-
-        function paintFeed() {
-            const feed = $("feed");
-            const key = (e) => `${e.at}-${e.type}-${e.seatId}`;
-            const firstPaint = feedSeen === null;
-            const seen = feedSeen || new Set();
-            if (!feedEvents.length) {
-                feed.innerHTML = '<li class="quiet">Nothing yet. Check-ins and free seats will appear here the moment they happen.</li>';
-                feedSeen = seen;
-                return;
-            }
-            feed.innerHTML = feedEvents.map((e, i) => {
-                const fresh = !firstPaint && !seen.has(key(e));
-                const area = areaName(e.seatId);
-                const text = (EVENT_TEXT[e.type] || EVENT_TEXT.freed)(esc(e.seatId));
-                return `<li class="${fresh ? "fresh" : ""}" style="--i:${i}">${block3d(e.type)}` +
-                    `<div class="what"><span>${text}</span>${area ? `<small>${esc(area)}</small>` : ""}</div>` +
-                    `<time datetime="${new Date(e.at).toISOString()}" data-at="${e.at}">${ago(Date.now() - serverSkew - e.at)}</time></li>`;
-            }).join("");
-            feedSeen = new Set(feedEvents.map(key));
-        }
-
-        function tickFeedTimes() {
-            for (const t of document.querySelectorAll("#feed time")) t.textContent = ago(Date.now() - serverSkew - Number(t.dataset.at));
         }
 
         // --- Your session ----------------------------------------------------
@@ -1258,6 +1049,28 @@
 
         // --- Boot ------------------------------------------------------------------
 
+        // One area's seats, drawn where they sit on the plan, coloured by state.
+        function miniMap(zoneKey) {
+            if (!layout) return "";
+            const pts = layout.seats.filter((s) => String(s.id).toUpperCase().startsWith(zoneKey) && /^\d/.test(String(s.id).slice(zoneKey.length)));
+            if (!pts.length) return "";
+            const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+            const pad = 14;
+            const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
+            const w = Math.max(...xs) - x0 + pad, h = Math.max(...ys) - y0 + pad;
+            // Size seats for the screen: about 6.5px drawn, but never wider than
+            // the gap between neighbours on a table (36 plan units), so rows
+            // read as separate seats rather than a bar.
+            const boxW = 260, boxH = 60;
+            const cell = Math.min(30, Math.max(18, 6.5 * Math.max(w / boxW, h / boxH)));
+            const rects = pts.map((p) => {
+                const seat = seatsById.get(String(p.id));
+                const st = seat ? seat.state : "AVAILABLE";
+                return `<rect class="s-${st}" x="${(p.x - cell / 2).toFixed(1)}" y="${(p.y - cell / 2).toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="${(cell / 4).toFixed(1)}"/>`;
+            }).join("");
+            return `<svg class="mini" viewBox="${x0} ${y0} ${w} ${h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${rects}</svg>`;
+        }
+
         // The floor plan only changes with a deploy, so keep a copy and draw
         // it at once on the next visit while a fresh one loads.
         const layoutKey = (id) => "navispace_layout_" + id;
@@ -1313,10 +1126,6 @@
             await refreshSeats(seatsNow);
 
             setInterval(() => { if (!document.hidden) refreshSeats(); }, 15000);
-            refreshActivity();
-            setInterval(() => { if (!document.hidden) refreshActivity(); }, 10000);
-            setInterval(() => { if (!document.hidden && highlights.length > 1) showHighlight(highlightAt + 1); }, 7000);
-            setInterval(tickFeedTimes, 30000);
             setInterval(() => { if (!document.hidden) refreshHeld(); }, 60000);
             setInterval(tickFocus, 1000);
         }
