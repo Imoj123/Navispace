@@ -283,12 +283,25 @@
                 return;
             }
 
-            const result = await reportLostFoundItem(libraryId, {
-                description,
-                location,
-                photoDataUrl: pendingPhoto,
-                identity,
-            });
+            // A photo takes a moment to upload: one post per tap, and say so.
+            const submit = reportForm.querySelector("button[type=submit]");
+            if (submit.disabled) return;
+            submit.disabled = true;
+            submit.textContent = "Posting…";
+            let result;
+            try {
+                result = await reportLostFoundItem(libraryId, {
+                    description,
+                    location,
+                    photoDataUrl: pendingPhoto,
+                    identity,
+                });
+            } catch {
+                result = { ok: false };
+            } finally {
+                submit.disabled = false;
+                submit.textContent = "Post to board";
+            }
 
             if (result.ok) {
                 reportForm.reset();
