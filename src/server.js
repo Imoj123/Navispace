@@ -13,6 +13,8 @@ const { getSeat, getSeats, handleScan, findHeldSeat } = require("./scan");
 const { sweepExpiredSeats, startSweepLoop } = require("./sweep");
 const { getLeaderboard } = require("./leaderboard");
 const { getSittings } = require("./history");
+const { openStatus } = require("./hours");
+const busy = require("./busy");
 const { reportSeat } = require("./reports");
 const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = require("./push");
 const { startReminderLoop } = require("./reminders");
@@ -56,7 +58,14 @@ function activeLibrarySeatGroups() {
   return LIBRARIES.filter((lib) => lib.status === "active").map((lib) => ({
     libraryId: lib.id,
     seatIds: getSeatIds(lib.id),
+    hours: libraryHours(lib.id),
   }));
+}
+
+/** A library's opening hours from its plan (defaults in hours.js). */
+function libraryHours(libraryId) {
+  const layout = getLayout(libraryId);
+  return (layout && layout.hours) || null;
 }
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
@@ -256,6 +265,23 @@ function createApp() {
     res.json(layout);
   });
 
+  // Opening hours right now, and the busiest stretch of the day: learned
+  // from how full the library really is once there's enough data, the
+  // plan's own estimate until then.
+  app.get("/api/library/:libId/hours", async (req, res) => {
+    const { libId } = req.params;
+    if (!getLibrary(libId)) {
+      return res.status(404).json({ ok: false, reason: "unknown_library" });
+    }
+    const hours = libraryHours(libId);
+    const learned = await busy.busiestWindow(libId, hours);
+    res.set("Cache-Control", "no-cache").json({
+      ...openStatus(hours),
+      busiest: learned || (hours && hours.busiest) || null,
+      busiestLearned: Boolean(learned),
+    });
+  });
+
   // --- Seat state ----------------------------------------------------------
 
   app.get("/api/library/:libId/seat/:id", async (req, res) => {
@@ -299,6 +325,15 @@ function createApp() {
     }
     // Claiming a seat needs the code from its sticker (see seatcode.js).
     // Everything after that is limited to the device holding the seat.
+    // Outside opening hours nobody can take a seat (and the sweep frees
+    // every seat at closing time).
+    if (action === "checkIn") {
+      const hours = openStatus(libraryHours(libId));
+      if (!hours.open) {
+        const seat = await getSeat(libId, req.params.id);
+        return res.status(403).json({ ok: false, reason: "library_closed", hours, seat: publicSeat(seat) });
+      }
+    }
     if (action === "checkIn" && !seatCodeValid(libId, req.params.id, k)) {
       const seat = await getSeat(libId, req.params.id);
       return res.status(403).json({ ok: false, reason: "scan_required", seat: publicSeat(seat) });
@@ -350,7 +385,7 @@ function createApp() {
 
   app.post("/api/library/:libId/sweep", async (req, res) => {
     const { libId } = req.params;
-    const reclaimed = await sweepExpiredSeats(libId, getSeatIds(libId));
+    const reclaimed = await sweepExpiredSeats(libId, getSeatIds(libId), Date.now(), { hours: libraryHours(libId) });
     res.json({ reclaimed });
   });
 
@@ -512,7 +547,8 @@ function start() {
     config.SWEEP_INTERVAL_MS,
     (libraryId, reclaimed) => {
       console.log(`[sweep] ${libraryId} reclaimed: ${reclaimed.join(", ")}`);
-    }
+    },
+    (libraryId, seats, now) => busy.observe(libraryId, seats, now, libraryHours(libraryId))
   );
 
   const stopReminders = startReminderLoop(

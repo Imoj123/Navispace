@@ -3,6 +3,7 @@
 const { store } = require("./store");
 const config = require("./config");
 const { recordSitting } = require("./history");
+const { localParts } = require("./hours");
 
 /**
  * Seat states, mirroring the AVAILABLE / OCCUPIED / STEPPED_AWAY
@@ -41,7 +42,8 @@ function dayKeyFor(timestampMs) {
 
 /** Extension #5: shorter check-in window during configured peak hours. */
 function currentCheckInDurationMs(now = Date.now()) {
-  const hour = new Date(now).getHours();
+  // The library's own clock: the server itself runs in UTC.
+  const hour = localParts(now).hour;
   const isPeak =
     hour >= config.PEAK_HOURS_START && hour < config.PEAK_HOURS_END;
   return isPeak
