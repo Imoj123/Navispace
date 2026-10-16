@@ -1203,14 +1203,16 @@
 
         // --- Install -------------------------------------------------------------
 
-        // Phones add NaviSpace to the Home Screen; computers install it as an
-        // app (Chrome and Edge offer it themselves; Safari on a Mac calls it
-        // "Add to Dock", from its File menu). Already installed: no button.
+        // NaviSpace is a website you keep handy, not an app to install: phones
+        // add it to the Home Screen, a Mac to the Dock, other computers to the
+        // desktop. (Chrome and Edge offer this themselves; Safari on a Mac does
+        // it from File → Add to Dock.) Already added: no button.
         const onPhone = window.matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 820;
         const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
         const macSafari = /Macintosh/.test(navigator.userAgent) && /Safari\//.test(navigator.userAgent) &&
             !/Chrome|Chromium|Edg|Firefox/.test(navigator.userAgent) && navigator.maxTouchPoints === 0;
-        if (!onPhone) $("installBtn").textContent = macSafari ? "Add to Dock" : "Install app";
+        const onMac = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints === 0;
+        if (!onPhone) $("installBtn").textContent = onMac ? "Add to Dock" : "Add to desktop";
         let deferredInstall = null;
         window.addEventListener("beforeinstallprompt", (e) => {
             e.preventDefault();
@@ -1221,7 +1223,7 @@
         if (!installed && onPhone && typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
         if (!installed && macSafari) {
             $("installBtn").hidden = false;
-            $("iosHint").innerHTML = "In Safari's menu bar, choose <em>File</em>, then <em>Add to Dock</em>. NaviSpace then opens as its own app, with notifications.";
+            $("iosHint").innerHTML = "In Safari's menu bar, choose <em>File</em>, then <em>Add to Dock</em>. NaviSpace then opens in its own window, with notifications.";
         }
         $("installBtn").addEventListener("click", async () => {
             if (deferredInstall) {
