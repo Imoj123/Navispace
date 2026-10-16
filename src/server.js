@@ -17,6 +17,7 @@ const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = requi
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem } = require("./lostfound");
 const { seatCodeValid, seatCodesRequired } = require("./seatcode");
+const activity = require("./activity");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -228,6 +229,14 @@ function createApp() {
 
   app.use(express.static(PUBLIC_DIR));
 
+  // The home page's "Live on the floor" feed: recent seat events, no names.
+  app.get("/api/library/:libId/activity", (req, res) => {
+    if (!getLibrary(req.params.libId)) {
+      return res.status(404).json({ ok: false, reason: "unknown_library" });
+    }
+    res.set("Cache-Control", "no-store").json({ now: Date.now(), events: activity.recent(req.params.libId) });
+  });
+
   app.get("/api/scenes", (_req, res) => {
     res.set("Cache-Control", "no-cache").json(availableScenes());
   });
@@ -312,6 +321,7 @@ function createApp() {
       seatIds
     );
 
+    if (result.ok) activity.recordScan(libId, action, req.params.id);
     if (result.seat) result.seat = publicSeat(result.seat);
     res.status(result.ok ? 200 : 409).json(result);
   });
@@ -350,6 +360,7 @@ function createApp() {
   app.post("/api/library/:libId/sweep", async (req, res) => {
     const { libId } = req.params;
     const reclaimed = await sweepExpiredSeats(libId, getSeatIds(libId));
+    activity.recordReclaimed(libId, reclaimed);
     res.json({ reclaimed });
   });
 
@@ -499,6 +510,7 @@ function start() {
     config.SWEEP_INTERVAL_MS,
     (libraryId, reclaimed) => {
       console.log(`[sweep] ${libraryId} reclaimed: ${reclaimed.join(", ")}`);
+      activity.recordReclaimed(libraryId, reclaimed);
     }
   );
 
