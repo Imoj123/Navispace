@@ -13,6 +13,9 @@ function listPrefix(libraryId) {
 }
 
 const TTL_SECONDS = config.LOST_FOUND_TTL_DAYS * 24 * 60 * 60;
+// The same post again this soon (a double tap, a phone re-sending a slow
+// upload) returns the first item instead of making a second one.
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * Reports a found item: a photo plus a short description, optionally
@@ -40,6 +43,13 @@ async function reportItem(libraryId, { description, location, photoDataUrl, repo
         return { ok: false, reason: "photo_too_large" };
     }
 
+    const twin = (await listItems(libraryId)).find((i) =>
+        i.reporterToken === reporterToken &&
+        i.description === String(description).slice(0, 200) &&
+        i.photoDataUrl === photoDataUrl &&
+        now - i.createdAt < DUPLICATE_WINDOW_MS);
+    if (twin) return { ok: true, item: twin, duplicate: true };
+
     const item = {
         id: crypto.randomUUID(),
         libraryId,
@@ -65,11 +75,8 @@ async function reportItem(libraryId, { description, location, photoDataUrl, repo
  */
 async function listItems(libraryId) {
     const keys = await store.listKeys(listPrefix(libraryId));
-    const items = [];
-    for (const key of keys) {
-        const item = await store.get(key);
-        if (item) items.push(item);
-    }
+    // One read for all of them (see store.getMany), not one per item.
+    const items = (await store.getMany(keys)).filter(Boolean);
 
     items.sort((a, b) => {
         if (a.status !== b.status) return a.status === "unclaimed" ? -1 : 1;
