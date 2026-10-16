@@ -383,6 +383,17 @@
                 <p id="stText"></p>
                 <a class="btn btn-primary" id="stLink" href="/staff/stickers" target="_blank" rel="noopener">Open printable stickers</a>
             </section>
+
+            <section class="staff-section stickers" aria-labelledby="poTitle">
+                <header>
+                    <h2 id="poTitle">Launch poster</h2>
+                    <p class="eyebrow">A4</p>
+                </header>
+                <p>For the entrance and the front desk: a QR code to NaviSpace and the three steps (scan your desk, keep
+                    your seat, check out), with the opening hours. Print in colour if you can; it reads in black and white
+                    too.</p>
+                <a class="btn btn-primary" id="poLink" href="/staff/poster" target="_blank" rel="noopener">Open printable poster</a>
+            </section>
         </div>
     </main>
 
@@ -524,6 +535,7 @@
             // Stickers
             $("stCount").textContent = `${d.stickers.count} seats`;
             $("stLink").href = `/staff/stickers?lib=${encodeURIComponent(libraryId)}`;
+            $("poLink").href = `/staff/poster?lib=${encodeURIComponent(libraryId)}`;
             $("stText").textContent = d.stickers.signed
                 ? "One sticker per seat on A4, each with its signed code. Print them (or save as a PDF) and stick each on its desk. Reprint after changing the floor plan or the signing secret."
                 : "SEAT_SIGNING_SECRET isn't set on the server, so stickers would carry no seat code. Set it first, then print.";

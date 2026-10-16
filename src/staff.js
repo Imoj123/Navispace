@@ -13,6 +13,7 @@ const { openStatus } = require("./hours");
 const busy = require("./busy");
 const usage = require("./usage");
 const { limit } = require("./ratelimit");
+const waitlist = require("./waitlist");
 
 /**
  * The staff page (/staff.html): one password, set as STAFF_PASSWORD on the
@@ -76,6 +77,7 @@ function seatLink(origin, libraryId, seatId) {
 const escapeHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 function mountStaff(app, { siteOrigin }) {
+  mountPoster(app, { siteOrigin });
   app.post("/api/staff/login", limit("staffLogin"), (req, res) => {
     if (!password()) return res.status(503).json({ ok: false, reason: "staff_disabled" });
     if (!sameText((req.body && req.body.password) || "", password())) {
@@ -136,6 +138,7 @@ function mountStaff(app, { siteOrigin }) {
       await recordSitting(libId, seat, Date.now());
       resetToAvailable(seat);
       await saveSeat(seat);
+      waitlist.announceFreed(libId, [seat.id]);
     }
     res.json({ ok: true });
   });
@@ -193,4 +196,98 @@ function mountStaff(app, { siteOrigin }) {
   });
 }
 
-module.exports = { mountStaff, seatLink };
+/** "Weekdays 08:00–20:00 · Fridays until 17:00", from a plan's hours. */
+function hoursLine(hours) {
+  const h = hours || {};
+  const plural = { Mon: "Mondays", Tue: "Tuesdays", Wed: "Wednesdays", Thu: "Thursdays", Fri: "Fridays" };
+  const extra = Object.entries(h.closesOn || {})
+    .filter(([day]) => plural[day])
+    .map(([day, t]) => `${plural[day]} until ${t}`);
+  return [`Weekdays ${h.opens || "08:00"}–${h.closes || "20:00"}`, ...extra].join(" · ");
+}
+
+/** The launch poster: entrance and front desk, A4. A QR code to the home page and three steps. */
+function mountPoster(app, { siteOrigin }) {
+  app.get("/staff/poster", async (req, res) => {
+    if (!password() || !signedIn(req)) return res.redirect(302, "/staff.html");
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).send("Unknown library");
+    const lib = getLibrary(libId);
+    const link = `${siteOrigin(req)}/${libId === "engineering" ? "" : `?lib=${encodeURIComponent(libId)}`}`;
+    const qr = await QRCode.toString(link, { type: "svg", margin: 0, errorCorrectionLevel: "Q", color: { dark: "#121614", light: "#0000" } });
+    const shown = link.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const layout = getLayout(libId) || {};
+    res.set("Cache-Control", "no-store").type("html").send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Launch poster · ${escapeHtml(lib.name)}</title>
+<style>
+  @font-face { font-family: "Newsreader"; src: url("/fonts/newsreader.woff2") format("woff2"); font-weight: 200 800; }
+  @font-face { font-family: "Newsreader"; src: url("/fonts/newsreader-italic.woff2") format("woff2"); font-style: italic; font-weight: 200 800; }
+  @font-face { font-family: "Public Sans"; src: url("/fonts/public-sans.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Plex Mono"; src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2"); font-weight: 500; }
+  @page { size: A4; margin: 0; }
+  :root { --ink: #121614; --muted: #5b625c; --brass: #a8843f; --free: #3f8a63; --line: #d9d3c3; --paper: #fbf8f1; }
+  * { box-sizing: border-box; }
+  html { background: #e9e5da; }
+  body { margin: 0; color: var(--ink); font: 400 15px/1.5 "Public Sans", system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 210mm; margin: 0 auto; padding: 16px 0; font: 500 12px "Plex Mono", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .bar button { font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 10px 16px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
+  .page { width: 210mm; height: 297mm; margin: 0 auto 24px; background: var(--paper); position: relative; overflow: hidden; padding: 18mm 18mm 16mm; display: grid; grid-template-rows: auto auto 1fr auto auto; box-shadow: 0 10px 40px rgba(0,0,0,.12); }
+  .page::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 7mm; background: var(--ink); }
+  .page::after { content: ""; position: absolute; top: 7mm; left: 0; right: 0; height: 1.2mm; background: var(--brass); }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-top: 4mm; }
+  .mark { display: flex; align-items: center; gap: 3mm; font: 500 15px "Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; }
+  .mark img { width: 11mm; height: 11mm; }
+  .where { font: 500 11px "Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-align: right; }
+  h1 { margin: 14mm 0 0; font: 400 25mm/0.95 "Newsreader", Georgia, serif; letter-spacing: -0.02em; }
+  h1 em { font-style: italic; color: var(--brass); }
+  .lede { margin: 6mm 0 0; font: 400 19px/1.4 "Newsreader", Georgia, serif; max-width: 140mm; color: #2b302c; }
+  .scan { align-self: center; display: grid; grid-template-columns: 78mm 1fr; gap: 10mm; align-items: center; margin: 8mm 0; }
+  .qr { width: 78mm; height: 78mm; padding: 5mm; border: 1.2mm solid var(--ink); background: #fff; position: relative; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .scan-copy b { display: block; font: 400 32px/1.1 "Newsreader", Georgia, serif; }
+  .scan-copy p { margin: 3mm 0 0; color: var(--muted); font-size: 15px; }
+  .scan-copy .url { margin-top: 5mm; font: 500 13px "Plex Mono", monospace; color: var(--ink); word-break: break-all; }
+  .free { display: inline-flex; align-items: center; gap: 2mm; margin-top: 5mm; font: 500 11px "Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--free); }
+  .free i { width: 3mm; height: 3mm; border-radius: 50%; background: var(--free); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.4mm solid var(--ink); }
+  .step { padding: 5mm 5mm 0 0; }
+  .step + .step { padding-left: 5mm; border-left: 0.3mm solid var(--line); }
+  .step .n { font: 500 12px "Plex Mono", monospace; letter-spacing: .14em; color: var(--brass); }
+  .step h2 { margin: 2mm 0 2mm; font: 400 25px/1.1 "Newsreader", Georgia, serif; }
+  .step p { margin: 0; font-size: 13.5px; line-height: 1.45; color: #3a403b; }
+  .foot { display: flex; justify-content: space-between; gap: 8mm; margin-top: 9mm; padding-top: 4mm; border-top: 0.3mm solid var(--line); font: 500 10.5px/1.5 "Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  @media print { html { background: none; } .bar { display: none; } .page { margin: 0; box-shadow: none; } }
+  @media screen and (max-width: 820px) { .page { transform: scale(calc(100vw / 220mm)); transform-origin: top left; margin: 0 0 calc(297mm * (100vw / 220mm) - 297mm); } .bar { padding: 12px 16px; } }
+</style></head><body>
+<div class="bar"><span>Launch poster · A4 · ${escapeHtml(lib.name)}</span><button onclick="print()">Print or save as PDF</button></div>
+<article class="page">
+  <div class="top">
+    <span class="mark"><img src="/icons/favicon.svg" alt="">NaviSpace</span>
+    <span class="where">${escapeHtml(lib.name)}<br>Wits University</span>
+  </div>
+  <div>
+    <h1>Find a seat.<br><em>Keep it.</em></h1>
+    <p class="lede">See which desks are free before you walk the floor, and hold yours while you work. No app to download, no sign-up.</p>
+  </div>
+  <section class="scan">
+    <div class="qr">${qr}</div>
+    <div class="scan-copy">
+      <b>Scan to see the floor, live.</b>
+      <p>Open your phone's camera and point it at the code.</p>
+      <span class="free"><i></i>Free seats, right now</span>
+      <p class="url">${escapeHtml(shown)}</p>
+    </div>
+  </section>
+  <section class="steps">
+    <div class="step"><span class="n">01</span><h2>Scan your desk</h2><p>Every desk has its own code. Scan it and tap Check in. The seat is yours.</p></div>
+    <div class="step"><span class="n">02</span><h2>Keep your seat</h2><p>Tap Still here when asked. Stepping out? Hold it for up to 1 h 15 min.</p></div>
+    <div class="step"><span class="n">03</span><h2>Check out</h2><p>Leaving? Tap Check out, so the next person can sit down.</p></div>
+  </section>
+  <div class="foot"><span>${escapeHtml(hoursLine(layout.hours))}</span><span>Full? Tap “Notify me” for the next free seat</span></div>
+</article>
+</body></html>`);
+  });
+}
+
+module.exports = { mountStaff, mountPoster, seatLink, hoursLine };

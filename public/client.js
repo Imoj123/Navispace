@@ -871,3 +871,143 @@ function confidenceLevel(seat, config, now = Date.now()) {
     })
     .catch(() => {});
 })();
+
+/* --- "Tell me when a seat frees up" ---------------------------------------- */
+
+async function waitlistPost(libraryId, path, body) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/waitlist${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+/**
+ * The "Tell me when a seat frees up" card, shared by the home page and the
+ * map. It appears when the floor is full or nearly (NEARLY_FULL seats or
+ * fewer left): pick any seat or a favourite area, tap Notify me, and the
+ * server sends a notification the moment one frees up. While waiting it says so, with a way to stop.
+ *
+ * mountWaitCard(box, libraryId) returns update({ seats, zoneNames, open, holding }),
+ * to call whenever the seats refresh.
+ */
+function mountWaitCard(box, libraryId) {
+  let status = null;     // { waiting, area, until, ahead } from the server
+  let lastStatusAt = 0;
+  let ctx = null;
+  let message = "";
+  let busy = false;
+  let chosen = null;     // the area picked, kept across repaints
+  const token = () => getOrCreateIdentity().token;
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  // Shown when the floor is full or nearly: the seats left go fast.
+  const NEARLY_FULL = 3;
+
+  function freeCount() {
+    return (ctx.seats || []).filter((s) => s.state === "AVAILABLE").length;
+  }
+
+  function paint() {
+    if (!ctx) return;
+    const names = ctx.zoneNames || {};
+    box.innerHTML = "";
+    if (status && status.waiting) {
+      box.hidden = false;
+      box.dataset.state = "waiting";
+      const what = status.area && names[status.area] ? `a seat in ${names[status.area]}` : "any seat";
+      box.innerHTML = `
+        <p class="wait-title"><span class="wait-pulse" aria-hidden="true"></span>Watching for ${esc(what)}</p>
+        <p class="wait-sub">We'll notify this device the moment one frees up${status.until ? `, until ${esc(hhmm(status.until))}` : ""}.${status.ahead ? ` ${status.ahead} ${status.ahead === 1 ? "person is" : "people are"} ahead of you; the first to scan gets the seat.` : ""}</p>
+        <div class="wait-row"><button class="btn" type="button" data-wait="leave">Stop watching</button></div>`;
+    } else {
+      const free = freeCount();
+      if (!ctx.open || ctx.holding || !(ctx.seats || []).length || free > NEARLY_FULL) { box.hidden = true; return; }
+      box.hidden = false;
+      box.dataset.state = "idle";
+      // Any seat, or a favourite area.
+      const areas = [...new Set((ctx.seats || []).map((s) => (/^[A-Za-z]+/.exec(String(s.id)) || [""])[0].toUpperCase()))].filter((a) => names[a]);
+      const options = [["", "Any seat"]].concat(areas.map((a) => [a, names[a]]));
+      box.innerHTML = `
+        <p class="wait-title">${free === 0 ? "Every seat is taken." : `Only ${free} ${free === 1 ? "seat" : "seats"} left.`}</p>
+        <p class="wait-sub">Get a notification the moment a seat frees up, instead of walking around looking. Pick an area if you have a favourite.</p>
+        <div class="wait-row">
+          <label class="wait-area"><select data-wait="area" aria-label="Which seats">${options.map(([v, label]) => `<option value="${esc(v)}"${v === (chosen || "") ? " selected" : ""}>${esc(label)}</option>`).join("")}</select></label>
+          <button class="btn btn-primary" type="button" data-wait="join">Notify me</button>
+        </div>`;
+    }
+    if (message) {
+      const p = document.createElement("p");
+      p.className = "wait-msg";
+      p.setAttribute("role", "status");
+      p.innerHTML = message;
+      box.appendChild(p);
+    }
+    for (const b of box.querySelectorAll("button")) b.disabled = busy;
+  }
+
+  async function refreshStatus(force) {
+    if (!force && Date.now() - lastStatusAt < 30000) return;
+    lastStatusAt = Date.now();
+    try {
+      const r = await waitlistPost(libraryId, "/status", { token: token() });
+      if (r && r.ok) status = r;
+    } catch { }
+  }
+
+  const reasons = {
+    library_closed: "The library is closed right now.",
+    already_holding_seat: "You already have a seat.",
+    slow_down: "Too many taps. Wait a moment and try again.",
+    list_full: "Too many people are waiting right now. Try again in a little while.",
+  };
+
+  box.addEventListener("change", (e) => {
+    if (e.target.matches("[data-wait=area]")) chosen = e.target.value;
+  });
+
+  box.addEventListener("click", async (e) => {
+    const action = e.target.closest("[data-wait]") && e.target.closest("[data-wait]").dataset.wait;
+    if (action !== "join" && action !== "leave") return;
+    const picker = box.querySelector("[data-wait=area]");
+    const area = (picker && picker.value) || null;
+    busy = true;
+    message = "";
+    paint();
+    try {
+      if (action === "leave") {
+        await waitlistPost(libraryId, "/leave", { token: token() });
+        status = { waiting: false };
+      } else {
+        // Notifications are how it tells you: turn them on first (or make
+        // sure the server has this device's sign-up).
+        const state = await notificationStateLive();
+        const help = ' <a href="/#notifications">Set up notifications</a>';
+        if (state === "needs_home_screen") throw new Error("On an iPhone or iPad, add NaviSpace to your Home Screen first, and turn notifications on there." + help);
+        if (state === "unsupported") throw new Error("This browser can't show notifications." + help);
+        if (state === "blocked") throw new Error("Notifications are blocked for this site." + help);
+        const on = await enablePushReminders(getOrCreateIdentity(), { quiet: state === "on" });
+        if (!on.ok) throw new Error((on.reason === "permission_denied" ? "Notifications weren't allowed, so we can't tell you." : "Couldn't turn on notifications.") + help);
+        let r = await waitlistPost(libraryId, "", { token: token(), area });
+        if (!r.ok && r.reason === "notifications_off") throw new Error("Couldn't turn on notifications." + help);
+        if (!r.ok) throw new Error(esc(reasons[r.reason] || "Couldn't do that right now. Try again."));
+        status = r;
+        message = "Done. Keep notifications on; you can close this page.";
+      }
+    } catch (err) {
+      message = String(err.message || err);
+    } finally {
+      busy = false;
+      paint();
+    }
+  });
+
+  return async function update(next) {
+    ctx = next;
+    if (ctx.holding && status && status.waiting) await refreshStatus(true);
+    else await refreshStatus(false);
+    if (!busy) paint();
+  };
+}

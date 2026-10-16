@@ -929,3 +929,104 @@ html.welcome-open {
 .welcome-later:hover {
     color: var(--text);
 }
+
+/* --- "Tell me when a seat frees up" (mountWaitCard in client.js) ---------- */
+
+.wait {
+    margin: 22px 0 0;
+    padding: 18px 20px;
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--brass);
+    background: var(--surface);
+    max-width: 520px;
+}
+
+.wait[hidden] {
+    display: none;
+}
+
+.wait[data-state="waiting"] {
+    border-left-color: var(--free);
+}
+
+.wait-title {
+    margin: 0 0 6px;
+    font: 400 21px/1.2 var(--font-serif);
+    color: var(--text);
+}
+
+.wait-sub {
+    margin: 0 0 14px;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--muted);
+}
+
+.wait-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.wait-row .btn {
+    width: auto;
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.wait-area {
+    flex: 1 1 180px;
+    display: flex;
+}
+
+.wait-area select {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 36px 0 14px;
+    font: 400 15px var(--font-body);
+    color: var(--text);
+    background: var(--ground-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c4a35f' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 14px center;
+    border: 1px solid var(--line-strong);
+    border-radius: 0;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.wait-area select:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+}
+
+.wait-msg {
+    margin: 12px 0 0;
+    font: 400 italic 15px/1.45 var(--font-serif);
+    color: var(--text);
+}
+
+.wait-msg a {
+    color: var(--brass);
+}
+
+.wait-pulse {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin: 0 10px 2px 0;
+    border-radius: 50%;
+    background: var(--free);
+    box-shadow: 0 0 0 0 rgba(140, 197, 164, 0.6);
+    animation: wait-pulse 2s ease-out infinite;
+}
+
+@keyframes wait-pulse {
+    70% { box-shadow: 0 0 0 9px rgba(140, 197, 164, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(140, 197, 164, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wait-pulse { animation: none; }
+}
+
+@media (max-width: 420px) {
+    .wait-row .btn { flex: 1 1 100%; }
+}

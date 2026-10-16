@@ -21,6 +21,7 @@ const RULES = {
   lfReport:    { token: [5, 3600],    ip: [20, 3600] },
   push:        { token: [20, 3600],   ip: [60, 3600] },      // notification sign-ups and tests
   forget:      { token: [5, 3600],    ip: [20, 3600] },
+  waitlist:    { token: [20, 600],    ip: [60, 600] },       // "tell me when a seat frees up"
   staffLogin:  { ip: [10, 900] },                            // password guesses
 };
 
