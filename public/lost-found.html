@@ -563,9 +563,22 @@
             const tip = document.getElementById("threadTip");
             tip.textContent = "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
             if (!("Notification" in window) && !isIosNotInstalled()) return;
-            // Already allowed: make sure this device is signed up, without asking again.
+            // Already allowed: make sure this device is signed up, without asking
+            // again, and offer a test so a silent computer can be diagnosed.
             if ("Notification" in window && Notification.permission === "granted") {
                 enablePushReminders(identity, { quiet: true }).catch(() => { });
+                const t = document.createElement("button");
+                t.type = "button";
+                t.textContent = "Send me a test notification";
+                t.onclick = async () => {
+                    t.disabled = true;
+                    const r = await enablePushReminders(identity);
+                    t.replaceWith(document.createTextNode(
+                        r.ok && r.testSent ? "Test sent. If nothing appeared, notifications for your browser are switched off on this device (on a Mac: System Settings → Notifications → your browser, and turn off Do Not Disturb)." :
+                        r.ok ? `The server couldn't send it (${r.testReason || "unknown reason"}).` :
+                        "Couldn't sign this device up for notifications."));
+                };
+                tip.append(" Notifications are on for this device. ", t, ".");
                 return;
             }
             const b = document.createElement("button");

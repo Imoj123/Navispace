@@ -1203,17 +1203,26 @@
 
         // --- Install -------------------------------------------------------------
 
-        // NaviSpace lives on phones (scanning desk codes, seat reminders), so
-        // the offer to add it to the home screen only appears on one. A laptop
-        // browser still has its own install option in the address bar.
+        // Phones add NaviSpace to the Home Screen; computers install it as an
+        // app (Chrome and Edge offer it themselves; Safari on a Mac calls it
+        // "Add to Dock", from its File menu). Already installed: no button.
         const onPhone = window.matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 820;
+        const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+        const macSafari = /Macintosh/.test(navigator.userAgent) && /Safari\//.test(navigator.userAgent) &&
+            !/Chrome|Chromium|Edg|Firefox/.test(navigator.userAgent) && navigator.maxTouchPoints === 0;
+        if (!onPhone) $("installBtn").textContent = macSafari ? "Add to Dock" : "Install app";
         let deferredInstall = null;
         window.addEventListener("beforeinstallprompt", (e) => {
             e.preventDefault();
             deferredInstall = e;
-            if (onPhone && $("heldPill").hidden) $("installBtn").hidden = false;
+            if ($("heldPill").hidden) $("installBtn").hidden = false;
         });
-        if (onPhone && typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
+        window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
+        if (!installed && onPhone && typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
+        if (!installed && macSafari) {
+            $("installBtn").hidden = false;
+            $("iosHint").innerHTML = "In Safari's menu bar, choose <em>File</em>, then <em>Add to Dock</em>. NaviSpace then opens as its own app, with notifications.";
+        }
         $("installBtn").addEventListener("click", async () => {
             if (deferredInstall) {
                 deferredInstall.prompt();
