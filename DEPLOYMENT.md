@@ -78,6 +78,12 @@ history on cron-job.org first: failed pings mean the server was asleep.
 - **Closing:** 10 minutes before closing, everyone holding a seat gets a
   notification. Check-ins stop at closing time, and every held seat is released
   5 minutes later (`CLOSING_GRACE_MINUTES`).
+- **Full floor:** when 3 seats or fewer are left, the home page and the map
+  offer **Notify me**: any seat, or a favourite area. When a seat frees up
+  (checked out, hold ran out, freed by staff or by reports), up to 3 people
+  waiting for it get a notification, oldest first; whoever scans first gets it.
+  The notification opens the map with that seat pointed out. Waiting lapses
+  after 3 hours and is cleared at closing. Needs notifications on.
 - **Busiest hours** on the home page are learned from how full the library is.
   Until each open hour has about three days of data, the plan's estimate
   (`hours.busiest`) shows.
@@ -98,21 +104,24 @@ Timings live in `src/config.js`.
   Students are counted by scrambled codes only.
 - **Seat stickers:** every seat's sticker on A4, signed with the server's
   `SEAT_SIGNING_SECRET`. Print, or save as a PDF.
+- **Launch poster:** an A4 poster for the entrance and the front desk: a QR code
+  to the home page, the three steps (scan your desk, keep your seat, check out)
+  and the opening hours. Print in colour if you can.
 
 ## Speed limits
 
 To stop one person flooding the floor or the board, each device and each
 network is limited (per minute or hour): seat actions, seat reports, Lost &
-Found posts, claims, messages and reports, notification sign-ups, data
-deletion, and staff sign-in attempts. Over a limit, the page says to wait a
+Found posts, claims, messages and reports, notification sign-ups, "Notify me",
+data deletion, and staff sign-in attempts. Over a limit, the page says to wait a
 moment. The numbers are in `src/ratelimit.js`.
 
 ## Privacy
 
 `/privacy.html` says, in plain language, what's kept, why and for how long
 (POPIA), and has **Delete my data**: it frees the device's seat and deletes its
-sittings, study board record, notification sign-up, Lost & Found posts and
-claims (with their conversations). It's linked from the home page footer, the
+sittings, study board record, notification sign-up, any wait for a seat, Lost &
+Found posts and claims (with their conversations). It's linked from the home page footer, the
 nickname card and the Lost & Found form. **Keep it true:** if what NaviSpace
 stores changes, update the page.
 
@@ -166,3 +175,4 @@ In Render → Logs:
 - `[push] VAPID_SUBJECT … malformed`: fix `VAPID_SUBJECT` (exactly `mailto:you@domain`).
 - `[sweep] engineering reclaimed: …`: seats freed (hold ran out, or closing time).
 - `[reminders] engineering sent: …`: reminders and closing notices that went out.
+- `[waitlist] engineering told N waiting`: people told a seat freed up.

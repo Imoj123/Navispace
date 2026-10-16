@@ -5,6 +5,7 @@ const { LIBRARIES } = require("./libraries");
 const { getSeatIds } = require("./seats");
 const { findHeldSeat, saveSeat, resetToAvailable, studentKey } = require("./scan");
 const { removeSubscription } = require("./push");
+const { leaveWaitlist } = require("./waitlist");
 const config = require("./config");
 
 /**
@@ -13,7 +14,7 @@ const config = require("./config");
  *
  * - the seat it holds (freed now),
  * - its sittings ("Your week") and study-board record,
- * - its notification sign-up,
+ * - its notification sign-up and any "tell me when a seat frees up",
  * - Lost & Found items it posted (with their conversations), and its
  *   claims on other people's items (the item goes back to unclaimed and
  *   the conversation is deleted).
@@ -28,6 +29,7 @@ async function forgetDevice(token) {
 
   for (const lib of LIBRARIES) {
     await store.delete(studentKey(lib.id, token));
+    await leaveWaitlist(lib.id, token);
     for (const key of await store.listKeys(`credit:${lib.id}:${token}:`)) await store.delete(key);
 
     const seatIds = lib.status === "active" ? getSeatIds(lib.id) : [];
