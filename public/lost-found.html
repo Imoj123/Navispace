@@ -573,7 +573,7 @@
         async function testNotifications() {
             const mac = /Macintosh/.test(navigator.userAgent);
             const where = mac
-                ? "your Mac is hiding it. Open System Settings → Notifications, find NaviSpace (and your browser) and turn on Allow notifications with the Banners style. Banners don't show for the app you're using, so switch to another app and try again, or check Notification Centre (click the clock)."
+                ? "your Mac is hiding it. Open System Settings → Notifications, click your browser (Google Chrome can be listed twice: do both), turn on Allow notifications and set Alert Style to Persistent. Also turn off Do Not Disturb in Control Centre → Focus."
                 : "this device is hiding it. Allow notifications for NaviSpace and your browser in the device's settings, and check Do Not Disturb.";
             for (const fresh of [false, true]) {
                 const arrived = pushArrives(15000);
