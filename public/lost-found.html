@@ -588,11 +588,27 @@
             return "The server sent it twice, but this browser never received it. Its connection to the push service may be blocked (a VPN or firewall can do this), or try another browser.";
         }
 
+        // Where to unblock notifications for this site, in the browser in use.
+        function blockedHelp() {
+            const ua = navigator.userAgent;
+            const host = location.host;
+            if (/Safari\//.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua) && navigator.maxTouchPoints === 0)
+                return `Notifications are blocked for this site. In Safari's menu bar choose Safari → Settings → Websites → Notifications and set ${host} to Allow (if it isn't listed, tick "Allow websites to ask for permission"), then reload this page.`;
+            if (/Firefox/.test(ua))
+                return "Notifications are blocked for this site. Click the icon to the left of the address, clear the blocked Notifications permission, then reload this page.";
+            return "Notifications are blocked for this site. Click the icon to the left of the address, set Notifications to Allow, then reload this page.";
+        }
+
         // Replies arrive as notifications on phones that allow them.
         function offerNotifications() {
             const tip = document.getElementById("threadTip");
             tip.textContent = "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
             if (!("Notification" in window) && !isIosNotInstalled()) return;
+            // Blocked earlier: asking again does nothing, so say where to unblock it.
+            if ("Notification" in window && Notification.permission === "denied") {
+                tip.append(" ", blockedHelp());
+                return;
+            }
             // Already allowed: make sure this device is signed up, without asking
             // again, and offer a test so a silent computer can be diagnosed.
             if ("Notification" in window && Notification.permission === "granted") {
@@ -620,7 +636,7 @@
                     r.ok && r.testSent ? "Notifications are on. You should have just got a test one." :
                     r.ok ? "Saved, but the test notification didn't go through. Try again in a minute." :
                     r.reason === "ios_not_installed" ? "On iPhone, add NaviSpace to your Home Screen first." :
-                    r.reason === "permission_denied" ? "Notifications are blocked for this site in your browser settings." :
+                    r.reason === "permission_denied" ? blockedHelp() :
                     "Notifications aren't available in this browser."));
             };
             tip.append(" ", b, ".");
