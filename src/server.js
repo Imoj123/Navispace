@@ -70,8 +70,6 @@ function libraryHours(libraryId) {
   return (layout && layout.hours) || null;
 }
 
-const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
-
 /** Minimal Cookie header parser — the one cookie we read doesn't justify a dependency. */
 function readCookie(req, name) {
   const header = req.headers.cookie || "";
@@ -116,17 +114,10 @@ function buildManifest(req) {
   const nick = String(source.nick || "").trim().slice(0, 24);
   if (nick) params.set("nick", nick);
 
-  // Start on the seat the student was on, so the installed app opens
-  // right where "Enable seat reminders" is.
-  const lib = String(source.lib || "");
-  const seat = String(source.seat || "");
-  if (SAFE_ID_RE.test(lib) && SAFE_ID_RE.test(seat)) {
-    params.set("lib", lib);
-    params.set("seat", seat);
-    manifest.start_url = `/seat.html?${params}`;
-  } else {
-    manifest.start_url = `/?${params}`;
-  }
+  // Always start on the home page. (Starting on the seat it was added
+  // from meant opening on that seat forever, long after leaving it; the
+  // home page links to whatever seat the student holds now.)
+  manifest.start_url = `/?${params}`;
   return manifest;
 }
 

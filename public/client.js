@@ -68,6 +68,11 @@ function readCookie(name) {
 
 (function adoptHandoffIdentity() {
   const params = new URLSearchParams(window.location.search);
+  // Apps added before the start page was always home open on the seat they
+  // were added from (only a start URL carries ?handoff=). Check that seat.
+  if (isStandaloneApp() && params.has("handoff") && window.location.pathname === "/seat.html") {
+    sessionStorage.setItem("navispace_check_start_seat", "1");
+  }
   // Two routes in, because iOS versions differ: the start_url's query
   // (some drop it), or the ns_handoff cookie, which iOS copies from Safari
   // into a Home Screen app when it's installed.
@@ -106,12 +111,6 @@ function updateManifestHandoff() {
   const params = new URLSearchParams({ handoff: token });
   const nick = localStorage.getItem("navispace_nickname");
   if (nick && nick !== "Anonymous") params.set("nick", nick);
-  // On a seat page, the installed app should open on this seat.
-  if (window.location.pathname === "/seat.html") {
-    const here = new URLSearchParams(window.location.search);
-    params.set("lib", getLibraryIdFromUrl());
-    params.set("seat", here.get("seat") || "A1");
-  }
   // The same fields as a cookie: Safari may fetch the manifest before this
   // script runs, and the link's crossorigin="use-credentials" sends it.
   document.cookie = `ns_handoff=${encodeURIComponent(params)}; path=/; max-age=31536000; SameSite=Lax; Secure`;
@@ -811,6 +810,22 @@ function confidenceLevel(seat, config, now = Date.now()) {
  * Right after the installed app takes over a student's identity, open
  * the seat they hold — that's where "Enable seat reminders" is.
  */
+(function leaveStaleStartSeat() {
+  if (sessionStorage.getItem("navispace_check_start_seat") !== "1") return;
+  sessionStorage.removeItem("navispace_check_start_seat");
+  const token = localStorage.getItem("navispace_token");
+  const here = new URLSearchParams(window.location.search).get("seat");
+  if (!token) { window.location.replace("/"); return; }
+  getHeldSeat(token)
+    .then((held) => {
+      if (held && held.seatId === here) return; // still yours: stay
+      window.location.replace(held && held.seatId
+        ? `/seat.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`
+        : "/");
+    })
+    .catch(() => window.location.replace("/"));
+})();
+
 (function goToHeldSeatAfterHandoff() {
   if (sessionStorage.getItem("navispace_go_to_seat") !== "1") return;
   sessionStorage.removeItem("navispace_go_to_seat");
