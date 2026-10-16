@@ -2,6 +2,7 @@
 
 const { store } = require("./store");
 const { getSeat, saveSeat, resetToAvailable } = require("./scan");
+const { recordSitting } = require("./history");
 const config = require("./config");
 
 function reportKey(libraryId, seatId) {
@@ -37,6 +38,8 @@ async function reportSeat(libraryId, seatId, reporterToken, now = Date.now()) {
 
     if (active.length >= threshold) {
         const seat = await getSeat(libraryId, seatId);
+        // Reported empty: count the sitting up to its last confirmed moment.
+        await recordSitting(libraryId, seat, seat.lastConfirmTime || now);
         resetToAvailable(seat);
         await saveSeat(seat);
         await store.delete(key);
