@@ -213,6 +213,112 @@ async function enablePushReminders(identity, { quiet = false, fresh = false } = 
   }
 }
 
+/** This device and browser, for notification help. */
+function deviceKind() {
+  const ua = navigator.userAgent;
+  const touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1; // iPadOS calls itself a Mac
+  const os = /iPhone|iPod/.test(ua) ? "iphone" : (/iPad/.test(ua) || touchMac) ? "ipad"
+    : /Android/.test(ua) ? "android" : /Macintosh/.test(ua) ? "mac" : /Windows/.test(ua) ? "windows" : "other";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox|FxiOS/.test(ua) ? "Firefox"
+    : /Chrome|CriOS|Chromium/.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "your browser";
+  const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  return { os, browser, installed };
+}
+
+/**
+ * Where notifications stand on this device: "on", "off", "blocked",
+ * "needs_home_screen" (iPhone/iPad Safari: only a Home Screen copy can
+ * get them) or "unsupported".
+ */
+function notificationState() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return isIosNotInstalled() ? "needs_home_screen" : "unsupported";
+  }
+  return { granted: "on", denied: "blocked" }[Notification.permission] || "off";
+}
+
+/**
+ * Step-by-step help for this exact device and browser, for a state:
+ * { title, steps: [string] }. Used by the home page's Notifications
+ * section and the Lost & Found thread, so both say the same thing.
+ */
+function notificationGuide(state = notificationState()) {
+  const { os, browser, installed } = deviceKind();
+  const host = window.location.host;
+  const where = { mac: "Mac", windows: "Windows computer", android: "Android phone", iphone: "iPhone", ipad: "iPad" }[os] || "device";
+  if (state === "needs_home_screen") {
+    return {
+      title: `On ${os === "ipad" ? "an iPad" : "an iPhone"}, notifications only work from the Home Screen`,
+      steps: [
+        "In Safari, tap the Share button (the square with an arrow).",
+        "Choose Add to Home Screen, then Add.",
+        "Open NaviSpace from the new icon on your Home Screen.",
+        "Come back to this section and tap Turn on notifications, then Allow.",
+      ],
+    };
+  }
+  if (state === "unsupported") {
+    return { title: "This browser can't show notifications", steps: ["Open NaviSpace in Chrome, Edge, Safari or Firefox and turn them on there."] };
+  }
+  if (state === "blocked") {
+    if (os === "iphone" || os === "ipad") return { title: "Notifications are blocked for NaviSpace", steps: ["Open the Settings app, then Notifications.", "Tap NaviSpace and turn on Allow Notifications.", "Come back and reload this page."] };
+    if (os === "android") return { title: `Notifications are blocked for this site in ${browser}`, steps: ["Tap the icon to the left of the address, then Permissions (or Site settings).", "Set Notifications to Allow.", "Reload this page."] };
+    if (browser === "Safari") return { title: "Notifications are blocked for this site in Safari", steps: ["In the menu bar choose Safari → Settings → Websites → Notifications.", `Set ${host} to Allow. If it isn't listed, tick "Allow websites to ask for permission to send notifications".`, "Reload this page and turn them on again."] };
+    if (browser === "Firefox") return { title: "Notifications are blocked for this site in Firefox", steps: ["Click the icon to the left of the address.", "Clear the blocked Notifications permission.", "Reload this page and turn them on again."] };
+    return { title: `Notifications are blocked for this site in ${browser}`, steps: ["Click the icon to the left of the address, then Site settings.", "Set Notifications to Allow.", "Reload this page."] };
+  }
+  // On, or about to be turned on: what makes a delivered notification stay hidden.
+  const first = state === "off" ? [`Tap Turn on notifications, then Allow when ${browser} asks.`] : [];
+  if (os === "mac") {
+    const app = browser === "your browser" ? "your browser" : browser === "Chrome" ? "Google Chrome" : browser === "Edge" ? "Microsoft Edge" : browser;
+    return {
+      title: `If nothing shows on this ${where}`,
+      steps: first.concat([
+        `Open System Settings → Notifications and click ${app}${browser === "Chrome" ? " (it can be listed twice: do both)" : ""}.`,
+        "Turn on Allow notifications and set Alert Style to Persistent.",
+        "Turn off Do Not Disturb: Control Centre → Focus.",
+      ], browser === "Safari" ? [`In Safari → Settings → Websites → Notifications, make sure ${host} is set to Allow.`] : []),
+    };
+  }
+  if (os === "windows") return { title: `If nothing shows on this ${where}`, steps: first.concat([`Open Settings → System → Notifications and turn on ${browser === "Edge" ? "Microsoft Edge" : browser === "Chrome" ? "Google Chrome" : browser}.`, "Turn off Do not disturb in the same place."]) };
+  if (os === "android") return { title: `If nothing shows on this ${where}`, steps: first.concat([`Open Settings → Apps → ${browser} → Notifications and allow them.`, "Turn off Do Not Disturb, and let the browser run in the background if battery saver asks."]) };
+  if (os === "iphone" || os === "ipad") return { title: `If nothing shows on this ${where}`, steps: first.concat(["Open the Settings app → Notifications → NaviSpace and turn on Allow Notifications.", "Turn off Focus or Do Not Disturb in Control Centre."]) };
+  return { title: "If nothing shows on this device", steps: first.concat(["Allow notifications for your browser in the device's settings, and turn off Do Not Disturb."]) };
+}
+
+/** Resolves with the service worker's report when a push arrives, or null after ms. */
+function pushArrives(ms) {
+  return new Promise((resolve) => {
+    if (!navigator.serviceWorker) return resolve(null);
+    const done = (v) => { navigator.serviceWorker.removeEventListener("message", on); clearTimeout(timer); resolve(v); };
+    const on = (e) => { if (e.data && e.data.type === "navispace-push") done(e.data); };
+    const timer = setTimeout(() => done(null), ms);
+    navigator.serviceWorker.addEventListener("message", on);
+  });
+}
+
+/**
+ * Sends a test notification and follows it all the way: did the server
+ * send it, did this browser receive it, did the system accept it? A
+ * browser that never receives it gets a fresh subscription and a second
+ * try. Returns { ok, hidden, message }: hidden means it reached the
+ * device, so the device's own settings are hiding it.
+ */
+async function testPushNotifications(identity) {
+  for (const fresh of [false, true]) {
+    const arrived = pushArrives(15000);
+    const r = await enablePushReminders(identity, { fresh });
+    if (!r.ok) {
+      return { ok: false, message: r.reason === "permission_denied" ? "Notifications are blocked for this site." : "Couldn't sign this device up for notifications." };
+    }
+    if (!r.testSent) return { ok: false, message: `The server couldn't send it (${r.testReason || "unknown reason"}).` };
+    const got = await arrived;
+    if (got && got.shown) return { ok: true, hidden: true, message: "Sent and received: it reached this device. If you didn't see it, the device is hiding it. Follow the steps below." };
+    if (got) return { ok: false, message: `It reached this browser, but the system refused to show it (${got.error}).` };
+  }
+  return { ok: false, message: "The server sent it twice, but this browser never received it. Its connection to the push service may be blocked (a VPN or firewall can do this). Try another browser or network." };
+}
+
 /**
  * A browser that already allowed notifications re-registers itself with
  * the server once a day, quietly (no prompt, no test notification). This

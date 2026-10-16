@@ -562,6 +562,124 @@
             }
         }
 
+        /* --- Notifications ------------------------------------------------------
+           This device's status, one button, and the steps for this exact
+           device and browser (a Mac in Chrome, an iPhone, Windows in Edge...). */
+        .notify {
+            scroll-margin-top: 20px;
+        }
+
+        .notify-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+            gap: 26px 56px;
+            align-items: start;
+        }
+
+        .notify-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .notify-state i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--muted);
+        }
+
+        .notify-state[data-state="on"] i {
+            background: var(--free);
+            box-shadow: 0 0 0 3px rgba(140, 197, 164, 0.2);
+        }
+
+        .notify-state[data-state="blocked"] i {
+            background: var(--taken, #c2705a);
+        }
+
+        .notify-lede {
+            margin: 0;
+            font: 400 clamp(22px, 2.4vw, 28px)/1.25 var(--font-serif);
+            text-wrap: pretty;
+        }
+
+        .notify-lede em {
+            color: var(--brass);
+        }
+
+        .notify-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .notify-actions .btn {
+            width: auto;
+            margin: 0;
+            padding: 14px 20px;
+        }
+
+        .notify-actions .btn[hidden] {
+            display: none;
+        }
+
+        .notify-result {
+            margin: 14px 0 0;
+            color: var(--text);
+            font: 400 italic 16px/1.45 var(--font-serif);
+            max-width: 46ch;
+        }
+
+        .notify-result:empty {
+            display: none;
+        }
+
+        .notify-guide h3 {
+            margin: 0 0 14px;
+            font: 400 11.5px/1.4 var(--font-mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .notify-guide ol {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            counter-reset: step;
+            border-top: 1px solid var(--line);
+        }
+
+        .notify-guide li {
+            counter-increment: step;
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr);
+            gap: 10px;
+            padding: 13px 0;
+            border-bottom: 1px solid var(--line);
+            line-height: 1.5;
+        }
+
+        .notify-guide li::before {
+            content: counter(step, decimal-leading-zero);
+            font: 400 12px/1.9 var(--font-mono);
+            color: var(--brass);
+        }
+
+        .notify-guide p {
+            margin: 12px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        @media (max-width: 860px) {
+            .notify-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .steps {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -745,6 +863,28 @@
                     </dl>
                 </div>
                 <figure class="week-art" id="weekArt"></figure>
+            </div>
+        </section>
+
+        <section class="section notify" id="notifications" aria-labelledby="notifyTitle">
+            <div class="section-head">
+                <h2 id="notifyTitle">Notifications</h2>
+                <span class="eyebrow notify-state" id="notifyState" data-state="off"><i></i><span id="notifyStateText">Off on this device</span></span>
+            </div>
+            <div class="notify-grid">
+                <div>
+                    <p class="notify-lede">A nudge <em>10 and 5 minutes</em> before your seat frees up, and a ping when someone replies about a lost item.</p>
+                    <div class="notify-actions">
+                        <button class="btn btn-primary" id="notifyOn" type="button">Turn on notifications</button>
+                        <button class="btn" id="notifyTest" type="button" hidden>Send a test</button>
+                    </div>
+                    <p class="notify-result" id="notifyResult" role="status" aria-live="polite"></p>
+                </div>
+                <div class="notify-guide">
+                    <h3 id="notifyGuideTitle">On this device</h3>
+                    <ol id="notifyGuide"></ol>
+                    <p>Each device is set up on its own: your phone and your laptop each need turning on.</p>
+                </div>
             </div>
         </section>
 
@@ -962,6 +1102,75 @@
                     : `${h.closedFor && h.closedFor !== "Weekend" ? esc(h.closedFor) + ". " : "Closed. "}Opens <b>${esc(when)}</b>`;
             } catch { }
         }
+
+        // --- Notifications ------------------------------------------------------
+        // Status for this device, a button that does the right next thing,
+        // and steps written for this device and browser (from client.js).
+
+        function paintNotifications(message) {
+            const state = notificationState();
+            const label = {
+                on: "On for this device",
+                off: "Off on this device",
+                blocked: "Blocked on this device",
+                needs_home_screen: "Needs the Home Screen",
+                unsupported: "Not available here",
+            }[state];
+            $("notifyState").dataset.state = state;
+            $("notifyStateText").textContent = label;
+            const on = $("notifyOn");
+            on.hidden = state === "on" || state === "unsupported";
+            on.textContent = state === "needs_home_screen" ? "Show me how" : state === "blocked" ? "I've unblocked it" : "Turn on notifications";
+            $("notifyTest").hidden = state !== "on";
+            const guide = notificationGuide(state);
+            $("notifyGuideTitle").textContent = guide.title;
+            $("notifyGuide").innerHTML = "";
+            for (const step of guide.steps) {
+                const li = document.createElement("li");
+                li.textContent = step;
+                $("notifyGuide").appendChild(li);
+            }
+            if (message !== undefined) $("notifyResult").textContent = message;
+        }
+
+        $("notifyOn").addEventListener("click", async () => {
+            const state = notificationState();
+            if (state === "needs_home_screen") {
+                $("notifyGuide").scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+            if (state === "blocked") { location.reload(); return; }
+            $("notifyOn").disabled = true;
+            $("notifyResult").textContent = "Asking…";
+            try {
+                const r = await enablePushReminders(getOrCreateIdentity());
+                paintNotifications(
+                    r.ok && r.testSent ? "Notifications are on. A test is on its way. If it doesn't appear, follow the steps." :
+                    r.ok ? "Turned on, but the test didn't go through. Send a test in a minute." :
+                    r.reason === "permission_denied" ? "That was blocked. The steps show how to unblock it." :
+                    r.reason === "ios_not_installed" ? "Add NaviSpace to your Home Screen first." :
+                    r.reason === "no_vapid_key" ? "Notifications aren't set up on the server yet." :
+                    "Couldn't turn them on in this browser.");
+            } finally {
+                $("notifyOn").disabled = false;
+            }
+        });
+
+        $("notifyTest").addEventListener("click", async () => {
+            $("notifyTest").disabled = true;
+            $("notifyResult").textContent = "Sending a test and following it…";
+            try {
+                const r = await testPushNotifications(getOrCreateIdentity());
+                paintNotifications(r.message);
+            } finally {
+                $("notifyTest").disabled = false;
+            }
+        });
+
+        // Needs nothing from the server: paint now, and again when the person
+        // comes back from changing a setting.
+        paintNotifications();
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) paintNotifications(); });
 
         // --- Your week ---------------------------------------------------------
         // This device's sittings from the server, bucketed into local days.
