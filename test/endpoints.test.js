@@ -269,3 +269,14 @@ test("search engines: only the home page and the map are listed", async () => {
     assert.equal(api.headers.get("x-robots-tag"), "noindex");
   });
 });
+
+test("unknown pages get the not-found page; unknown API paths get JSON", async () => {
+  await withServer(async (base) => {
+    const page = await fetch(`${base}/no-such-page`);
+    assert.equal(page.status, 404);
+    assert.match(await page.text(), /Nothing at <em>this desk\.<\/em>/);
+    const api = await fetch(`${base}/api/no-such-thing`);
+    assert.equal(api.status, 404);
+    assert.equal((await api.json()).reason, "not_found");
+  });
+});

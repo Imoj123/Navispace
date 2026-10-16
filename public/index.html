@@ -435,11 +435,60 @@
         }
 
         .zone {
+            position: relative;
             background: var(--ground);
             padding: 18px 20px 20px;
             display: grid;
             gap: 10px;
             min-width: 0;
+            color: inherit;
+            text-decoration: none;
+            transition: background 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .zone:hover,
+        .zone:focus-visible {
+            background:
+                radial-gradient(ellipse 90% 70% at 50% 0%, rgba(228, 192, 118, 0.09), transparent 70%),
+                var(--ground);
+            box-shadow: inset 0 0 0 1px rgba(196, 163, 95, 0.55);
+        }
+
+        .zone .go {
+            position: absolute;
+            top: 18px;
+            right: 20px;
+            font: 400 13px/1 var(--font-mono);
+            color: var(--brass);
+            opacity: 0;
+            transform: translateX(-4px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .zone:hover .go,
+        .zone:focus-visible .go {
+            opacity: 1;
+            transform: none;
+        }
+
+        /* A small live drawing of the area: its seats where they sit. */
+        .zone .mini {
+            display: block;
+            width: 100%;
+            height: 60px;
+            margin: 2px 0 2px;
+        }
+
+        .zone .mini rect {
+            transition: fill 0.4s ease, opacity 0.25s ease;
+        }
+
+        .zone .mini .s-AVAILABLE { fill: var(--free); opacity: 0.85; }
+        .zone .mini .s-OCCUPIED { fill: var(--taken); opacity: 0.75; }
+        .zone .mini .s-STEPPED_AWAY { fill: var(--away); opacity: 0.8; }
+
+        .zone:hover .mini rect {
+            opacity: 1;
         }
 
         .zone .name {
@@ -849,16 +898,24 @@
                 if (seat.state === "AVAILABLE") g.free++;
             }
             const zones = $("zones");
+            const mapHref = libraryUrl("/library.html", library.id);
+            const fresh = !zones.children.length;
             zones.innerHTML = "";
             for (const [key, g] of groups) {
-                const d = document.createElement("div");
+                const d = document.createElement("a");
                 d.className = "zone";
-                d.innerHTML = '<span class="name"></span><span class="num"><b></b> of <span class="t"></span> free</span><div class="bar"><span></span></div>';
+                d.href = mapHref;
+                d.innerHTML = '<span class="name"></span><span class="go" aria-hidden="true">→</span><span class="num"><b></b> of <span class="t"></span> free</span>' + miniMap(key) + '<div class="bar"><span></span></div>';
                 d.querySelector(".name").textContent = names[key] || `Area ${key}`;
                 d.querySelector("b").textContent = g.free;
                 d.querySelector(".t").textContent = g.total;
+                d.setAttribute("aria-label", `${names[key] || "Area " + key}: ${g.free} of ${g.total} seats free. Open the map.`);
                 zones.appendChild(d);
-                requestAnimationFrame(() => { d.querySelector(".bar span").style.width = (g.free / g.total * 100) + "%"; });
+                const bar = d.querySelector(".bar span");
+                const pct = (g.free / g.total * 100) + "%";
+                // Grow the bar on first load only; live updates just set it.
+                if (fresh) requestAnimationFrame(() => { bar.style.width = pct; });
+                else { bar.style.transition = "none"; bar.style.width = pct; }
             }
             $("areasMeta").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
         }
@@ -991,6 +1048,28 @@
         });
 
         // --- Boot ------------------------------------------------------------------
+
+        // One area's seats, drawn where they sit on the plan, coloured by state.
+        function miniMap(zoneKey) {
+            if (!layout) return "";
+            const pts = layout.seats.filter((s) => String(s.id).toUpperCase().startsWith(zoneKey) && /^\d/.test(String(s.id).slice(zoneKey.length)));
+            if (!pts.length) return "";
+            const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+            const pad = 14;
+            const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
+            const w = Math.max(...xs) - x0 + pad, h = Math.max(...ys) - y0 + pad;
+            // Size seats for the screen: about 6.5px drawn, but never wider than
+            // the gap between neighbours on a table (36 plan units), so rows
+            // read as separate seats rather than a bar.
+            const boxW = 260, boxH = 60;
+            const cell = Math.min(30, Math.max(18, 6.5 * Math.max(w / boxW, h / boxH)));
+            const rects = pts.map((p) => {
+                const seat = seatsById.get(String(p.id));
+                const st = seat ? seat.state : "AVAILABLE";
+                return `<rect class="s-${st}" x="${(p.x - cell / 2).toFixed(1)}" y="${(p.y - cell / 2).toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" rx="${(cell / 4).toFixed(1)}"/>`;
+            }).join("");
+            return `<svg class="mini" viewBox="${x0} ${y0} ${w} ${h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${rects}</svg>`;
+        }
 
         // The floor plan only changes with a deploy, so keep a copy and draw
         // it at once on the next visit while a fresh one loads.
