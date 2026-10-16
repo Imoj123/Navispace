@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121614" />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NaviSpace" />
+    <link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>NaviSpace — Choose a library</title>
+    <meta name="description" content="Pick the Wits library you're studying in." />
+    <meta name="robots" content="noindex" />
+    <style>
+        main {
+            max-width: 560px;
+        }
+
+        /* One library per row: number, name, status. The one you're in now
+           is marked in brass; libraries that aren't live yet can't be picked. */
+        .lib-list {
+            list-style: none;
+            margin: 28px 0 0;
+            padding: 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .lib-list a,
+        .lib-list .soon {
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            min-height: 64px;
+            padding: 12px 4px;
+            border-bottom: 1px solid var(--line);
+            font: 400 12.5px var(--font-mono);
+            color: var(--muted);
+            text-decoration: none;
+        }
+
+        .lib-list .name {
+            font: 400 21px/1.2 var(--font-serif);
+            color: var(--text);
+        }
+
+        .lib-list .status {
+            letter-spacing: 0.06em;
+            text-align: right;
+        }
+
+        .lib-list a .status {
+            color: var(--free);
+        }
+
+        .lib-list a:hover .name,
+        .lib-list a:focus-visible .name {
+            color: var(--brass);
+        }
+
+        .lib-list a.here .n,
+        .lib-list a.here .status {
+            color: var(--brass);
+        }
+
+        .lib-list .soon {
+            opacity: 0.6;
+        }
+
+        .back {
+            display: inline-block;
+            margin-top: 26px;
+            padding: 10px 0;
+            font: 400 italic 17px/1 var(--font-serif);
+            color: var(--muted);
+        }
+
+        .back:hover {
+            color: var(--text);
+        }
+    </style>
+</head>
+
+<body>
+    <header class="topbar">
+        <a class="wordmark" href="/"><span class="wordmark-mark"></span>NaviSpace</a>
+        <nav class="topnav" id="topnav"></nav>
+    </header>
+
+    <main>
+        <p class="eyebrow">Wits libraries</p>
+        <h1 class="page-title">Choose a <em>library.</em></h1>
+        <p class="page-subtitle" id="lede">Pick where you're studying. NaviSpace remembers it next time.</p>
+
+        <ul class="lib-list" id="list" aria-label="Libraries"></ul>
+        <a class="back" id="back" href="/">Keep the one I'm in</a>
+    </main>
+
+    <script src="/client.js"></script>
+    <script>
+        // Reached from "Change library". ?from= is the page it came from, so
+        // picking a library lands on that same page for the new library (a
+        // seat page goes to the new library's map: seats belong to one library).
+        const params = new URLSearchParams(location.search);
+        const current = params.get("lib") || "";
+        const SAME_PAGE = ["/library.html", "/leaderboard.html", "/lost-found.html"];
+        const from = SAME_PAGE.includes(params.get("from")) ? params.get("from") : "/library.html";
+        const where = { "/library.html": "map", "/leaderboard.html": "study board", "/lost-found.html": "lost & found" }[from];
+        document.getElementById("lede").textContent = `Pick where you're studying. You'll go straight to its ${where}, and NaviSpace remembers it next time.`;
+
+        const navLib = current || "engineering";
+        document.getElementById("topnav").innerHTML = `
+            <a href="/">Home</a>
+            <a href="${libraryUrl("/library.html", navLib)}">Map</a>
+            <a href="${libraryUrl("/leaderboard.html", navLib)}">Study board</a>
+            <a href="${libraryUrl("/lost-found.html", navLib)}">Lost &amp; found</a>
+        `;
+        if (current) document.getElementById("back").href = libraryUrl(from, current);
+        else document.getElementById("back").hidden = true;
+
+        const pad = (n) => String(n).padStart(2, "0");
+        getLibraries().then((libs) => {
+            const list = document.getElementById("list");
+            list.innerHTML = "";
+            libs.forEach((lib, i) => {
+                const li = document.createElement("li");
+                const active = lib.status === "active";
+                const row = document.createElement(active ? "a" : "div");
+                if (active) {
+                    row.href = libraryUrl(from, lib.id);
+                    row.addEventListener("click", () => {
+                        try { localStorage.setItem("navispace_last_lib", lib.id); } catch { }
+                    });
+                    if (lib.id === current) { row.className = "here"; row.setAttribute("aria-current", "true"); }
+                } else {
+                    row.className = "soon";
+                }
+                row.innerHTML = '<span class="n"></span><span class="name"></span><span class="status"></span>';
+                row.querySelector(".n").textContent = pad(i + 1);
+                row.querySelector(".name").textContent = lib.name;
+                row.querySelector(".status").textContent = !active ? "Coming soon"
+                    : lib.id === current ? "You're here" : `Open · ${lib.seatCount} seats`;
+                li.appendChild(row);
+                list.appendChild(li);
+            });
+        }).catch(() => {
+            document.getElementById("list").innerHTML = '<li class="soon"><span></span><span class="name">Couldn\'t load the libraries.</span><span></span></li>';
+        });
+    </script>
+</body>
+
+</html>

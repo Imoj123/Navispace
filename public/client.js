@@ -363,6 +363,16 @@ function libraryUrl(path, libraryId) {
 }
 
 /**
+ * "Change library" links open the library picker, telling it which
+ * library you're in and which page you came from, so a pick lands on the
+ * same page for the new library.
+ */
+document.querySelectorAll("a[data-change-library]").forEach((a) => {
+  const q = new URLSearchParams({ lib: getLibraryIdFromUrl(), from: window.location.pathname });
+  a.href = `/libraries.html?${q}`;
+});
+
+/**
  * GET a JSON API endpoint, riding out a flaky phone connection: each try
  * times out after 10s, and a network error or 5xx is retried twice
  * (after 0.6s, then 1.5s) before giving up. 4xx answers are returned
