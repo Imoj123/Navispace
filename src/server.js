@@ -471,6 +471,13 @@ function createApp() {
     });
   });
 
+  // Anything else: data requests get JSON, people get the not-found page.
+  app.use((req, res) => {
+    if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false, reason: "not_found" });
+    res.status(404).set("Cache-Control", "no-cache").type("html")
+      .send(pageWithVersions(path.join(PUBLIC_DIR, "404.html")));
+  });
+
   return app;
 }
 
