@@ -16,6 +16,7 @@ const { reportSeat } = require("./reports");
 const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = require("./push");
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem } = require("./lostfound");
+const { seatCodeValid, seatCodesRequired } = require("./seatcode");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -258,7 +259,7 @@ function createApp() {
 
   app.post("/api/library/:libId/scan/:id", async (req, res) => {
     const { libId } = req.params;
-    const { action, token, nickname } = req.body || {};
+    const { action, token, nickname, k } = req.body || {};
 
     if (!isActiveLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "library_not_active" });
@@ -269,6 +270,12 @@ function createApp() {
     }
     if (!token || !nickname) {
       return res.status(400).json({ ok: false, reason: "missing_identity" });
+    }
+    // Claiming a seat needs the code from its sticker (see seatcode.js).
+    // Everything after that is limited to the device holding the seat.
+    if (action === "checkIn" && !seatCodeValid(libId, req.params.id, k)) {
+      const seat = await getSeat(libId, req.params.id);
+      return res.status(403).json({ ok: false, reason: "scan_required", seat: publicSeat(seat) });
     }
 
     const result = await handleScan(
@@ -435,6 +442,7 @@ function createApp() {
       PEAK_HOURS_START: config.PEAK_HOURS_START,
       PEAK_HOURS_END: config.PEAK_HOURS_END,
       VAPID_PUBLIC_KEY: vapidPublicKey(),
+      SEAT_CODE_REQUIRED: seatCodesRequired(),
     });
   });
 
