@@ -313,3 +313,13 @@ test("lost & found: the claim note and thread stay private to finder and claiman
     assert.equal((await (await post(`/${item.id}/desk`, { token: "tok-f" })).json()).item.atDesk, true);
   });
 });
+
+test("a quiet push re-sync saves the subscription without a test notification", async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/push/subscribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "tok-sync", subscription: { endpoint: "https://push.example/x", keys: {} }, quiet: true }) });
+    const body = await res.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.testReason, "quiet");
+    assert.equal((await store.get("push:tok-sync")).endpoint, "https://push.example/x");
+  });
+});

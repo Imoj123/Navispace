@@ -491,11 +491,13 @@ function createApp() {
   // object the browser's PushManager.subscribe() returns.
 
   app.post("/api/push/subscribe", async (req, res) => {
-    const { token, subscription } = req.body || {};
+    const { token, subscription, quiet } = req.body || {};
     if (!token || !subscription) {
       return res.status(400).json({ ok: false, reason: "missing_fields" });
     }
     await saveSubscription(token, subscription);
+    // A quiet re-sync (the page refreshing an existing permission) skips the test.
+    if (quiet) return res.json({ ok: true, testSent: false, testReason: "quiet" });
     // Send one right away so the student sees reminders work end to end
     // (and a broken VAPID/push setup shows up now, not 55 minutes later).
     const test = await sendPush(token, {
