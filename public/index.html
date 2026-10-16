@@ -1107,8 +1107,15 @@
         // Status for this device, a button that does the right next thing,
         // and steps written for this device and browser (from client.js).
 
-        function paintNotifications(message) {
-            const state = notificationState();
+        // Painted at once from the permission, then double-checked against this
+        // device's push subscription (notificationStateLive in client.js).
+        async function paintNotifications(message) {
+            paintNotificationState(notificationState(), message);
+            const live = await notificationStateLive();
+            if (live !== notificationState()) paintNotificationState(live);
+        }
+
+        function paintNotificationState(state, message) {
             const label = {
                 on: "On for this device",
                 off: "Off on this device",
@@ -1134,7 +1141,7 @@
         }
 
         $("notifyOn").addEventListener("click", async () => {
-            const state = notificationState();
+            const state = $("notifyState").dataset.state;
             if (state === "needs_home_screen") {
                 $("notifyGuide").scrollIntoView({ behavior: "smooth", block: "center" });
                 return;
@@ -1171,6 +1178,10 @@
         // comes back from changing a setting.
         paintNotifications();
         document.addEventListener("visibilitychange", () => { if (!document.hidden) paintNotifications(); });
+        // Coming back via the Back button (a page kept in memory) or a page
+        // the browser loaded ahead of time: read the state again.
+        window.addEventListener("pageshow", (e) => { if (e.persisted) paintNotifications(); });
+        if (document.prerendering) document.addEventListener("prerenderingchange", () => paintNotifications(), { once: true });
 
         // --- Your week ---------------------------------------------------------
         // This device's sittings from the server, bucketed into local days.

@@ -173,7 +173,8 @@ async function enablePushReminders(identity, { quiet = false, fresh = false } = 
   }
 
   // quiet: only refresh an existing permission, never prompt (no tap).
-  if (quiet && Notification.permission !== "granted") return { ok: false, reason: "not_granted" };
+  // (Safari can say "default" for a granted one; see notificationStateLive.)
+  if (quiet && Notification.permission === "denied") return { ok: false, reason: "not_granted" };
   const permission = quiet ? "granted" : await Notification.requestPermission();
   if (permission !== "granted") {
     return { ok: false, reason: "permission_denied" };
@@ -234,6 +235,27 @@ function notificationState() {
     return isIosNotInstalled() ? "needs_home_screen" : "unsupported";
   }
   return { granted: "on", denied: "blocked" }[Notification.permission] || "off";
+}
+
+/**
+ * notificationState(), double-checked: Safari (notably a Home Screen app on
+ * iPhone) can report the permission as "default" after moving between
+ * pages even though it's granted and notifications still arrive. A live
+ * push subscription on this device settles it: then they're on.
+ */
+async function notificationStateLive() {
+  const state = notificationState();
+  if (state !== "off") return state;
+  try {
+    const reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
+    ]);
+    const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+    return sub ? "on" : state;
+  } catch {
+    return state;
+  }
 }
 
 /**
@@ -327,11 +349,13 @@ async function testPushNotifications(identity) {
  */
 (function syncPushQuietly() {
   try {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (!("Notification" in window) || Notification.permission === "denied") return;
     const token = localStorage.getItem("navispace_token");
     const last = Number(localStorage.getItem("navispace_push_synced")) || 0;
     if (!token || Date.now() - last < 24 * 60 * 60 * 1000) return;
-    enablePushReminders({ token }, { quiet: true }).then((r) => {
+    // Quiet only refreshes a granted permission; a subscription that exists
+    // (see notificationStateLive) gets re-sent as it is.
+    notificationStateLive().then((state) => (state === "on" ? enablePushReminders({ token }, { quiet: true }) : { ok: false })).then((r) => {
       if (r.ok) localStorage.setItem("navispace_push_synced", String(Date.now()));
     }).catch(() => {});
   } catch { }
