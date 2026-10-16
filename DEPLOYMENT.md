@@ -1,56 +1,133 @@
-# Deploying NaviSpace on Render
+# Running NaviSpace on Render
 
-## Stop the free tier from sleeping
+NaviSpace runs as one Render web service (`npm start`) at
+`https://navispace-1.onrender.com`, with its data in an Upstash Redis
+database. Every merge to `main` redeploys it automatically.
 
-Render's free web services sleep after 15 minutes without traffic. The next visitor waits 30–60 seconds while it boots. Worse, while it sleeps **the reminder and expiry loops don't run**, so no seat reminders are sent and expired seats aren't freed.
+## Checklist
 
-Pick one:
+| | What | Why |
+| --- | --- | --- |
+| ✅ | Upstash variables set | Check-ins, Lost & Found, conversations and "Your week" survive restarts |
+| ✅ | VAPID keys set | Seat reminders and Lost & Found notifications |
+| ✅ | `SEAT_SIGNING_SECRET` set | Only a scanned sticker can claim a seat |
+| ✅ | Keep-awake ping every 10 minutes | Reminders, seat releases and closing time keep running |
+| ☐ | Seat stickers printed from the server's secret | Old stickers stop working once the secret is set |
+| ☐ | Opening hours and closed days confirmed | Check-ins are refused outside them |
 
-1. **Upgrade the service to Render's Starter plan.** This is the real fix: it never sleeps, and nothing else needs maintaining.
-2. **Free: ping it every 10 minutes.** Create a free monitor at [cron-job.org](https://cron-job.org) or [UptimeRobot](https://uptimerobot.com) that requests:
+## Environment variables
 
-   ```
-   https://navispace-1.onrender.com/healthz
-   ```
+Set these on the Render service: **Dashboard → your service → Environment**.
+Saving them redeploys the service.
 
-   every 10 minutes. `/healthz` is cheap and never cached. One service running 24/7 uses about 730 of the free tier's 750 instance-hours a month, so a single always-on service fits. Don't run a second free service on the same account this way, because together they would go over.
-
-Installed copies of the app open instantly either way: the service worker now serves the cached pages first and refreshes them in the background.
-
-## Environment variables for notifications
-
-All four need to be set on the Render service (Dashboard → your service → Environment):
-
-| Variable | Value |
-| --- | --- |
-| `VAPID_PUBLIC_KEY` | from `npm run vapid-keys` |
-| `VAPID_PRIVATE_KEY` | from `npm run vapid-keys` |
-| `VAPID_SUBJECT` | `mailto:` + a real email address you own, e.g. `mailto:you@yourdomain` (Apple rejects pushes signed with a placeholder) |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | from a free Upstash Redis database. Without these, every restart or sleep **erases** check-ins and notification sign-ups. |
-
-Generate the VAPID keys once and keep them. Changing them invalidates every existing subscription.
-
-## Checking notifications work
-
-1. Check in to a seat and tap **Enable seat reminders**. A test notification should arrive within a few seconds.
-   - If the page says the test didn't go through, open Render → Logs and look for a `[push] send failed (...)` line, which gives the push service's reason.
-2. **iPhone:** iOS only allows web notifications for an app added to the Home Screen, on iOS 16.4 or newer.
-   - Check in from Safari, then **Share → Add to Home Screen**, then open NaviSpace from the new icon.
-   - The installed app takes over your Safari identity and opens on your seat. Tap **Enable seat reminders** there.
-   - If the app shows the seat as just "Occupied" instead of "You're checked in", the identity didn't carry over. Delete the icon, reload the seat page in Safari, and add it again.
-   - If the test notification doesn't arrive, check Render → Logs for a `[push] VAPID_SUBJECT ... malformed` warning. It must be exactly `mailto:you@domain`, with no spaces.
-3. Reminders arrive 10 minutes and again 5 minutes before a seat would free up (`REMINDER_LEADS_MS` in `src/config.js`). A check-in holds the seat for 2 hours, and stepping away holds it for 1 hour 15 minutes.
-
-## Opening hours
-
-The library is open on weekdays from 08:00, Johannesburg time. It closes at 20:00, and at 17:00 on Fridays. It's closed on weekends and South African public holidays, including Good Friday, Family Day, and Sunday holidays moved to the Monday. Outside those hours, check-ins are refused and every held seat is freed at closing time.
-
-- **Times:** `hours.opens`, `hours.closes` and `hours.closesOn` (e.g. `{"Fri": "17:00"}`) in `src/layouts/engineering.json`.
-- **Busiest hours:** learned from how full the library really is. The plan's `hours.busiest` is shown until every open hour has about three days of data.
-- **Optional environment variables:**
+### Required
 
 | Variable | Value |
 | --- | --- |
-| `CLOSED_DAYS` | Extra closed dates, comma-separated, e.g. `2026-12-21,2026-12-22` for a recess or an election day |
-| `TIME_ZONE` | Defaults to `Africa/Johannesburg` |
-| `ALWAYS_OPEN` | `1` ignores opening hours, for testing at night or on a weekend. Remove it afterwards. |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | From a free Upstash Redis database. Without them, every restart or sleep **erases** all data. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | From `npm run vapid-keys`. Generate once and keep: changing them cancels every notification sign-up. |
+| `VAPID_SUBJECT` | `mailto:` plus a real address you own, e.g. `mailto:you@yourdomain`. Apple rejects a placeholder. |
+| `SEAT_SIGNING_SECRET` | A long random string. Seats can then only be claimed with the code printed on their sticker. Changing it retires every printed sticker. |
+
+### Optional
+
+| Variable | Value |
+| --- | --- |
+| `CLOSED_DAYS` | Extra closed dates, comma-separated: `2026-12-21,2026-12-22` for a recess, an election day or a closure. |
+| `CLOSING_GRACE_MINUTES` | How long after closing held seats are released. Default `5`, for evenings the library closes a little late. |
+| `TIME_ZONE` | Default `Africa/Johannesburg`. |
+| `ALWAYS_OPEN` | `1` ignores opening hours, for testing at night or on a weekend. **Remove it afterwards.** |
+
+## Keeping it awake
+
+Render's free plan sleeps after 15 minutes without visitors. While it sleeps,
+**nothing runs**: no reminders, no seats freed when their hold runs out, no
+release at closing time, and no learning of the busiest hours. The first
+visitor afterwards waits 30–60 seconds.
+
+The keep-awake ping is set up: a cron-job.org job requests
+
+```
+https://navispace-1.onrender.com/healthz
+```
+
+every 10 minutes. `/healthz` is cheap and never cached. One always-on service
+uses about 730 of the free plan's 750 hours a month, so don't keep a second
+free service awake on the same account. Render's Starter plan removes the need
+for the ping altogether.
+
+**If something stops working at night or after a quiet spell,** check the job's
+history on cron-job.org first: failed pings mean the server was asleep.
+
+## How a day runs
+
+- **Opening hours:** weekdays from 08:00, Johannesburg time. Closes at 20:00, and
+  17:00 on Fridays. Closed on weekends and South African public holidays
+  (including Good Friday, Family Day and Sunday holidays moved to the Monday),
+  plus any `CLOSED_DAYS`. Set in `hours` in `src/layouts/engineering.json`
+  (`opens`, `closes`, and `closesOn` such as `{"Fri": "17:00"}`).
+- **Check-ins** are refused outside opening hours. The seat page says when they reopen.
+- **A check-in holds the seat for 2 hours.** "Still here" on the seat page
+  (asked every 50 minutes) starts the 2 hours again.
+- **Reminders** go out 10 and 5 minutes before a hold ends. Ignore them and the
+  seat frees itself when the hold ends (the server checks every minute).
+- **Stepping away** holds the seat for 1 hour 15 minutes.
+- **Closing:** 10 minutes before closing, everyone holding a seat gets a
+  notification. Check-ins stop at closing time, and every held seat is released
+  5 minutes later (`CLOSING_GRACE_MINUTES`).
+- **Busiest hours** on the home page are learned from how full the library is.
+  Until each open hour has about three days of data, the plan's estimate
+  (`hours.busiest`) shows.
+
+Timings live in `src/config.js`.
+
+## Notifications
+
+Each phone and computer is set up on its own, from the **Notifications**
+section of the home page. It shows the device's status, turns notifications on,
+sends a test, and lists the steps for that exact device and browser.
+
+The test follows the notification all the way and says where it stopped:
+
+| The test says | Where the problem is |
+| --- | --- |
+| "Sent and received… the device is hiding it" | The device's own settings. Follow the steps the section shows. |
+| "The system refused to show it" | The browser's permission for the site. |
+| "The browser never received it" | The connection to the push service (a VPN or firewall). |
+| "The server couldn't send it (…)" | The VAPID variables. Check Render → Logs for a `[push]` line. |
+
+What fixed real devices:
+
+- **iPhone / iPad:** notifications only work from the Home Screen copy
+  (Share → Add to Home Screen, iOS 16.4 or newer), turned on from inside it.
+- **Mac, Chrome:** System Settings → Notifications → **Google Chrome**. It can
+  be listed twice: set **both** to Allow, Alert Style **Persistent**. Turn off
+  Do Not Disturb (Control Centre → Focus), which Apple shares across devices.
+- **Mac, Safari:** Safari → Settings → Websites → Notifications → set
+  `navispace-1.onrender.com` to Allow, then System Settings → Notifications →
+  Safari → Persistent.
+
+## Seat stickers
+
+Each sticker's QR code opens its seat with a signed code (`&k=…`) made from
+`SEAT_SIGNING_SECRET`. The stickers must be made with the **same secret as the
+server**, so either print them from the staff page, or run locally with the
+same value:
+
+```
+BASE_URL=https://navispace-1.onrender.com SEAT_SIGNING_SECRET=... npm run qr
+```
+
+which writes one PNG per seat to `qr-codes/`. Changing the secret retires every
+printed sticker at once. Regenerate stickers whenever seats are added, removed
+or renamed in the floor plan (`scripts/build-engineering-plan.py`).
+
+## Logs worth knowing
+
+In Render → Logs:
+
+- `[store] Using in-memory store`: the Upstash variables are missing.
+- `[push] send failed (…)`: a notification was rejected, with the push service's reason.
+- `[push] VAPID_SUBJECT … malformed`: fix `VAPID_SUBJECT` (exactly `mailto:you@domain`).
+- `[sweep] engineering reclaimed: …`: seats freed (hold ran out, or closing time).
+- `[reminders] engineering sent: …`: reminders and closing notices that went out.
