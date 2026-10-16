@@ -149,7 +149,9 @@ function urlBase64ToUint8Array(base64String) {
  * "not supported", which reads as a dead end when it isn't one.
  */
 function isIosNotInstalled() {
-  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  // iPadOS 13+ Safari reports a Mac user agent; only the touch screen tells it apart.
+  const isIos = (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
   return isIos && !isStandaloneApp();
 }
 
