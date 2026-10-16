@@ -171,3 +171,30 @@ test("posting the same item twice in a row keeps one", async () => {
   await reportItem("dup-lib", { ...post, description: "Charger" }, 5000);
   assert.equal((await listItems("dup-lib")).length, 2);
 });
+
+test("a claim opens a private thread for the finder and the claimant only", async () => {
+  const { markAtDesk, getThread, sendMessage } = require("../src/lostfound");
+  const { item } = await reportItem(LIB, { description: "Calculator", photoDataUrl: "data:image/jpeg;base64,AAAA", reporterToken: finder.token, reporterNickname: finder.nickname });
+  await claimItem(LIB, item.id, { claimantToken: claimant.token, claimantNickname: claimant.nickname, note: "Name scratched on the back" });
+
+  const forFinder = await getThread(LIB, item.id, finder.token);
+  assert.equal(forFinder.role, "finder");
+  assert.deepEqual(forFinder.messages.map((m) => [m.from, m.text]), [["owner", "Name scratched on the back"]]);
+  assert.equal((await getThread(LIB, item.id, "tok-stranger")).reason, "not_allowed");
+  assert.equal((await sendMessage(LIB, item.id, "tok-stranger", "hi")).reason, "not_allowed");
+
+  const sent = await sendMessage(LIB, item.id, finder.token, "I'm at C4 until 15:00");
+  assert.equal(sent.ok, true);
+  assert.equal(sent.recipientToken, claimant.token);
+  assert.equal((await sendMessage(LIB, item.id, claimant.token, "see www.example.com")).reason, "no_links");
+  assert.equal((await sendMessage(LIB, item.id, claimant.token, "   ")).reason, "empty");
+  const forOwner = await getThread(LIB, item.id, claimant.token);
+  assert.equal(forOwner.role, "owner");
+  assert.equal(forOwner.messages.length, 2);
+
+  // Only the finder can say it's at the desk; returning it deletes the thread.
+  assert.equal((await markAtDesk(LIB, item.id, claimant.token)).reason, "not_reporter");
+  assert.equal((await markAtDesk(LIB, item.id, finder.token)).item.atDesk, true);
+  await resolveItem(LIB, item.id, finder.token);
+  assert.equal(await store.get(`lfthread:${LIB}:${item.id}`), null);
+});

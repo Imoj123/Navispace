@@ -297,3 +297,19 @@ test("/api/me/sittings needs a token and returns only that device's sittings", a
     assert.deepEqual(other.sittings, []);
   });
 });
+
+test("lost & found: the claim note and thread stay private to finder and claimant", async () => {
+  await withServer(async (base) => {
+    const post = (path, body) => fetch(`${base}/api/library/engineering/lostfound${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const { item } = await (await post("", { description: "Keys", photoDataUrl: "data:image/jpeg;base64,AAAA", token: "tok-f", nickname: "Finder" })).json();
+    await post(`/${item.id}/claim`, { token: "tok-o", nickname: "Owner", note: "Red keyring" });
+    const board = await (await fetch(`${base}/api/library/engineering/lostfound`)).json();
+    assert.equal(JSON.stringify(board).includes("Red keyring"), false, "note not on the public board");
+    assert.equal((await post(`/${item.id}/thread`, { token: "tok-x" })).status, 403);
+    const thread = await (await post(`/${item.id}/thread`, { token: "tok-f" })).json();
+    assert.equal(thread.messages[0].text, "Red keyring");
+    assert.equal((await post(`/${item.id}/thread/send`, { token: "tok-f", text: "Front desk at 2?" })).status, 200);
+    assert.equal((await post(`/${item.id}/desk`, { token: "tok-o" })).status, 403);
+    assert.equal((await (await post(`/${item.id}/desk`, { token: "tok-f" })).json()).item.atDesk, true);
+  });
+});
