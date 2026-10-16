@@ -597,10 +597,10 @@
 
         // Replies arrive as notifications on devices that allow them. The full
         // walkthrough for this device lives on the home page (/#notifications).
-        function offerNotifications() {
+        async function offerNotifications() {
             const tip = document.getElementById("threadTip");
             tip.textContent = "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
-            const state = notificationState();
+            const state = await notificationStateLive();
             const help = document.createElement("a");
             help.href = "/#notifications";
             help.textContent = "How to turn them on";
