@@ -142,6 +142,7 @@
             font: 400 12px/1.4 var(--font-mono);
             letter-spacing: 0.06em;
             color: var(--muted);
+            text-wrap: pretty;
         }
 
         .focus b {
@@ -663,10 +664,6 @@
                 grid-template-columns: 1fr;
                 gap: 28px;
             }
-
-            .topnav {
-                display: none;
-            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -1094,7 +1091,9 @@
             });
             const art = $("weekArt");
             const label = `Hours at a desk this week: ${w.days.map((ms, i) => `${DAY_NAMES[i]} ${ms ? hm(ms) : "none"}`).join(", ")}.`;
-            art.innerHTML = `<svg viewBox="-40 -205 410 300" role="img" aria-label="${label}">${bars}${labels}</svg>`;
+            // An empty week is only the floor: no room left for columns that aren't there.
+            const viewBox = w.total ? "-40 -205 410 300" : "-40 -40 410 135";
+            art.innerHTML = `<svg viewBox="${viewBox}" role="img" aria-label="${label}">${bars}${labels}</svg>`;
             // Columns rise the first time they're seen, then just update.
             if (!weekPainted && "IntersectionObserver" in window) {
                 art.classList.add("grow");
