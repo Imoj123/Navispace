@@ -158,3 +158,16 @@ test("unclaimed items sort ahead of claimed ones, newest first within each group
     assert.equal(items[1].id, newer.id);
     assert.equal(items[1].status, "claimed");
 });
+
+test("posting the same item twice in a row keeps one", async () => {
+  const { reportItem, listItems } = require("../src/lostfound");
+  const post = { description: "Pills", location: "C2", photoDataUrl: "data:image/jpeg;base64,AAAA", reporterToken: "tok-twice" };
+  const first = await reportItem("dup-lib", post, 1000);
+  const second = await reportItem("dup-lib", post, 4000);
+  assert.equal(second.ok, true);
+  assert.equal(second.item.id, first.item.id);
+  assert.equal((await listItems("dup-lib")).length, 1);
+  // A genuinely new post (different description) is still added.
+  await reportItem("dup-lib", { ...post, description: "Charger" }, 5000);
+  assert.equal((await listItems("dup-lib")).length, 2);
+});
