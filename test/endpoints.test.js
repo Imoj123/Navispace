@@ -244,3 +244,28 @@ test("without a signing secret, seat links check in as before", async () => {
     assert.equal((await (await fetch(`${base}/api/config`)).json()).SEAT_CODE_REQUIRED, false);
   });
 });
+
+test("search engines: only the home page and the map are listed", async () => {
+  await withServer(async (base) => {
+    const robots = await (await fetch(`${base}/robots.txt`)).text();
+    assert.match(robots, /^User-agent: \*\nAllow: \//);
+    assert.ok(!/Disallow/.test(robots));
+    assert.match(robots, new RegExp(`Sitemap: ${base}/sitemap.xml`));
+
+    const sitemap = await (await fetch(`${base}/sitemap.xml`)).text();
+    const locs = [...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
+    assert.deepEqual(locs, [`${base}/`, `${base}/library.html`]);
+
+    const noindex = (html) => /<meta name="robots" content="noindex"/.test(html);
+    for (const page of ["/", "/library.html"]) {
+      const html = await (await fetch(base + page)).text();
+      assert.ok(!noindex(html), `${page} is indexable`);
+      assert.ok(html.includes(`<link rel="canonical" href="${base}${page}"`), `${page} has an absolute canonical`);
+    }
+    for (const page of ["/seat.html", "/focus.html", "/leaderboard.html", "/lost-found.html"]) {
+      assert.ok(noindex(await (await fetch(base + page)).text()), `${page} is kept out`);
+    }
+    const api = await fetch(`${base}/api/libraries`);
+    assert.equal(api.headers.get("x-robots-tag"), "noindex");
+  });
+});
