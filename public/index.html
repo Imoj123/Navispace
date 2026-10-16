@@ -1203,17 +1203,28 @@
 
         // --- Install -------------------------------------------------------------
 
-        // NaviSpace lives on phones (scanning desk codes, seat reminders), so
-        // the offer to add it to the home screen only appears on one. A laptop
-        // browser still has its own install option in the address bar.
+        // NaviSpace is a website you keep handy, not an app to install: phones
+        // add it to the Home Screen, a Mac to the Dock, other computers to the
+        // desktop. (Chrome and Edge offer this themselves; Safari on a Mac does
+        // it from File → Add to Dock.) Already added: no button.
         const onPhone = window.matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 820;
+        const installed = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+        const macSafari = /Macintosh/.test(navigator.userAgent) && /Safari\//.test(navigator.userAgent) &&
+            !/Chrome|Chromium|Edg|Firefox/.test(navigator.userAgent) && navigator.maxTouchPoints === 0;
+        const onMac = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints === 0;
+        if (!onPhone) $("installBtn").textContent = onMac ? "Add to Dock" : "Add to desktop";
         let deferredInstall = null;
         window.addEventListener("beforeinstallprompt", (e) => {
             e.preventDefault();
             deferredInstall = e;
-            if (onPhone && $("heldPill").hidden) $("installBtn").hidden = false;
+            if ($("heldPill").hidden) $("installBtn").hidden = false;
         });
-        if (onPhone && typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
+        window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
+        if (!installed && onPhone && typeof isIosNotInstalled === "function" && isIosNotInstalled()) $("installBtn").hidden = false;
+        if (!installed && macSafari) {
+            $("installBtn").hidden = false;
+            $("iosHint").innerHTML = "In Safari's menu bar, choose <em>File</em>, then <em>Add to Dock</em>. NaviSpace then opens in its own window, with notifications.";
+        }
         $("installBtn").addEventListener("click", async () => {
             if (deferredInstall) {
                 deferredInstall.prompt();
