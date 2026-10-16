@@ -65,16 +65,18 @@ test("peak hours follow the library's clock, not the server's", () => {
   assert.equal(localParts(sast(2026, 10, 16, 10)).hour, 10);
 });
 
-test("at closing time every held seat is freed, and its sitting ends at 20:00", async () => {
+test("seats are freed 5 minutes after closing, and the sitting ends then", async () => {
   const lib = "test-lib", seat = "T1", who = { token: "tok-late", nickname: "Late" };
   await handleScan(lib, seat, "checkIn", who, sast(2026, 10, 16, 19, 30));
   await handleScan(lib, seat, "stillHere", who, sast(2026, 10, 16, 19, 50));
 
   assert.deepEqual(await sweepExpiredSeats(lib, [seat], sast(2026, 10, 16, 19, 55), { hours: HOURS }), []);
-  assert.deepEqual(await sweepExpiredSeats(lib, [seat], sast(2026, 10, 16, 20, 1), { hours: HOURS }), [seat]);
+  // Closed at 20:00, but the library sometimes closes late: seats hold until 20:05.
+  assert.deepEqual(await sweepExpiredSeats(lib, [seat], sast(2026, 10, 16, 20, 1), { hours: HOURS }), []);
+  assert.deepEqual(await sweepExpiredSeats(lib, [seat], sast(2026, 10, 16, 20, 6), { hours: HOURS }), [seat]);
   assert.equal((await getSeat(lib, seat)).state, SeatState.AVAILABLE);
   const [sitting] = await getSittings(who.token, sast(2026, 10, 16, 21));
-  assert.equal(sitting.ms, 30 * 60 * 1000);
+  assert.equal(sitting.ms, 35 * 60 * 1000);
 });
 
 test("busiest hours are learned from how full the library is", async () => {
@@ -123,4 +125,26 @@ test("check-ins are refused while the library is closed; /hours says why", async
     delete process.env.CLOSED_DAYS;
     await new Promise((r) => server.close(r));
   }
+});
+
+test("ten minutes before closing, everyone holding a seat hears once", async (t) => {
+  const push = require("../src/push");
+  const { sendExpiryReminders } = require("../src/reminders");
+  const sent = [];
+  t.mock.method(push, "sendPush", async (token, payload) => { sent.push(payload.body); return { sent: true }; });
+  const lib = "close-lib", who = { token: "tok-close", nickname: "Late" };
+  await handleScan(lib, "T2", "checkIn", who, sast(2026, 10, 16, 19, 0));
+  await sendExpiryReminders(lib, ["T2"], sast(2026, 10, 16, 19, 45), HOURS);
+  assert.equal(sent.length, 0);
+  await sendExpiryReminders(lib, ["T2"], sast(2026, 10, 16, 19, 51), HOURS);
+  await sendExpiryReminders(lib, ["T2"], sast(2026, 10, 16, 19, 55), HOURS);
+  assert.deepEqual(sent, ["The library closes at 20:00. Seat T2 is released at 20:05."]);
+});
+
+test("CLOSING_GRACE_MINUTES changes the grace", () => {
+  const { releaseDue } = require("../src/hours");
+  process.env.CLOSING_GRACE_MINUTES = "15";
+  assert.equal(releaseDue(HOURS, sast(2026, 10, 16, 20, 10)), false);
+  assert.equal(releaseDue(HOURS, sast(2026, 10, 16, 20, 16)), true);
+  delete process.env.CLOSING_GRACE_MINUTES;
 });

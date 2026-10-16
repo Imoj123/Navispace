@@ -224,4 +224,37 @@ async function sendMessage(libraryId, itemId, token, text, now = Date.now()) {
     };
 }
 
-module.exports = { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, MAX_MESSAGE_CHARS };
+/**
+ * One of the two people in a thread reports it (harassment, a scam): the
+ * item is flagged for library staff, who can read the thread and remove it
+ * from the staff page. Participants only.
+ */
+async function reportThread(libraryId, itemId, token, now = Date.now()) {
+    const key = itemKey(libraryId, itemId);
+    const item = await store.get(key);
+    if (!item || !item.claim) return { ok: false, reason: "not_found" };
+    const role = roleOf(item, token);
+    if (!role) return { ok: false, reason: "not_allowed" };
+    item.reported = { at: now, by: role };
+    await store.put(key, item, { expirationTtl: TTL_SECONDS });
+    return { ok: true };
+}
+
+/** Staff: the thread of any item, without the participant check. */
+async function staffThread(libraryId, itemId) {
+    const item = await store.get(itemKey(libraryId, itemId));
+    if (!item) return { ok: false, reason: "not_found" };
+    return { ok: true, messages: (await store.get(threadKey(libraryId, itemId))) || [] };
+}
+
+/** Staff: remove an item (collected from the desk, or abusive) and its thread. */
+async function staffRemove(libraryId, itemId) {
+    await store.delete(itemKey(libraryId, itemId));
+    await store.delete(threadKey(libraryId, itemId));
+    return { ok: true };
+}
+
+module.exports = {
+    reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, reportThread,
+    staffThread, staffRemove, MAX_MESSAGE_CHARS,
+};

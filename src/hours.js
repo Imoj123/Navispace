@@ -137,4 +137,49 @@ function closedAtToday(hours, ms = Date.now()) {
   return ms - (p.minutes - close) * 60 * 1000 - (ms % 60000);
 }
 
-module.exports = { TIME_ZONE, localParts, toMinutes, publicHolidays, openStatus, closedAtToday };
+/**
+ * Minutes after closing before held seats are released: the library
+ * sometimes closes a few minutes late, so nobody is cut off mid-sentence.
+ * Check-ins still stop at closing time. CLOSING_GRACE_MINUTES overrides.
+ */
+function closingGraceMinutes() {
+  const n = Number(process.env.CLOSING_GRACE_MINUTES);
+  return Number.isFinite(n) && n >= 0 ? n : 5;
+}
+
+const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/**
+ * Whether held seats should be released now: outside opening hours and
+ * past today's closing grace (or on a closed day). Never with ALWAYS_OPEN.
+ */
+function releaseDue(hours, ms = Date.now()) {
+  if (process.env.ALWAYS_OPEN === "1") return false;
+  const status = openStatus(hours, ms);
+  if (status.regularOpen) return false;
+  const p = localParts(ms);
+  if (closedDayReason(p)) return true;
+  const close = toMinutes(closesOn(hours, p.weekday), DEFAULT_CLOSES);
+  return !(p.minutes >= close && p.minutes < close + closingGraceMinutes());
+}
+
+/** When today's seats were released (closing time + grace), in ms, if that has passed. */
+function releasedAtToday(hours, ms = Date.now()) {
+  const closedAt = closedAtToday(hours, ms);
+  if (closedAt === null) return null;
+  const at = closedAt + closingGraceMinutes() * 60 * 1000;
+  return at <= ms ? at : null;
+}
+
+/**
+ * While open: { minutes, closes, releasedAt } until today's closing time
+ * ("20:00", and "20:05" when seats are released); null when closed.
+ */
+function closingSoon(hours, ms = Date.now()) {
+  if (!openStatus(hours, ms).regularOpen) return null;
+  const p = localParts(ms);
+  const close = toMinutes(closesOn(hours, p.weekday), DEFAULT_CLOSES);
+  return { minutes: close - p.minutes, closes: hhmm(close), releasedAt: hhmm(close + closingGraceMinutes()), date: p.date };
+}
+
+module.exports = { TIME_ZONE, localParts, toMinutes, publicHolidays, openStatus, closedAtToday, closingGraceMinutes, releaseDue, releasedAtToday, closingSoon };

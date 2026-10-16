@@ -666,6 +666,18 @@ input[type="text"]::placeholder {
     color: var(--faint);
 }
 
+.sitefoot a {
+    display: inline-block;
+    padding: 6px 0;
+    margin: -6px 0;
+    color: inherit;
+    text-underline-offset: 3px;
+}
+
+.sitefoot a:hover {
+    color: var(--text);
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
