@@ -20,7 +20,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v17";
+const CACHE_NAME = "navispace-shell-v18";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -146,18 +146,19 @@ self.addEventListener("push", (event) => {
             body: payload.body,
             icon: "/icons/icon-192.png",
             badge: "/icons/badge-96.png",
-            renotify: Boolean(payload.seatId),
+            renotify: Boolean(payload.seatId || payload.tag),
             vibrate: [120, 60, 120],
-            data: { seatId: payload.seatId || null, libraryId: payload.libraryId || null },
-            tag: payload.seatId ? `navispace-${payload.libraryId}-${payload.seatId}` : "navispace",
+            data: { seatId: payload.seatId || null, libraryId: payload.libraryId || null, url: payload.url || null },
+            tag: payload.tag || (payload.seatId ? `navispace-${payload.libraryId}-${payload.seatId}` : "navispace"),
         })
     );
 });
 
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
-    const { seatId, libraryId } = event.notification.data || {};
-    const targetUrl = seatId
+    const { seatId, libraryId, url } = event.notification.data || {};
+    // Lost & found messages carry their own page (the item's thread).
+    const targetUrl = url && url.startsWith("/") ? url : seatId
         ? `/seat.html?lib=${encodeURIComponent(libraryId || "engineering")}&seat=${encodeURIComponent(seatId)}`
         : "/";
 

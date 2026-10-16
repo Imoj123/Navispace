@@ -71,7 +71,7 @@ async function removeSubscription(token) {
  * Never throws — a failed reminder should never break the caller
  * (the reminder sweep, or a scan request).
  */
-async function sendPush(token, payload) {
+async function sendPush(token, payload, { ttlSeconds = 5 * 60 } = {}) {
     if (!vapidConfigured()) return { sent: false, reason: "no_vapid_key" };
     ensureConfigured();
     if (!configured) return { sent: false, reason: "bad_vapid_config" };
@@ -84,7 +84,7 @@ async function sendPush(token, payload) {
         // a few minutes, so don't let the push service deliver it late.
         // urgency high: lets it through Android's battery saver/doze.
         await webpush.sendNotification(subscription, JSON.stringify(payload), {
-            TTL: 5 * 60,
+            TTL: ttlSeconds,
             urgency: "high",
         });
         return { sent: true };

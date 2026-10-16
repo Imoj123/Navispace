@@ -567,6 +567,30 @@ async function resolveLostFoundItem(libraryId, itemId, identity) {
   return res.json();
 }
 
+/** Lost & found POSTs that carry this device's token; returns the JSON answer. */
+async function lostFoundPost(libraryId, itemId, action, body) {
+  const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/lostfound/${encodeURIComponent(itemId)}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+/** The finder handed the item to the library's front desk. */
+function markLostFoundAtDesk(libraryId, itemId, identity) {
+  return lostFoundPost(libraryId, itemId, "desk", { token: identity.token });
+}
+
+/** The private finder–owner thread for a claimed item. */
+function getLostFoundThread(libraryId, itemId, identity) {
+  return lostFoundPost(libraryId, itemId, "thread", { token: identity.token });
+}
+
+function sendLostFoundMessage(libraryId, itemId, identity, text) {
+  return lostFoundPost(libraryId, itemId, "thread/send", { token: identity.token, text });
+}
+
 /**
  * Downscales and compresses an image file in the browser before
  * upload, so a phone's multi-megabyte camera photo becomes a small
