@@ -147,6 +147,11 @@
   .status-band { border-color: currentColor; border-color: color-mix(in srgb, currentColor 45%, transparent); }
   #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
   #actions .btn { margin: 0; }
+  .scan-note {
+    grid-column: 1 / -1; display: grid; gap: 6px; padding: 16px 18px;
+    border: 1px dashed var(--line-strong); color: var(--muted); font-size: 14.5px;
+  }
+  .scan-note strong { color: var(--text); font: 400 19px/1.25 var(--font-serif); }
   #actions > .btn-primary, #actions > :only-child, #actions > :nth-child(2):last-child { grid-column: 1 / -1; }
   #actions > .btn-primary { padding-top: 18px; padding-bottom: 18px; }
   #enableReminders {
@@ -258,7 +263,24 @@
       setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 6000);
     }
 
+    // Whether checking in needs the code from the desk's sticker, and
+    // whether this tab has it (it arrives with the scan).
+    let codeRequired = false;
+    let lastSeat = null;
+    getServerConfig().then((c) => {
+      codeRequired = Boolean(c && c.SEAT_CODE_REQUIRED);
+      if (codeRequired && lastSeat) render(lastSeat);
+    }).catch(() => { });
+
+    function scanNote() {
+      const note = document.createElement("div");
+      note.className = "scan-note";
+      note.innerHTML = "<strong>Scan the code on this desk to check in.</strong><span>Seats can only be claimed from the desk itself, so nobody can hold one from outside the library.</span>";
+      return note;
+    }
+
     function render(seat) {
+      lastSeat = seat;
       if (seat && seat.reason === "unknown_seat") {
         renderUnknownSeat();
         return;
@@ -287,7 +309,8 @@
       tickSeatFocus();
 
       if (seat.state === "AVAILABLE") {
-        actions.appendChild(makeButton("Check in", true, () => act("checkIn")));
+        if (codeRequired && !seatCodeFor(libraryId, seatId)) actions.appendChild(scanNote());
+        else actions.appendChild(makeButton("Check in", true, () => act("checkIn")));
       } else if (seat.state === "OCCUPIED" && isHolder) {
         const focusLink = document.createElement("a");
         focusLink.className = "btn btn-primary";
@@ -386,7 +409,10 @@
     async function act(action) {
       const result = await postScan(libraryId, seatId, action, identity);
       if (!result.ok) {
-        if (result.reason === "already_holding_seat") {
+        if (result.reason === "scan_required") {
+          codeRequired = true;
+          toast("Scan the code on the desk to check in.");
+        } else if (result.reason === "already_holding_seat") {
           toast(`You're already checked into seat ${result.heldSeatId}. Check out there first.`);
         } else {
           toast("Couldn't do that — refreshing status.");
