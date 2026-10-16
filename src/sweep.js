@@ -3,7 +3,7 @@
 const { store } = require("./store");
 const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
 const { recordSitting } = require("./history");
-const { openStatus, closedAtToday } = require("./hours");
+const { releaseDue, releasedAtToday } = require("./hours");
 
 /**
  * Reclaims seats whose expiry has passed without a confirming scan —
@@ -16,17 +16,18 @@ const { openStatus, closedAtToday } = require("./hours");
  * known seat ID list in). Returns the reclaimed seat IDs for that
  * library; startSweepLoop below calls this once per library.
  *
- * Options: hours (the library's opening hours: once it's closed, every
- * held seat is freed) and observe(libraryId, seats, now), handed every
+ * Options: hours (the library's opening hours: a few minutes after it
+ * closes, every held seat is freed) and observe(libraryId, seats, now), handed every
  * seat after the sweep, which is how busy.js learns the busiest hours
  * without a second read.
  */
 async function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), { hours, observe } = {}) {
   const reclaimed = [];
-  // Once the library has closed, every seat is freed: nobody holds a desk
-  // overnight or over a weekend. Their sittings end at closing time.
-  const closed = hours ? !openStatus(hours, now).open : false;
-  const closedAt = closed ? closedAtToday(hours, now) : null;
+  // A few minutes after the library closes (see closingGraceMinutes), every
+  // seat is freed: nobody holds a desk overnight or over a weekend. Their
+  // sittings end when the seats were released.
+  const closed = hours ? releaseDue(hours, now) : false;
+  const closedAt = closed ? releasedAtToday(hours, now) : null;
 
   const stored = await store.getMany(seatIds.map((id) => seatKey(libraryId, id)));
   for (const [i, seatId] of seatIds.entries()) {
