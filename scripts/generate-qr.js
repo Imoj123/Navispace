@@ -7,8 +7,13 @@
  * (extension #3) — no separate encoding needed for that.
  *
  * Usage:
- *   BASE_URL=https://navispace.example.com npm run qr
- *   (defaults to http://localhost:3000 for local testing)
+ *   BASE_URL=https://navispace.example.com SEAT_SIGNING_SECRET=... npm run qr
+ *   (BASE_URL defaults to http://localhost:3000 for local testing)
+ *
+ * SEAT_SIGNING_SECRET must be the same value as on the server: each code
+ * then carries its seat's signed code (&k=...), which checking in needs
+ * (see src/seatcode.js). Without it the codes have no k, which only works
+ * while the server has no secret set either.
  *
  * Writes into qr-codes/<libraryId>/seat-<seatId>.png. The Engineering
  * Library's codes omit the lib param (just ?seat=A1) to stay
@@ -22,12 +27,17 @@ const path = require("path");
 const QRCode = require("qrcode");
 const { LIBRARIES } = require("../src/libraries");
 const { getSeatIds } = require("../src/seats");
+const { seatCode, seatCodesRequired } = require("../src/seatcode");
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const OUT_DIR = path.join(__dirname, "..", "qr-codes");
 
 async function main() {
   let total = 0;
+  if (!seatCodesRequired()) {
+    console.warn("! SEAT_SIGNING_SECRET is not set: these codes carry no seat code, so they stop\n" +
+      "  working for check-in as soon as the server has a secret. Set it to the server's value.\n");
+  }
 
   for (const lib of LIBRARIES) {
     if (lib.status !== "active") {
@@ -49,7 +59,8 @@ async function main() {
         lib.id === "engineering"
           ? `seat=${encodeURIComponent(seatId)}`
           : `lib=${encodeURIComponent(lib.id)}&seat=${encodeURIComponent(seatId)}`;
-      const url = `${BASE_URL}/seat.html?${query}`;
+      const code = seatCode(lib.id, seatId);
+      const url = `${BASE_URL}/seat.html?${query}${code ? `&k=${code}` : ""}`;
       const outPath = path.join(libDir, `seat-${seatId}.png`);
       await QRCode.toFile(outPath, url, { width: 512, margin: 2 });
       console.log(`✓ ${lib.name} ${seatId} -> ${outPath}  (${url})`);

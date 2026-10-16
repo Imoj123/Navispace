@@ -191,3 +191,56 @@ test("pages stamp their stylesheet and script by version, and those can be kept 
     assert.ok(Array.isArray(scenes) && scenes.includes("koi"));
   });
 });
+
+test("with a signing secret, checking in needs the code from the seat's sticker", async () => {
+  const { seatCode } = require("../src/seatcode");
+  const before = process.env.SEAT_SIGNING_SECRET;
+  process.env.SEAT_SIGNING_SECRET = "test-secret";
+  try {
+    await withServer(async (base) => {
+      const [seatId, otherId] = getSeatIds("engineering");
+      const token = "123e4567-e89b-12d3-a456-426614174000";
+      const scan = (id, body) => fetch(`${base}/api/library/engineering/scan/${id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, nickname: "Thandi", ...body }),
+      });
+
+      const config = await (await fetch(`${base}/api/config`)).json();
+      assert.equal(config.SEAT_CODE_REQUIRED, true);
+
+      const noCode = await scan(seatId, { action: "checkIn" });
+      assert.equal(noCode.status, 403);
+      assert.equal((await noCode.json()).reason, "scan_required");
+
+      const otherSeatsCode = await scan(seatId, { action: "checkIn", k: seatCode("engineering", otherId) });
+      assert.equal(otherSeatsCode.status, 403, "one seat's code doesn't open another");
+
+      const guessed = await scan(seatId, { action: "checkIn", k: "aaaaaaaaaa" });
+      assert.equal(guessed.status, 403);
+
+      const right = await scan(seatId, { action: "checkIn", k: seatCode("engineering", seatId) });
+      assert.equal(right.status, 200);
+
+      // Once seated, the holder's own actions don't need the code.
+      assert.equal((await scan(seatId, { action: "stepAway" })).status, 200);
+      assert.equal((await scan(seatId, { action: "imBack" })).status, 200);
+      assert.equal((await scan(seatId, { action: "leaving" })).status, 200);
+    });
+  } finally {
+    if (before === undefined) delete process.env.SEAT_SIGNING_SECRET;
+    else process.env.SEAT_SIGNING_SECRET = before;
+  }
+});
+
+test("without a signing secret, seat links check in as before", async () => {
+  delete process.env.SEAT_SIGNING_SECRET;
+  await withServer(async (base) => {
+    const seatId = getSeatIds("engineering")[0];
+    const res = await fetch(`${base}/api/library/engineering/scan/${seatId}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "checkIn", token: "tok-plain", nickname: "Ayo" }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await (await fetch(`${base}/api/config`)).json()).SEAT_CODE_REQUIRED, false);
+  });
+});

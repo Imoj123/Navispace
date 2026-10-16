@@ -450,11 +450,35 @@ function getLibraries() {
   return _librariesPromise;
 }
 
+/* --- Seat codes -------------------------------------------------------------
+ * A seat's QR sticker carries a code (?k=...) that checking in needs, so only
+ * someone who scanned the desk can claim it (see src/seatcode.js). The code is
+ * kept for this tab and taken out of the address bar, so a seat link copied
+ * from the browser doesn't carry it. */
+const seatCodeKey = (libraryId, seatId) => `navispace_k_${libraryId}_${seatId}`;
+
+(function rememberSeatCode() {
+  const params = new URLSearchParams(location.search);
+  const seatId = params.get("seat");
+  const code = params.get("k");
+  if (!seatId || !code) return;
+  try { sessionStorage.setItem(seatCodeKey(getLibraryIdFromUrl(), seatId), code); } catch { }
+  params.delete("k");
+  const rest = params.toString();
+  history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+})();
+
+function seatCodeFor(libraryId, seatId) {
+  try { return sessionStorage.getItem(seatCodeKey(libraryId, seatId)); } catch { return null; }
+}
+
 async function postScan(libraryId, seatId, action, identity) {
+  const payload = { action, token: identity.token, nickname: identity.nickname };
+  if (action === "checkIn") payload.k = seatCodeFor(libraryId, seatId);
   const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/scan/${encodeURIComponent(seatId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, token: identity.token, nickname: identity.nickname }),
+    body: JSON.stringify(payload),
   });
   const [body] = await Promise.all([res.json(), myHashReady()]);
   return { httpOk: res.ok, ...body };
