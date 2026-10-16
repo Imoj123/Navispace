@@ -239,6 +239,44 @@
         .plan-seat.state-UNKNOWN rect { fill: rgba(255, 255, 255, 0.06); stroke: rgba(255, 255, 255, 0.25); }
 
         /* Same confidence language as the tiles: solid = recent, dashed = stale. */
+        .plan-spot {
+            fill: none;
+            stroke: var(--brass);
+            stroke-width: 2.5;
+            transform-box: fill-box;
+            transform-origin: center;
+            animation: plan-spot 1.8s ease-out infinite;
+        }
+
+        @keyframes plan-spot {
+            0% { opacity: 1; transform: scale(0.7); }
+            100% { opacity: 0; transform: scale(1.35); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .plan-spot { animation: none; }
+        }
+
+        .spot-note {
+            margin: 18px 0 0;
+            padding: 12px 16px;
+            border-left: 3px solid var(--brass);
+            background: var(--surface);
+            font: 400 italic 17px/1.4 var(--font-serif);
+        }
+
+        .spot-note[data-free="yes"] {
+            border-left-color: var(--free);
+        }
+
+        #wait {
+            margin-bottom: 22px;
+        }
+
+        .spot-note[hidden] {
+            display: none;
+        }
+
         .plan-seat.staleness-medium rect { stroke-dasharray: 4 3; }
         .plan-seat.staleness-low rect { stroke: var(--slate-dim); stroke-dasharray: 4 3; }
         .plan-seat.staleness-low { opacity: 0.75; }
@@ -333,6 +371,9 @@
             <span><b id="mrAway">—</b>Stepped away</span>
         </div>
 
+        <p class="spot-note" id="spotNote" role="status" hidden></p>
+        <div class="wait" id="wait" hidden aria-live="polite"></div>
+
         <div class="legend">
             <span><span class="signal-dot signal-AVAILABLE"></span>Available</span>
             <span><span class="signal-dot signal-OCCUPIED"></span>Occupied</span>
@@ -352,6 +393,7 @@
     <script src="/client.js"></script>
     <script>
         const libraryId = getLibraryIdFromUrl();
+        const spotSeat = new URLSearchParams(location.search).get("seat");
 
             document.getElementById("topnav").innerHTML = `
       <a href="/">Home</a>
@@ -472,6 +514,8 @@
             for (const seat of layout.seats) {
                 const [x, y] = pt(seat.x, seat.y);
                 const g = svgEl("g", { class: "plan-seat state-UNKNOWN", transform: `translate(${x} ${y})` }, svg);
+                // The seat a "seat freed up" notification pointed to.
+                if (String(seat.id) === spotSeat) svgEl("circle", { r: 24, class: "plan-spot" }, g);
                 svgEl("rect", { x: -13, y: -13, width: 26, height: 26, rx: 7 }, g);
                 const t = svgEl("text", { x: 0, y: 0.5 }, g);
                 t.textContent = seat.id;
@@ -528,6 +572,8 @@
                     meta.textContent = layout.floor || "";
                 }
                 paintPlan(seats, config);
+                paintSpot(seats);
+                paintWait(seats, layout);
                 document.getElementById("mrFree").textContent = seats.filter((s) => s.state === "AVAILABLE").length;
                 document.getElementById("mrUse").textContent = seats.filter((s) => s.state !== "AVAILABLE").length;
                 document.getElementById("mrAway").textContent = seats.filter((s) => s.state === "STEPPED_AWAY").length;
@@ -616,6 +662,44 @@
             }
 
             return div;
+        }
+
+        // Opened from a "seat freed up" notification: point at that seat.
+        let spotScrolled = false;
+        function paintSpot(seats) {
+            const note = document.getElementById("spotNote");
+            const seat = spotSeat && seats.find((s) => String(s.id) === spotSeat);
+            if (!seat) { note.hidden = true; return; }
+            note.hidden = false;
+            note.dataset.free = seat.state === "AVAILABLE" ? "yes" : "no";
+            note.textContent = seat.state === "AVAILABLE"
+                ? `Seat ${seat.id} is free. Go to it and scan the code on the desk to take it.`
+                : `Seat ${seat.id} has been taken already. Someone scanned it first.`;
+            const spot = planSeats && planSeats.get(spotSeat);
+            if (spot && !spotScrolled) {
+                spotScrolled = true;
+                // Bring it into view inside the sideways-scrolling plan only.
+                const wrap = document.getElementById("planWrap");
+                const r = spot.g.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+                wrap.scrollLeft += r.left + r.width / 2 - (w.left + w.width / 2);
+            }
+        }
+
+        // "Tell me when a seat frees up", when the floor or an area is full.
+        let waitCard = null, holding = false, heldCheckedAt = 0, libraryOpen = true;
+        async function paintWait(seats, layout) {
+            const lib = (cachedLibraries() || []).find((l) => l.id === libraryId);
+            if (lib && lib.status !== "active") return;
+            if (!waitCard) waitCard = mountWaitCard(document.getElementById("wait"), libraryId);
+            if (Date.now() - heldCheckedAt > 60000) {
+                heldCheckedAt = Date.now();
+                try {
+                    const token = localStorage.getItem("navispace_token");
+                    holding = Boolean(token && (await getHeldSeat(token) || {}).seatId);
+                } catch { }
+                try { libraryOpen = Boolean((await apiGet(`/api/library/${encodeURIComponent(libraryId)}/hours`)).open); } catch { }
+            }
+            waitCard({ seats, zoneNames: layout.zoneNames || {}, open: libraryOpen, holding });
         }
 
         render();

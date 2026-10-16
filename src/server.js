@@ -16,7 +16,7 @@ const { getSittings } = require("./history");
 const { openStatus } = require("./hours");
 const busy = require("./busy");
 const { reportSeat } = require("./reports");
-const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = require("./push");
+const { saveSubscription, removeSubscription, hasSubscription, sendPush, vapidPublicKey } = require("./push");
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, reportThread } = require("./lostfound");
 const { seatCodeValid, seatCodesRequired } = require("./seatcode");
@@ -24,6 +24,7 @@ const { limit } = require("./ratelimit");
 const usage = require("./usage");
 const { mountStaff } = require("./staff");
 const { forgetDevice } = require("./forget");
+const waitlist = require("./waitlist");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -353,7 +354,10 @@ function createApp() {
 
     if (result.ok && action === "checkIn") {
       usage.recordCheckIn(libId, req.params.id, tokenHash(token)).catch(() => { });
+      // Got a seat: no need to be told about another one.
+      waitlist.leaveWaitlist(libId, token).catch(() => { });
     }
+    if (result.ok && action === "leaving") waitlist.announceFreed(libId, [req.params.id]);
     if (result.seat) result.seat = publicSeat(result.seat);
     res.status(result.ok ? 200 : 409).json(result);
   });
@@ -373,6 +377,7 @@ function createApp() {
     }
 
     const result = await reportSeat(libId, req.params.id, token);
+    if (result.corrected) waitlist.announceFreed(libId, [req.params.id]);
     res.json({ ok: true, ...result });
   });
 
@@ -392,7 +397,46 @@ function createApp() {
   app.post("/api/library/:libId/sweep", async (req, res) => {
     const { libId } = req.params;
     const reclaimed = await sweepExpiredSeats(libId, getSeatIds(libId), Date.now(), { hours: libraryHours(libId) });
+    await waitlist.announceFreed(libId, reclaimed);
     res.json({ reclaimed });
+  });
+
+  // --- "Tell me when a seat frees up" ----------------------------------------
+  // Body: { token, area } — area is a zone letter, or null for any seat.
+  // Needs this device's notifications on (that's how it's told), and the
+  // library open (the list is cleared at closing).
+
+  app.post("/api/library/:libId/waitlist", limit("waitlist"), async (req, res) => {
+    const { libId } = req.params;
+    const { token, area } = req.body || {};
+    if (!isActiveLibrary(libId)) return res.status(404).json({ ok: false, reason: "library_not_active" });
+    if (!token) return res.status(400).json({ ok: false, reason: "missing_identity" });
+    const zones = (getLayout(libId) || {}).zoneNames || {};
+    if (area != null && !Object.prototype.hasOwnProperty.call(zones, area)) {
+      return res.status(400).json({ ok: false, reason: "unknown_area" });
+    }
+    if (!openStatus(libraryHours(libId)).open) return res.status(403).json({ ok: false, reason: "library_closed" });
+    if (!(await hasSubscription(token))) return res.status(409).json({ ok: false, reason: "notifications_off" });
+    if (await findHeldSeat(libId, token, getSeatIds(libId))) {
+      return res.status(409).json({ ok: false, reason: "already_holding_seat" });
+    }
+    res.json(await waitlist.joinWaitlist(libId, token, area || null));
+  });
+
+  app.post("/api/library/:libId/waitlist/leave", limit("waitlist"), async (req, res) => {
+    const { libId } = req.params;
+    const { token } = req.body || {};
+    if (!isActiveLibrary(libId)) return res.status(404).json({ ok: false, reason: "library_not_active" });
+    if (!token) return res.status(400).json({ ok: false, reason: "missing_identity" });
+    res.json(await waitlist.leaveWaitlist(libId, token));
+  });
+
+  app.post("/api/library/:libId/waitlist/status", async (req, res) => {
+    const { libId } = req.params;
+    const { token } = req.body || {};
+    if (!isActiveLibrary(libId)) return res.status(404).json({ ok: false, reason: "library_not_active" });
+    if (!token) return res.status(400).json({ ok: false, reason: "missing_identity" });
+    res.json({ ok: true, ...(await waitlist.waitStatus(libId, token)) });
   });
 
   // --- Lost & Found --------------------------------------------------------
@@ -609,6 +653,7 @@ function start() {
     config.SWEEP_INTERVAL_MS,
     (libraryId, reclaimed) => {
       console.log(`[sweep] ${libraryId} reclaimed: ${reclaimed.join(", ")}`);
+      waitlist.announceFreed(libraryId, reclaimed);
     },
     (libraryId, seats, now) => busy.observe(libraryId, seats, now, libraryHours(libraryId))
   );

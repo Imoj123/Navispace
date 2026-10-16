@@ -60,6 +60,10 @@ async function removeSubscription(token) {
     await store.delete(pushKey(token));
 }
 
+async function hasSubscription(token) {
+    return Boolean(await store.get(pushKey(token)));
+}
+
 /**
  * Sends one push notification to whatever device is subscribed under
  * this identity token. Silently no-ops if there's no subscription, no
@@ -106,5 +110,6 @@ module.exports = {
     vapidPublicKey,
     saveSubscription,
     removeSubscription,
+    hasSubscription,
     sendPush,
 };

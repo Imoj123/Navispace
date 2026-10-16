@@ -95,3 +95,19 @@ test("stickers: signed links for every seat, only for signed-in staff", async ()
     assert.equal(seatLink("https://x", "engineering", seat), `https://x/seat.html?seat=${seat}&k=${seatCode("engineering", seat)}`);
   });
 });
+
+test("the launch poster is for signed-in staff, with a QR code to the home page and the opening hours", async () => {
+  process.env.STAFF_PASSWORD = "desk-secret";
+  await withServer(async (base) => {
+    const out = await fetch(`${base}/staff/poster`, { redirect: "manual" });
+    assert.equal(out.status, 302);
+    const login = await fetch(`${base}/api/staff/login`, json({ password: "desk-secret" }));
+    const res = await fetch(`${base}/staff/poster`, { headers: { Cookie: login.headers.get("set-cookie").split(";")[0] } });
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /<svg[^>]*>/);
+    assert.match(html, /Scan your desk[\s\S]*Keep your seat[\s\S]*Check out/);
+    assert.match(html, /Weekdays 08:00–20:00 · Fridays until 17:00/);
+    assert.match(html, new RegExp(`127\\.0\\.0\\.1:\\d+<`));
+  });
+});

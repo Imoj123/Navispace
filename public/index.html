@@ -830,6 +830,7 @@
                     <a class="focus" id="focus">Your focus session · <b id="focusTime">starts when you check
                             in</b></a>
                 </div>
+                <div class="wait" id="wait" hidden aria-live="polite"></div>
                 <div class="hours"><span>Busiest <b id="busiest">11:00–14:00</b></span><span id="openNow">Weekdays <b
                             id="closes">08:00–20:00</b></span></div>
             </div>
@@ -1082,7 +1083,22 @@
                 seatsById = new Map(seats.map((s) => [String(s.id), s]));
                 paintNumbers(seats);
                 paintFloor();
+                paintWait();
             } catch { }
+        }
+
+        // "Tell me when a seat frees up", when the floor or an area is full.
+        let waitCard = null;
+        let libraryOpen = true;
+        function paintWait() {
+            if (!library || library.status !== "active") return;
+            if (!waitCard) waitCard = mountWaitCard($("wait"), library.id);
+            waitCard({
+                seats: [...seatsById.values()],
+                zoneNames: (layout && layout.zoneNames) || {},
+                open: libraryOpen,
+                holding: !$("heldPill").hidden,
+            });
         }
 
         // --- Opening hours --------------------------------------------------
@@ -1097,6 +1113,7 @@
                 if (h.busiest) $("busiest").textContent = h.busiest;
                 $("busiest").title = h.busiestLearned ? "Learned from how full the library has been" : "";
                 const when = h.nextOpen === "today" ? `today at ${h.opens}` : h.nextOpen === "tomorrow" ? `tomorrow at ${h.opens}` : `${h.nextOpen} at ${h.opens}`;
+                if (libraryOpen !== Boolean(h.open)) { libraryOpen = Boolean(h.open); paintWait(); }
                 $("openNow").innerHTML = h.open
                     ? `Open until <b>${esc(h.closes)}</b>`
                     : `${h.closedFor && h.closedFor !== "Weekend" ? esc(h.closedFor) + ". " : "Closed. "}Opens <b>${esc(when)}</b>`;
@@ -1344,6 +1361,7 @@
                     $("heldPill").hidden = true;
                     $("focus").classList.remove("live");
                     $("focusTime").textContent = "starts when you check in";
+                    paintWait();
                     return;
                 }
                 const pill = $("heldPill");
@@ -1361,6 +1379,7 @@
                     $("focus").removeAttribute("href");
                 }
                 tickFocus();
+                paintWait();
             } catch { }
         }
 
