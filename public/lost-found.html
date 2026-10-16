@@ -180,7 +180,7 @@
             meta.textContent = [item.location, timeAgo(item.createdAt)].filter(Boolean).join(" · ");
             body.appendChild(meta);
 
-            const isMine = isMine(item.reporterHash);
+            const mine = isMine(item.reporterHash);
 
             if (item.status === "claimed") {
                 const chip = document.createElement("div");
@@ -195,7 +195,7 @@
                     body.appendChild(note);
                 }
 
-                if (isMine) {
+                if (mine) {
                     const resolveBtn = document.createElement("button");
                     resolveBtn.className = "btn btn-tinted lf-resolve";
                     resolveBtn.textContent = "Mark returned";
@@ -205,7 +205,7 @@
                     };
                     body.appendChild(resolveBtn);
                 }
-            } else if (isMine) {
+            } else if (mine) {
                 const youChip = document.createElement("div");
                 youChip.className = "lf-card-meta";
                 youChip.textContent = "Posted by you";
