@@ -712,8 +712,8 @@
                     <a class="focus" id="focus">Your focus session · <b id="focusTime">starts when you check
                             in</b></a>
                 </div>
-                <div class="hours"><span>Busiest <b id="busiest">11:00–14:00</b></span><span>Open until <b
-                            id="closes">22:00</b></span></div>
+                <div class="hours"><span>Busiest <b id="busiest">11:00–14:00</b></span><span id="openNow">Weekdays <b
+                            id="closes">08:00–20:00</b></span></div>
             </div>
 
             <div class="stage" aria-hidden="true">
@@ -942,6 +942,24 @@
                 seatsById = new Map(seats.map((s) => [String(s.id), s]));
                 paintNumbers(seats);
                 paintFloor();
+            } catch { }
+        }
+
+        // --- Opening hours --------------------------------------------------
+        // Open or closed right now, and the busiest stretch of the day,
+        // which the server learns from how full the library really is.
+
+        async function refreshHours() {
+            if (!library) return;
+            try {
+                const h = await apiGet(`/api/library/${encodeURIComponent(library.id)}/hours`);
+                if (!h || !h.closes) return;
+                if (h.busiest) $("busiest").textContent = h.busiest;
+                $("busiest").title = h.busiestLearned ? "Learned from how full the library has been" : "";
+                const when = h.nextOpen === "today" ? `today at ${h.opens}` : h.nextOpen === "tomorrow" ? `tomorrow at ${h.opens}` : `${h.nextOpen} at ${h.opens}`;
+                $("openNow").innerHTML = h.open
+                    ? `Open until <b>${esc(h.closes)}</b>`
+                    : `${h.closedFor && h.closedFor !== "Weekend" ? esc(h.closedFor) + ". " : "Closed. "}Opens <b>${esc(when)}</b>`;
             } catch { }
         }
 
@@ -1255,15 +1273,13 @@
                 }
             }
             if (!layout || !Array.isArray(layout.seats)) layout = null;
-            if (layout && layout.hours) {
-                if (layout.hours.busiest) $("busiest").textContent = layout.hours.busiest;
-                if (layout.hours.closes) $("closes").textContent = layout.hours.closes;
-            }
+            refreshHours();
             buildFloor();
             await refreshSeats(seatsNow);
 
             setInterval(() => { if (!document.hidden) refreshSeats(); }, 15000);
             setInterval(() => { if (!document.hidden) paintWeek(); }, 60000);
+            setInterval(() => { if (!document.hidden) refreshHours(); }, 10 * 60000);
             setInterval(() => { if (!document.hidden) refreshSittings(); }, 5 * 60000);
             setInterval(() => { if (!document.hidden) refreshHeld(); }, 60000);
             setInterval(tickFocus, 1000);

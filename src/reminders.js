@@ -7,12 +7,13 @@ const push = require("./push");
 const config = require("./config");
 
 /**
- * Finds seats within REMINDER_LEAD_MS of their current expiry
+ * Finds seats within a REMINDER_LEADS_MS lead time of their current expiry
  * (checkInExpiry for OCCUPIED, stepAwayExpiry for STEPPED_AWAY) and
  * pushes a heads-up to whoever's holding them — "confirm you're still
  * here or the seat frees up soon" — before the sweep actually
- * reclaims it. Exactly one reminder per expiry window: seat.reminderSent
- * is cleared by scan.js any time the expiry is recomputed (checkIn,
+ * reclaims it. One reminder per lead time (10 min, then 5 min) per
+ * expiry window: seat.remindersSent counts them, and scan.js resets it
+ * any time the expiry is recomputed (checkIn,
  * stillHere, stepAway, imBack), so a fresh confirmation always earns a
  * fresh reminder later, but this loop itself never repeats one.
  *
@@ -27,7 +28,7 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now()) {
     const seats = await getSeats(libraryId, seatIds);
     for (const seat of seats) {
         const seatId = seat.id;
-        if (!seat.holderToken || seat.reminderSent) continue;
+        if (!seat.holderToken) continue;
 
         const expiry =
             seat.state === SeatState.OCCUPIED
@@ -38,12 +39,17 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now()) {
         if (!expiry) continue;
 
         const timeLeft = expiry - now;
-        if (timeLeft <= 0 || timeLeft > config.REMINDER_LEAD_MS) continue;
+        if (timeLeft <= 0) continue;
+        // How many lead times have passed; one reminder covers any that
+        // were missed (e.g. the server was asleep at the 10-minute mark).
+        const due = config.REMINDER_LEADS_MS.filter((lead) => timeLeft <= lead).length;
+        if (due <= (seat.remindersSent || 0)) continue;
+        const mins = Math.max(1, Math.round(timeLeft / 60000));
 
         const body =
             seat.state === SeatState.OCCUPIED
-                ? `Seat ${seat.id} will free up soon unless you confirm you're still there.`
-                : `Seat ${seat.id} will free up soon unless you come back.`;
+                ? `Seat ${seat.id} frees up in ${mins} min unless you confirm you're still there.`
+                : `Seat ${seat.id} frees up in ${mins} min unless you come back.`;
 
         const result = await push.sendPush(seat.holderToken, {
             title: "NaviSpace",
@@ -53,7 +59,7 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now()) {
         });
 
         if (result.sent) {
-            seat.reminderSent = true;
+            seat.remindersSent = due;
             await saveSeat(seat);
             reminded.push(seatId);
         }

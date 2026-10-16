@@ -3,6 +3,7 @@
 const { store } = require("./store");
 const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
 const { recordSitting } = require("./history");
+const { openStatus, closedAtToday } = require("./hours");
 
 /**
  * Reclaims seats whose expiry has passed without a confirming scan —
@@ -14,9 +15,18 @@ const { recordSitting } = require("./history");
  * since a plain Map has no native "scan all seat keys" — pass the
  * known seat ID list in). Returns the reclaimed seat IDs for that
  * library; startSweepLoop below calls this once per library.
+ *
+ * Options: hours (the library's opening hours: once it's closed, every
+ * held seat is freed) and observe(libraryId, seats, now), handed every
+ * seat after the sweep, which is how busy.js learns the busiest hours
+ * without a second read.
  */
-async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
+async function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), { hours, observe } = {}) {
   const reclaimed = [];
+  // Once the library has closed, every seat is freed: nobody holds a desk
+  // overnight or over a weekend. Their sittings end at closing time.
+  const closed = hours ? !openStatus(hours, now).open : false;
+  const closedAt = closed ? closedAtToday(hours, now) : null;
 
   const stored = await store.getMany(seatIds.map((id) => seatKey(libraryId, id)));
   for (const [i, seatId] of seatIds.entries()) {
@@ -33,14 +43,20 @@ async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
       seat.stepAwayExpiry &&
       now > seat.stepAwayExpiry;
 
-    if (occupiedExpired || stepAwayExpired) {
-      // The sitting ended when its hold ran out, not when the sweep noticed.
-      await recordSitting(libraryId, seat, occupiedExpired ? seat.checkInExpiry : seat.stepAwayExpiry);
+    const heldAtClose = closed && (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY);
+
+    if (occupiedExpired || stepAwayExpired || heldAtClose) {
+      // The sitting ended when its hold ran out (or the library closed),
+      // not when the sweep noticed.
+      const expiry = seat.state === SeatState.OCCUPIED ? seat.checkInExpiry : seat.stepAwayExpiry;
+      await recordSitting(libraryId, seat, Math.min(expiry || now, closedAt || now, now));
       resetToAvailable(seat);
       await saveSeat(seat);
       reclaimed.push(seatId);
     }
   }
+
+  if (observe) await observe(libraryId, stored, now);
 
   return reclaimed;
 }
@@ -62,14 +78,14 @@ async function sweepExpiredSeats(libraryId, seatIds, now = Date.now()) {
  * pass closes that gap so "wake up" and "reconcile stale seats"
  * happen together.
  */
-function startSweepLoop(getLibrarySeatGroups, intervalMs, onSweep) {
+function startSweepLoop(getLibrarySeatGroups, intervalMs, onSweep, observe) {
   const runSweep = async () => {
     // A failed pass (e.g. the store briefly unreachable) is logged and
     // retried next interval — it must never take the whole server down.
     try {
       const groups = await getLibrarySeatGroups();
-      for (const { libraryId, seatIds } of groups) {
-        const reclaimed = await sweepExpiredSeats(libraryId, seatIds);
+      for (const { libraryId, seatIds, hours } of groups) {
+        const reclaimed = await sweepExpiredSeats(libraryId, seatIds, Date.now(), { hours, observe });
         if (reclaimed.length && onSweep) onSweep(libraryId, reclaimed);
       }
     } catch (err) {
