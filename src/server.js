@@ -183,12 +183,37 @@ function createApp() {
       .send(JSON.stringify(buildManifest(req)));
   });
 
+  // --- Search engines ---------------------------------------------------------
+  // Only the home page and the map are meant to appear in search results; the
+  // other pages carry <meta name="robots" content="noindex">, and data and
+  // media say the same in a header. Crawlers may still fetch everything, so
+  // the indexed pages render fully and the noindex tags are seen.
+  const siteOrigin = (req) => `${req.get("x-forwarded-proto") || req.protocol}://${req.get("host")}`;
+  const INDEXED_PAGES = ["/", "/library.html"];
+
+  app.get("/robots.txt", (req, res) => {
+    res.type("text/plain").send(`User-agent: *\nAllow: /\n\nSitemap: ${siteOrigin(req)}/sitemap.xml\n`);
+  });
+
+  app.get("/sitemap.xml", (req, res) => {
+    const urls = INDEXED_PAGES.map((p) => `  <url><loc>${siteOrigin(req)}${p}</loc></url>`).join("\n");
+    res.type("application/xml").send(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
+  });
+
+  app.use(["/api", "/media"], (_req, res, next) => {
+    res.set("X-Robots-Tag", "noindex");
+    next();
+  });
+
   // Pages, with their stylesheet and script stamped by version.
   app.get(/^\/(?:[\w-]+\.html)?$/, (req, res, next) => {
     const name = req.path === "/" ? "index.html" : req.path.slice(1);
     const file = path.join(PUBLIC_DIR, name);
     if (!fs.existsSync(file)) return next();
-    res.set("Cache-Control", "no-cache").type("html").send(pageWithVersions(file));
+    // Canonical links must be absolute; the pages say where, the server says which host.
+    const html = pageWithVersions(file).replace('<link rel="canonical" href="/', `<link rel="canonical" href="${siteOrigin(req)}/`);
+    res.set("Cache-Control", "no-cache").type("html").send(html);
   });
 
   // How long a phone may keep each kind of file without asking again.
