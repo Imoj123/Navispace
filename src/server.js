@@ -18,8 +18,12 @@ const busy = require("./busy");
 const { reportSeat } = require("./reports");
 const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = require("./push");
 const { startReminderLoop } = require("./reminders");
-const { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage } = require("./lostfound");
+const { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, reportThread } = require("./lostfound");
 const { seatCodeValid, seatCodesRequired } = require("./seatcode");
+const { limit } = require("./ratelimit");
+const usage = require("./usage");
+const { mountStaff } = require("./staff");
+const { forgetDevice } = require("./forget");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -43,7 +47,7 @@ function publicSeat(seat) {
 
 function publicItem(item) {
   if (!item) return item;
-  const { reporterToken, ...rest } = item;
+  const { reporterToken, reported, ...rest } = item; // reports are for staff only
   const out = { ...rest, reporterHash: tokenHash(reporterToken) };
   if (item.claim) {
     // The claim note is proof of ownership: only the finder and the
@@ -164,6 +168,9 @@ function availableScenes() {
 
 function createApp() {
   const app = express();
+  // Render sits in front of the app: the client's real address is the
+  // first X-Forwarded-For entry (used for speed limits, see ratelimit.js).
+  app.set("trust proxy", 1);
   app.use(compression());
   app.use(express.json({ limit: "3mb" })); // lost & found photos ride in the JSON body
 
@@ -204,10 +211,13 @@ function createApp() {
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
   });
 
-  app.use(["/api", "/media"], (_req, res, next) => {
+  app.use(["/api", "/media", "/staff"], (_req, res, next) => {
     res.set("X-Robots-Tag", "noindex");
     next();
   });
+
+  // The staff page and its API (password in STAFF_PASSWORD; see staff.js).
+  mountStaff(app, { siteOrigin });
 
   // Pages, with their stylesheet and script stamped by version.
   app.get(/^\/(?:[\w-]+\.html)?$/, (req, res, next) => {
@@ -302,7 +312,7 @@ function createApp() {
   // --- Scan actions ----------------------------------------------------------
   // Body: { action, token, nickname }
 
-  app.post("/api/library/:libId/scan/:id", async (req, res) => {
+  app.post("/api/library/:libId/scan/:id", limit("scan"), async (req, res) => {
     const { libId } = req.params;
     const { action, token, nickname, k } = req.body || {};
 
@@ -341,6 +351,9 @@ function createApp() {
       seatIds
     );
 
+    if (result.ok && action === "checkIn") {
+      usage.recordCheckIn(libId, req.params.id, tokenHash(token)).catch(() => { });
+    }
     if (result.seat) result.seat = publicSeat(result.seat);
     res.status(result.ok ? 200 : 409).json(result);
   });
@@ -348,7 +361,7 @@ function createApp() {
   // --- Crowdsourced correction -----------------------------------------------
   // Body: { token } — same device identity used for scans.
 
-  app.post("/api/library/:libId/report/:id", async (req, res) => {
+  app.post("/api/library/:libId/report/:id", limit("report"), async (req, res) => {
     const { libId } = req.params;
     const { token } = req.body || {};
 
@@ -394,7 +407,7 @@ function createApp() {
     res.json(items.map(publicItem));
   });
 
-  app.post("/api/library/:libId/lostfound", async (req, res) => {
+  app.post("/api/library/:libId/lostfound", limit("lfPost"), async (req, res) => {
     const { libId } = req.params;
     if (!isActiveLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "library_not_active" });
@@ -407,12 +420,13 @@ function createApp() {
       reporterToken: token,
       reporterNickname: nickname,
     });
+    if (result.ok && !result.duplicate) usage.recordPost(libId).catch(() => { });
     if (result.item) result.item = publicItem(result.item);
     res.status(result.ok ? 200 : 400).json(result);
   });
 
   // Body: { token, nickname, note }
-  app.post("/api/library/:libId/lostfound/:itemId/claim", async (req, res) => {
+  app.post("/api/library/:libId/lostfound/:itemId/claim", limit("lfClaim"), async (req, res) => {
     const { libId, itemId } = req.params;
     const { token, nickname, note } = req.body || {};
     if (!token) {
@@ -438,6 +452,13 @@ function createApp() {
     res.status(result.ok ? 200 : 403).json(result);
   });
 
+  // Body: { token } — either person in the thread reports it to staff.
+  app.post("/api/library/:libId/lostfound/:itemId/thread/report", limit("lfReport"), async (req, res) => {
+    const { libId, itemId } = req.params;
+    const result = await reportThread(libId, itemId, (req.body || {}).token);
+    res.status(result.ok ? 200 : result.reason === "not_found" ? 404 : 403).json(result);
+  });
+
   // Body: { token } — the finder handed the item to the front desk.
   app.post("/api/library/:libId/lostfound/:itemId/desk", async (req, res) => {
     const { libId, itemId } = req.params;
@@ -459,7 +480,7 @@ function createApp() {
   });
 
   // Body: { token, text } — adds a message and notifies the other person.
-  app.post("/api/library/:libId/lostfound/:itemId/thread/send", async (req, res) => {
+  app.post("/api/library/:libId/lostfound/:itemId/thread/send", limit("lfMessage"), async (req, res) => {
     const { libId, itemId } = req.params;
     const { token, text } = req.body || {};
     const result = await sendMessage(libId, itemId, token, text);
@@ -481,7 +502,7 @@ function createApp() {
   // Body: { token, subscription } — subscription is the PushSubscription
   // object the browser's PushManager.subscribe() returns.
 
-  app.post("/api/push/subscribe", async (req, res) => {
+  app.post("/api/push/subscribe", limit("push"), async (req, res) => {
     const { token, subscription, quiet } = req.body || {};
     if (!token || !subscription) {
       return res.status(400).json({ ok: false, reason: "missing_fields" });
@@ -547,7 +568,17 @@ function createApp() {
       CHECK_IN_DURATION_MS: config.CHECK_IN_DURATION_MS,
       VAPID_PUBLIC_KEY: vapidPublicKey(),
       SEAT_CODE_REQUIRED: seatCodesRequired(),
+      // Who to ask about privacy, shown on /privacy.html (optional).
+      PRIVACY_CONTACT: (process.env.PRIVACY_CONTACT || "").trim() || null,
     });
+  });
+
+  // Body: { token } — "Delete my data" on the privacy page: everything kept
+  // under this device's token, in every library (see forget.js).
+  app.post("/api/me/forget", limit("forget"), async (req, res) => {
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ ok: false, reason: "missing_token" });
+    res.json(await forgetDevice(token));
   });
 
   // Anything else: data requests get JSON, people get the not-found page.

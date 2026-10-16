@@ -12,7 +12,8 @@ database. Every merge to `main` redeploys it automatically.
 | ✅ | VAPID keys set | Seat reminders and Lost & Found notifications |
 | ✅ | `SEAT_SIGNING_SECRET` set | Only a scanned sticker can claim a seat |
 | ✅ | Keep-awake ping every 10 minutes | Reminders, seat releases and closing time keep running |
-| ☐ | Seat stickers printed from the server's secret | Old stickers stop working once the secret is set |
+| ☐ | `STAFF_PASSWORD` set | Turns on the staff page (front desk, usage, stickers) |
+| ☐ | Seat stickers printed from the staff page | Old stickers stop working once the secret is set |
 | ☐ | Opening hours and closed days confirmed | Check-ins are refused outside them |
 
 ## Environment variables
@@ -28,11 +29,13 @@ Saving them redeploys the service.
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | From `npm run vapid-keys`. Generate once and keep: changing them cancels every notification sign-up. |
 | `VAPID_SUBJECT` | `mailto:` plus a real address you own, e.g. `mailto:you@yourdomain`. Apple rejects a placeholder. |
 | `SEAT_SIGNING_SECRET` | A long random string. Seats can then only be claimed with the code printed on their sticker. Changing it retires every printed sticker. |
+| `STAFF_PASSWORD` | The password for `/staff.html`. Give it to the front desk. Changing it signs everyone out. Without it the staff page is off. |
 
 ### Optional
 
 | Variable | Value |
 | --- | --- |
+| `PRIVACY_CONTACT` | An email address (or a sentence) shown on the privacy page for questions and requests. Without it, the page says to ask at the front desk. |
 | `CLOSED_DAYS` | Extra closed dates, comma-separated: `2026-12-21,2026-12-22` for a recess, an election day or a closure. |
 | `CLOSING_GRACE_MINUTES` | How long after closing held seats are released. Default `5`, for evenings the library closes a little late. |
 | `TIME_ZONE` | Default `Africa/Johannesburg`. |
@@ -80,6 +83,38 @@ history on cron-job.org first: failed pings mean the server was asleep.
   (`hours.busiest`) shows.
 
 Timings live in `src/config.js`.
+
+## The staff page
+
+`https://navispace-1.onrender.com/staff.html`, behind `STAFF_PASSWORD`
+(sign-in lasts 12 hours, 10 wrong guesses lock it for 15 minutes):
+
+- **Seats in use:** who holds which seat and until when, with **Free this seat**
+  for someone who left without checking out.
+- **Lost & found:** every item, reported conversations first, then items at the
+  desk. Read a conversation, mark an item **Collected: remove**, or take it down.
+- **Usage, last 14 days:** check-ins, different students, a weekday on average,
+  Lost & Found posts, the most-used seats, and how full the library is by hour.
+  Students are counted by scrambled codes only.
+- **Seat stickers:** every seat's sticker on A4, signed with the server's
+  `SEAT_SIGNING_SECRET`. Print, or save as a PDF.
+
+## Speed limits
+
+To stop one person flooding the floor or the board, each device and each
+network is limited (per minute or hour): seat actions, seat reports, Lost &
+Found posts, claims, messages and reports, notification sign-ups, data
+deletion, and staff sign-in attempts. Over a limit, the page says to wait a
+moment. The numbers are in `src/ratelimit.js`.
+
+## Privacy
+
+`/privacy.html` says, in plain language, what's kept, why and for how long
+(POPIA), and has **Delete my data**: it frees the device's seat and deletes its
+sittings, study board record, notification sign-up, Lost & Found posts and
+claims (with their conversations). It's linked from the home page footer, the
+nickname card and the Lost & Found form. **Keep it true:** if what NaviSpace
+stores changes, update the page.
 
 ## Notifications
 
