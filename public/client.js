@@ -165,7 +165,7 @@ function isIosNotInstalled() {
  * "unsupported", "permission_denied", "no_vapid_key", or an error
  * message.
  */
-async function enablePushReminders(identity, { quiet = false } = {}) {
+async function enablePushReminders(identity, { quiet = false, fresh = false } = {}) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     if (isIosNotInstalled()) {
       return { ok: false, reason: "ios_not_installed" };
@@ -188,6 +188,12 @@ async function enablePushReminders(identity, { quiet = false } = {}) {
   try {
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
+    // fresh: drop this browser's subscription and make a new one (a stale
+    // one can be accepted by the push service yet never delivered).
+    if (subscription && fresh) {
+      await subscription.unsubscribe().catch(() => {});
+      subscription = null;
+    }
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
