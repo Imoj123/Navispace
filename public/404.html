@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121614" />
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>NaviSpace — Not on the floor</title>
+    <meta name="robots" content="noindex" />
+    <style>
+        main.lost {
+            max-width: 560px;
+            min-height: calc(100vh - 160px);
+            min-height: calc(100dvh - 160px);
+            display: grid;
+            align-content: center;
+            justify-items: start;
+            gap: 18px;
+        }
+
+        /* An empty seat, drawn like the seat badges on the map. */
+        .empty-seat {
+            width: 76px;
+            height: 76px;
+            display: grid;
+            place-items: center;
+            border: 1.5px dashed rgba(196, 163, 95, 0.7);
+            border-radius: 18px;
+            font: 400 italic 40px/1 var(--font-serif);
+            color: var(--brass);
+            background: radial-gradient(circle at 50% 30%, rgba(228, 192, 118, 0.12), transparent 70%);
+            margin-bottom: 6px;
+        }
+
+        .lost h1 {
+            margin: 0;
+            font: 400 clamp(38px, 8vw, 56px)/1.03 var(--font-serif);
+            letter-spacing: -0.015em;
+        }
+
+        .lost h1 em {
+            color: var(--brass);
+        }
+
+        .lost p {
+            margin: 0;
+            color: var(--muted);
+            max-width: 44ch;
+        }
+
+        .lost .ways {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px 26px;
+            margin-top: 10px;
+        }
+
+        .lost .quiet {
+            font: 400 italic 17px/1 var(--font-serif);
+            color: var(--muted);
+        }
+
+        .lost .quiet:hover {
+            color: var(--text);
+        }
+    </style>
+</head>
+
+<body>
+    <header class="topbar">
+        <a class="wordmark" href="/"><span class="wordmark-mark"></span>NaviSpace</a>
+        <nav class="topnav" aria-label="Sections">
+            <a href="/">Home</a>
+            <a href="/library.html">Map</a>
+            <a href="/leaderboard.html">Study board</a>
+            <a href="/lost-found.html">Lost &amp; found</a>
+        </nav>
+    </header>
+
+    <main class="lost">
+        <div class="empty-seat" aria-hidden="true">?</div>
+        <p class="eyebrow">404 · Not on the floor</p>
+        <h1>Nothing at <em>this desk.</em></h1>
+        <p>The page you were after isn't on NaviSpace. The link may be mistyped, or the page has moved. Every seat is still on the map.</p>
+        <div class="ways">
+            <a class="cta-link" href="/library.html">Open the map</a>
+            <a class="quiet" href="/">Back to the home page</a>
+        </div>
+    </main>
+</body>
+
+</html>
