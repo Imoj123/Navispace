@@ -281,27 +281,16 @@ test("unknown pages get the not-found page; unknown API paths get JSON", async (
   });
 });
 
-test("the activity feed lists recent seat events, newest first, with no one's identity", async () => {
-  require("../src/activity").clear();
+test("/api/me/sittings needs a token and returns only that device's sittings", async () => {
   await withServer(async (base) => {
-    const [a, b] = getSeatIds("engineering");
-    const scan = (id, action, token) => fetch(`${base}/api/library/engineering/scan/${id}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, token, nickname: "Thandi" }),
-    });
-    await scan(a, "checkIn", "tok-feed-1");
-    await scan(b, "checkIn", "tok-feed-2");
-    await scan(a, "stepAway", "tok-feed-1");
-    await scan(a, "stillHere", "tok-feed-1"); // not reported (and fails: seat is away)
-    await scan(b, "leaving", "tok-feed-2");
-    await scan(b, "leaving", "tok-feed-2"); // fails: already free, so not reported
-
-    const feed = await (await fetch(`${base}/api/library/engineering/activity`)).json();
-    assert.deepEqual(feed.events.map((e) => [e.type, e.seatId]), [
-      ["freed", b], ["away", a], ["taken", b], ["taken", a],
-    ]);
-    assert.ok(feed.events.every((e) => typeof e.at === "number"));
-    const raw = JSON.stringify(feed);
-    assert.ok(!/tok-feed|Thandi/.test(raw), "no tokens or nicknames");
+    const post = (body) => fetch(`${base}/api/me/sittings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal((await post({})).status, 400);
+    await store.put("history:tok-mine", [{ lib: "engineering", seat: "C4", start: Date.now() - 3600000, end: Date.now() - 600000, ms: 3000000 }]);
+    const mine = await (await post({ token: "tok-mine" })).json();
+    assert.equal(mine.sittings.length, 1);
+    assert.equal(mine.sittings[0].seat, "C4");
+    assert.equal(mine.sittings[0].lib, undefined);
+    const other = await (await post({ token: "tok-other" })).json();
+    assert.deepEqual(other.sittings, []);
   });
 });

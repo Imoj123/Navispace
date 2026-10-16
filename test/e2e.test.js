@@ -213,3 +213,33 @@ test("leaderboards are isolated per library", async () => {
   assert.equal(wartBoard.length, 1);
   assert.equal(wartBoard[0].nickname, "Bob");
 });
+test("history: leaving records the sitting's focus time, minus step-aways", async () => {
+  const { getSittings } = require("../src/history");
+  const t0 = Date.now() - 3 * 60 * 60 * 1000;
+  const min = 60 * 1000;
+  await handleScan(LIB, SEAT_ID, "checkIn", alice, t0);
+  await handleScan(LIB, SEAT_ID, "stepAway", alice, t0 + 30 * min);
+  await handleScan(LIB, SEAT_ID, "imBack", alice, t0 + 38 * min);
+  await handleScan(LIB, SEAT_ID, "leaving", alice, t0 + 50 * min);
+
+  const sittings = await getSittings(alice.token);
+  assert.equal(sittings.length, 1);
+  assert.equal(sittings[0].seat, SEAT_ID);
+  assert.equal(sittings[0].ms, 42 * min);
+  assert.deepEqual(await getSittings(bob.token), []);
+});
+
+test("history: a hold that runs out counts until it ran out; a mis-scan isn't counted", async () => {
+  const { getSittings } = require("../src/history");
+  const t0 = Date.now() - 3 * 60 * 60 * 1000;
+  const { seat } = await handleScan(LIB, SEAT_ID, "checkIn", alice, t0);
+  const hold = seat.checkInExpiry - t0; // shorter in peak hours
+  await sweepExpiredSeats(LIB, [SEAT_ID], t0 + hold + 5 * 60 * 1000);
+  let sittings = await getSittings(alice.token);
+  assert.equal(sittings.length, 1);
+  assert.equal(sittings[0].ms, hold);
+
+  await handleScan(LIB, SEAT_ID, "checkIn", bob, t0);
+  await handleScan(LIB, SEAT_ID, "leaving", bob, t0 + 20 * 1000);
+  assert.deepEqual(await getSittings(bob.token), []);
+});

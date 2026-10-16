@@ -2,6 +2,7 @@
 
 const { store } = require("./store");
 const config = require("./config");
+const { recordSitting } = require("./history");
 
 /**
  * Seat states, mirroring the AVAILABLE / OCCUPIED / STEPPED_AWAY
@@ -258,6 +259,7 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       // Final credit for today before releasing, same as a "stillHere"
       // would have, so leaving mid-session isn't worse than confirming.
       await creditSessionDay(libraryId, identity.token, identity.nickname, seatId, now);
+      await recordSitting(libraryId, seat, now);
       resetToAvailable(seat);
       await saveSeat(seat);
       return { ok: true, seat };
