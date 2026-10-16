@@ -348,9 +348,13 @@
         }
 
         let lastItems = [];
+        const BASE_TITLE = document.title;
         async function render() {
             const items = await getLostFoundItems(libraryId);
             lastItems = items;
+            // Unread messages show in the tab title too, for a tab left open on a computer.
+            const unread = items.filter((i) => i.claim && roleFor(i) && hasUnread(i)).length;
+            document.title = (unread ? `(${unread}) ` : "") + BASE_TITLE;
             const grid = document.getElementById("grid");
             const empty = document.getElementById("empty");
             grid.innerHTML = "";
@@ -558,14 +562,24 @@
         function offerNotifications() {
             const tip = document.getElementById("threadTip");
             tip.textContent = "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
-            if (!("Notification" in window) || Notification.permission === "granted") return;
+            if (!("Notification" in window) && !isIosNotInstalled()) return;
+            // Already allowed: make sure this device is signed up, without asking again.
+            if ("Notification" in window && Notification.permission === "granted") {
+                enablePushReminders(identity, { quiet: true }).catch(() => { });
+                return;
+            }
             const b = document.createElement("button");
             b.type = "button";
             b.textContent = "Get a notification when they reply";
             b.onclick = async () => {
                 const r = await enablePushReminders(identity);
-                b.replaceWith(document.createTextNode(r.ok ? "Notifications are on." :
-                    r.reason === "ios_not_installed" ? "On iPhone, add NaviSpace to your Home Screen first." : "Notifications aren't available here."));
+                // Say what really happened: a test notification is sent now.
+                b.replaceWith(document.createTextNode(
+                    r.ok && r.testSent ? "Notifications are on. You should have just got a test one." :
+                    r.ok ? "Saved, but the test notification didn't go through. Try again in a minute." :
+                    r.reason === "ios_not_installed" ? "On iPhone, add NaviSpace to your Home Screen first." :
+                    r.reason === "permission_denied" ? "Notifications are blocked for this site in your browser settings." :
+                    "Notifications aren't available in this browser."));
             };
             tip.append(" ", b, ".");
         }

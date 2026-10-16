@@ -165,7 +165,7 @@ function isIosNotInstalled() {
  * "unsupported", "permission_denied", "no_vapid_key", or an error
  * message.
  */
-async function enablePushReminders(identity) {
+async function enablePushReminders(identity, { quiet = false } = {}) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     if (isIosNotInstalled()) {
       return { ok: false, reason: "ios_not_installed" };
@@ -173,7 +173,9 @@ async function enablePushReminders(identity) {
     return { ok: false, reason: "unsupported" };
   }
 
-  const permission = await Notification.requestPermission();
+  // quiet: only refresh an existing permission, never prompt (no tap).
+  if (quiet && Notification.permission !== "granted") return { ok: false, reason: "not_granted" };
+  const permission = quiet ? "granted" : await Notification.requestPermission();
   if (permission !== "granted") {
     return { ok: false, reason: "permission_denied" };
   }
@@ -196,7 +198,7 @@ async function enablePushReminders(identity) {
     const res = await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: identity.token, subscription }),
+      body: JSON.stringify({ token: identity.token, subscription, quiet }),
     });
     const body = await res.json();
     return { ok: !!body.ok, testSent: !!body.testSent, testReason: body.testReason || null };
@@ -204,6 +206,25 @@ async function enablePushReminders(identity) {
     return { ok: false, reason: String((err && err.message) || err) };
   }
 }
+
+/**
+ * A browser that already allowed notifications re-registers itself with
+ * the server once a day, quietly (no prompt, no test notification). This
+ * covers a device that allowed them on one page but never signed up its
+ * current identity, a subscription the browser renewed, or the server's
+ * store being reset.
+ */
+(function syncPushQuietly() {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const token = localStorage.getItem("navispace_token");
+    const last = Number(localStorage.getItem("navispace_push_synced")) || 0;
+    if (!token || Date.now() - last < 24 * 60 * 60 * 1000) return;
+    enablePushReminders({ token }, { quiet: true }).then((r) => {
+      if (r.ok) localStorage.setItem("navispace_push_synced", String(Date.now()));
+    }).catch(() => {});
+  } catch { }
+})();
 
 /** RFC 4122 v4 id for browsers without crypto.randomUUID (iOS 15.0-15.3). */
 function uuidFallback() {
