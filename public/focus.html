@@ -320,7 +320,10 @@
             text-align: center;
             gap: 16px;
             padding: 24px;
-            background: rgba(10, 12, 11, 0.86);
+            /* Opaque enough that the timer and controls behind don't read through. */
+            background: rgba(10, 12, 11, 0.96);
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
             z-index: 6;
         }
 
@@ -328,6 +331,7 @@
         .done h1 {
             margin: 0;
             font: 400 clamp(34px, 6vw, 52px)/1.05 var(--font-serif);
+            text-wrap: balance;
         }
 
         .gate p,
@@ -971,15 +975,19 @@
 
         // ===== Keep the seat, keep the screen on ===================================
 
+        let heldHere = false;
         async function refreshSeat() {
             try {
                 const s = await getSeat(libraryId, seatId);
                 if (!s || s.reason) return;
                 seat = s;
                 if (!isMine(seat.holderHash) || seat.state === "AVAILABLE") {
-                    showGate("Your check-in has ended.", "This seat isn't held by you any more. Scan the code on your desk to check in again.");
+                    // "Ended" only makes sense if this page saw the seat as yours.
+                    if (heldHere) showGate("Your check-in has ended.", "This seat isn't held by you any more. Scan the code on your desk to check in again.");
+                    else showGate(`Check in at ${seatId} first.`, "Focus sessions start from the seat you're checked into. Scan the code on your desk, check in, then come back.");
                     return;
                 }
+                heldHere = true;
                 sessionStart = seat.sessionStart || seat.lastConfirmTime || sessionStart;
                 applyAway();
                 if (isAway()) return;
@@ -1068,7 +1076,8 @@
         // ===== Boot ======================================================================
 
         function showGate(title, text) {
-            $("gate").querySelector("h1").textContent = title;
+            // Never break "check-in" at its hyphen.
+            $("gate").querySelector("h1").innerHTML = title.replace(/[&<>]/g, "").replace(/check-in/gi, (w) => `<span style="white-space:nowrap">${w}</span>`);
             $("gateText").textContent = text;
             $("gateLink").href = libraryUrl("/library.html", libraryId);
             $("gate").hidden = false;
