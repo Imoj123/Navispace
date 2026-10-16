@@ -3,6 +3,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+// Check-ins are refused out of hours; these tests run at any time of day.
+process.env.ALWAYS_OPEN = "1";
+
 const { createApp } = require("../src/server");
 const { store } = require("../src/store");
 const { getSeatIds } = require("../src/seats");

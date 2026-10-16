@@ -39,14 +39,9 @@ function dayKeyFor(timestampMs) {
   return new Date(timestampMs).toISOString().slice(0, 10);
 }
 
-/** Extension #5: shorter check-in window during configured peak hours. */
-function currentCheckInDurationMs(now = Date.now()) {
-  const hour = new Date(now).getHours();
-  const isPeak =
-    hour >= config.PEAK_HOURS_START && hour < config.PEAK_HOURS_END;
-  return isPeak
-    ? config.PEAK_CHECK_IN_DURATION_MS
-    : config.CHECK_IN_DURATION_MS;
+/** How long a check-in (or a "still here") holds the seat. */
+function currentCheckInDurationMs(_now = Date.now()) {
+  return config.CHECK_IN_DURATION_MS;
 }
 
 function freshSeat(libraryId, seatId) {
@@ -60,7 +55,7 @@ function freshSeat(libraryId, seatId) {
     confirmStreak: 0,
     holderToken: null,
     holderNickname: null,
-    reminderSent: false,
+    remindersSent: 0,
     sessionStart: null,
     awayMs: 0,
     awayStart: null,
@@ -195,7 +190,7 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       seat.awayStart = null;
       seat.holderToken = identity.token;
       seat.holderNickname = identity.nickname;
-      seat.reminderSent = false;
+      seat.remindersSent = 0;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -211,7 +206,7 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       seat.checkInExpiry = now + currentCheckInDurationMs(now);
       seat.lastConfirmTime = now;
       seat.confirmStreak = (seat.confirmStreak ?? 0) + 1;
-      seat.reminderSent = false;
+      seat.remindersSent = 0;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -226,7 +221,7 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       seat.state = SeatState.STEPPED_AWAY;
       seat.stepAwayExpiry = now + config.STEP_AWAY_DURATION_MS;
       seat.awayStart = now;
-      seat.reminderSent = false;
+      seat.remindersSent = 0;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -244,7 +239,7 @@ async function handleScan(libraryId, seatId, action, identity, now = Date.now(),
       seat.lastConfirmTime = now;
       if (seat.awayStart) seat.awayMs = (seat.awayMs || 0) + Math.max(0, now - seat.awayStart);
       seat.awayStart = null;
-      seat.reminderSent = false;
+      seat.remindersSent = 0;
       await saveSeat(seat);
       return { ok: true, seat };
     }
@@ -278,7 +273,7 @@ function resetToAvailable(seat) {
   seat.confirmStreak = 0;
   seat.holderToken = null;
   seat.holderNickname = null;
-  seat.reminderSent = false;
+  seat.remindersSent = 0;
   seat.sessionStart = null;
   seat.awayMs = 0;
   seat.awayStart = null;
