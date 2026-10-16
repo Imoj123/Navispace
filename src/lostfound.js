@@ -8,6 +8,10 @@ function itemKey(libraryId, itemId) {
     return `lostfound:${libraryId}:${itemId}`;
 }
 
+function threadKey(libraryId, itemId) {
+    return `lfthread:${libraryId}:${itemId}`;
+}
+
 function listPrefix(libraryId) {
     return `lostfound:${libraryId}:`;
 }
@@ -16,6 +20,10 @@ const TTL_SECONDS = config.LOST_FOUND_TTL_DAYS * 24 * 60 * 60;
 // The same post again this soon (a double tap, a phone re-sending a slow
 // upload) returns the first item instead of making a second one.
 const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+const MAX_MESSAGE_CHARS = 300;
+const MAX_MESSAGES = 60;
+// Text only: a link in a lost-and-found chat is almost always a scam.
+const LINK_RE = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|co|ly|me|app|link|xyz)\b)/i;
 
 /**
  * Reports a found item: a photo plus a short description, optionally
@@ -109,8 +117,13 @@ async function claimItem(libraryId, itemId, { claimantToken, claimantNickname, n
         note: note ? String(note).slice(0, 200) : "",
         claimedAt: now,
     };
+    // The claim note opens the private thread between the two of them.
+    const opening = item.claim.note ? [{ from: "owner", text: item.claim.note, at: now }] : [];
+    item.messageCount = opening.length;
+    item.lastMessageAt = opening.length ? now : null;
 
     await store.put(key, item, { expirationTtl: TTL_SECONDS });
+    await store.put(threadKey(libraryId, itemId), opening, { expirationTtl: TTL_SECONDS });
     return { ok: true, item };
 }
 
@@ -128,7 +141,87 @@ async function resolveItem(libraryId, itemId, requesterToken) {
         return { ok: false, reason: "not_reporter" };
     }
     await store.delete(key);
+    // Once it's back with its owner, their conversation goes too.
+    await store.delete(threadKey(libraryId, itemId));
     return { ok: true };
 }
 
-module.exports = { reportItem, listItems, claimItem, resolveItem };
+/**
+ * The finder handed the item to the library's front desk: anyone can now
+ * collect it there, without arranging to meet. Finder only.
+ */
+async function markAtDesk(libraryId, itemId, requesterToken, now = Date.now()) {
+    const key = itemKey(libraryId, itemId);
+    const item = await store.get(key);
+    if (!item) return { ok: false, reason: "not_found" };
+    if (item.reporterToken !== requesterToken) return { ok: false, reason: "not_reporter" };
+    item.atDesk = true;
+    item.atDeskAt = now;
+    await store.put(key, item, { expirationTtl: TTL_SECONDS });
+    return { ok: true, item };
+}
+
+/** Which side of a claim this device is on: "finder", "owner" or null. */
+function roleOf(item, token) {
+    if (!token) return null;
+    if (item.reporterToken === token) return "finder";
+    if (item.claim && item.claim.claimantToken === token) return "owner";
+    return null;
+}
+
+/**
+ * The private thread for a claimed item. Only the finder and the person
+ * who claimed it can read it; everyone else gets not_allowed.
+ */
+async function getThread(libraryId, itemId, token) {
+    const item = await store.get(itemKey(libraryId, itemId));
+    if (!item || !item.claim) return { ok: false, reason: "not_found" };
+    const role = roleOf(item, token);
+    if (!role) return { ok: false, reason: "not_allowed" };
+    const messages = (await store.get(threadKey(libraryId, itemId))) || [];
+    return {
+        ok: true,
+        role,
+        finder: item.reporterNickname,
+        owner: item.claim.claimantNickname,
+        atDesk: Boolean(item.atDesk),
+        messages,
+    };
+}
+
+/**
+ * Adds a message to a claim's thread. Text only (no links), short, and a
+ * thread holds at most MAX_MESSAGES. Returns the recipient's token so the
+ * caller can notify them.
+ */
+async function sendMessage(libraryId, itemId, token, text, now = Date.now()) {
+    const key = itemKey(libraryId, itemId);
+    const item = await store.get(key);
+    if (!item || !item.claim) return { ok: false, reason: "not_found" };
+    const role = roleOf(item, token);
+    if (!role) return { ok: false, reason: "not_allowed" };
+    const clean = String(text || "").replace(/\s+/g, " ").trim().slice(0, MAX_MESSAGE_CHARS);
+    if (!clean) return { ok: false, reason: "empty" };
+    if (LINK_RE.test(clean)) return { ok: false, reason: "no_links" };
+
+    const tKey = threadKey(libraryId, itemId);
+    const messages = (await store.get(tKey)) || [];
+    if (messages.length >= MAX_MESSAGES) return { ok: false, reason: "thread_full" };
+    const message = { from: role, text: clean, at: now };
+    messages.push(message);
+    await store.put(tKey, messages, { expirationTtl: TTL_SECONDS });
+
+    item.messageCount = messages.length;
+    item.lastMessageAt = now;
+    await store.put(key, item, { expirationTtl: TTL_SECONDS });
+
+    return {
+        ok: true,
+        message,
+        recipientToken: role === "finder" ? item.claim.claimantToken : item.reporterToken,
+        senderNickname: role === "finder" ? item.reporterNickname : item.claim.claimantNickname,
+        item,
+    };
+}
+
+module.exports = { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, MAX_MESSAGE_CHARS };

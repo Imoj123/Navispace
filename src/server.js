@@ -18,7 +18,7 @@ const busy = require("./busy");
 const { reportSeat } = require("./reports");
 const { saveSubscription, removeSubscription, sendPush, vapidPublicKey } = require("./push");
 const { startReminderLoop } = require("./reminders");
-const { reportItem, listItems, claimItem, resolveItem } = require("./lostfound");
+const { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage } = require("./lostfound");
 const { seatCodeValid, seatCodesRequired } = require("./seatcode");
 
 const PORT = process.env.PORT || 3000;
@@ -46,7 +46,9 @@ function publicItem(item) {
   const { reporterToken, ...rest } = item;
   const out = { ...rest, reporterHash: tokenHash(reporterToken) };
   if (item.claim) {
-    const { claimantToken, ...claim } = item.claim;
+    // The claim note is proof of ownership: only the finder and the
+    // claimant see it, in their private thread.
+    const { claimantToken, note, ...claim } = item.claim;
     out.claim = { ...claim, claimantHash: tokenHash(claimantToken) };
   }
   return out;
@@ -443,6 +445,45 @@ function createApp() {
     }
     const result = await resolveItem(libId, itemId, token);
     res.status(result.ok ? 200 : 403).json(result);
+  });
+
+  // Body: { token } — the finder handed the item to the front desk.
+  app.post("/api/library/:libId/lostfound/:itemId/desk", async (req, res) => {
+    const { libId, itemId } = req.params;
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ ok: false, reason: "missing_identity" });
+    }
+    const result = await markAtDesk(libId, itemId, token);
+    if (result.item) result.item = publicItem(result.item);
+    res.status(result.ok ? 200 : result.reason === "not_found" ? 404 : 403).json(result);
+  });
+
+  // Body: { token } — the private thread between finder and claimant.
+  // POST so the token never sits in a URL or a log.
+  app.post("/api/library/:libId/lostfound/:itemId/thread", async (req, res) => {
+    const { libId, itemId } = req.params;
+    const result = await getThread(libId, itemId, (req.body || {}).token);
+    res.set("Cache-Control", "no-store").status(result.ok ? 200 : result.reason === "not_found" ? 404 : 403).json(result);
+  });
+
+  // Body: { token, text } — adds a message and notifies the other person.
+  app.post("/api/library/:libId/lostfound/:itemId/thread/send", async (req, res) => {
+    const { libId, itemId } = req.params;
+    const { token, text } = req.body || {};
+    const result = await sendMessage(libId, itemId, token, text);
+    if (!result.ok) {
+      const status = { not_found: 404, not_allowed: 403 }[result.reason] || 400;
+      return res.status(status).json(result);
+    }
+    // A notification for the other person, if they've turned them on.
+    sendPush(result.recipientToken, {
+      title: `${result.senderNickname} · ${result.item.description}`.slice(0, 80),
+      body: result.message.text,
+      url: `/lost-found.html?lib=${encodeURIComponent(libId)}&thread=${encodeURIComponent(itemId)}`,
+      tag: `navispace-lf-${itemId}`,
+    }, { ttlSeconds: 12 * 60 * 60 }).catch(() => { }); // still worth seeing hours later
+    res.json({ ok: true, message: result.message });
   });
 
   // --- Web Push subscriptions ------------------------------------------------

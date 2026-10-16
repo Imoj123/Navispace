@@ -58,6 +58,190 @@
 
         /* --- Lamp over the floor ------------------------------------------ */
         .lf-claim-note { font: 400 italic 14px/1.4 var(--font-serif); }
+
+        .lf-actions {
+            display: grid;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .lf-actions .btn {
+            margin: 0;
+        }
+
+        /* Handed to the front desk: the card says where to collect it. */
+        .lf-chip.desk {
+            color: var(--free);
+            border-color: rgba(140, 197, 164, 0.55);
+        }
+
+        .lf-desk-note {
+            font: 400 italic 15px/1.4 var(--font-serif);
+            color: var(--text);
+        }
+
+        .lf-thread-btn {
+            position: relative;
+        }
+
+        .lf-thread-btn .unread {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--brass);
+            box-shadow: 0 0 0 3px rgba(196, 163, 95, 0.2);
+        }
+
+        /* --- The private thread: a sheet over the board ------------------- */
+        .thread {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            display: grid;
+            align-items: end;
+            justify-items: center;
+            background: rgba(6, 8, 7, 0.72);
+        }
+
+        .thread[hidden] {
+            display: none;
+        }
+
+        .thread-box {
+            width: 100%;
+            max-width: 520px;
+            height: min(640px, 88vh);
+            height: min(640px, 88dvh);
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            background: var(--ground-2);
+            border: 1px solid var(--line-strong);
+            border-bottom: 0;
+            box-shadow: 0 -30px 80px rgba(0, 0, 0, 0.55);
+        }
+
+        @media (min-width: 640px) {
+            .thread {
+                align-items: center;
+            }
+
+            .thread-box {
+                border-bottom: 1px solid var(--line-strong);
+            }
+        }
+
+        .thread-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 12px;
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .thread-head h2 {
+            margin: 0;
+            font: 400 22px/1.15 var(--font-serif);
+        }
+
+        .thread-head p {
+            margin: 6px 0 0;
+            font: 400 11px/1.4 var(--font-mono);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .thread-close {
+            background: none;
+            border: 0;
+            color: var(--muted);
+            font: 400 26px/1 var(--font-serif);
+            padding: 4px 6px;
+            margin: -4px -6px 0 0;
+            cursor: pointer;
+        }
+
+        .thread-list {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .msg {
+            max-width: 82%;
+            padding: 10px 13px;
+            border: 1px solid var(--line-strong);
+            background: var(--panel);
+            font: 400 15px/1.4 var(--font-sans);
+            overflow-wrap: anywhere;
+        }
+
+        .msg.mine {
+            align-self: flex-end;
+            border-color: rgba(196, 163, 95, 0.55);
+            background: rgba(196, 163, 95, 0.08);
+        }
+
+        .msg small {
+            display: block;
+            margin-top: 5px;
+            font: 400 10.5px/1 var(--font-mono);
+            letter-spacing: 0.06em;
+            color: var(--muted);
+        }
+
+        .thread-empty,
+        .thread-tip {
+            color: var(--muted);
+            font: 400 italic 15px/1.45 var(--font-serif);
+        }
+
+        .thread-tip {
+            margin: 0;
+            font-size: 13.5px;
+        }
+
+        .thread-tip button {
+            background: none;
+            border: 0;
+            padding: 0;
+            color: var(--brass);
+            font: inherit;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .thread-form {
+            display: grid;
+            gap: 10px;
+            padding: 14px 20px max(16px, env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid var(--line);
+        }
+
+        .thread-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+        }
+
+        .thread-row input {
+            width: 100%;
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .thread-row .btn {
+            width: auto;
+            margin: 0;
+            padding: 10px 18px;
+        }
     </style>
     <script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/focus.html*"}},{"not":{"href_matches":"/api/*"}}]},"eagerness":"moderate"}]}</script>
 </head>
@@ -106,12 +290,32 @@
 
     <div id="claimModal" class="modal-overlay">
         <div class="modal-box">
-            <p>I think this is mine. Leave a note so the finder can tell it's really yours (a hidden mark, what's
-                inside, etc.) — they'll hold onto it until you two arrange a handoff.</p>
+            <p>I think this is mine. Say how the finder can tell it's yours (a mark, what's inside). It starts a private
+                conversation with them to arrange the handover.</p>
             <input type="text" id="claimNote" placeholder="e.g. Has a dent on the bottom-left corner" maxlength="200"
                 style="width:100%; margin-bottom: 14px;" />
             <button class="btn btn-primary" id="claimSubmit">Send</button>
             <button class="btn" id="claimCancel">Cancel</button>
+        </div>
+    </div>
+
+    <div class="thread" id="thread" role="dialog" aria-modal="true" aria-labelledby="threadTitle" hidden>
+        <div class="thread-box">
+            <div class="thread-head">
+                <div>
+                    <h2 id="threadTitle">Messages</h2>
+                    <p id="threadWho"></p>
+                </div>
+                <button class="thread-close" id="threadClose" type="button" aria-label="Close">×</button>
+            </div>
+            <div class="thread-list" id="threadList" aria-live="polite"></div>
+            <form class="thread-form" id="threadForm">
+                <p class="thread-tip" id="threadTip">Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.</p>
+                <div class="thread-row">
+                    <input type="text" id="threadInput" maxlength="300" autocomplete="off" placeholder="Write a message" aria-label="Message" />
+                    <button class="btn btn-primary" type="submit" id="threadSend">Send</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -127,8 +331,10 @@
       <a href="${libraryUrl("/leaderboard.html", libraryId)}">Study board</a>
       <a href="${libraryUrl("/lost-found.html", libraryId)}" class="current">Lost &amp; found</a>
     `;
+        let libraryName = "";
         getLibraries().then((libs) => {
             const lib = libs.find((l) => l.id === libraryId);
+            libraryName = lib ? lib.name : "";
             document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
         });
 
@@ -141,8 +347,10 @@
             return `${Math.round(hours / 24)}d ago`;
         }
 
+        let lastItems = [];
         async function render() {
             const items = await getLostFoundItems(libraryId);
+            lastItems = items;
             const grid = document.getElementById("grid");
             const empty = document.getElementById("empty");
             grid.innerHTML = "";
@@ -158,9 +366,26 @@
             }
         }
 
+        // Which side of a claim this device is on, if any.
+        function roleFor(item) {
+            if (isMine(item.reporterHash)) return "finder";
+            if (item.claim && isMine(item.claim.claimantHash)) return "owner";
+            return null;
+        }
+
+        function button(label, cls, onclick) {
+            const b = document.createElement("button");
+            b.className = "btn " + cls;
+            b.type = "button";
+            b.textContent = label;
+            b.onclick = onclick;
+            return b;
+        }
+
         function renderCard(item) {
+            const role = roleFor(item);
             const card = document.createElement("div");
-            card.className = "lf-card" + (item.status === "claimed" ? " is-claimed" : "");
+            card.className = "lf-card" + (item.status === "claimed" && !role ? " is-claimed" : "");
 
             const img = document.createElement("img");
             img.src = item.photoDataUrl;
@@ -177,55 +402,49 @@
 
             const meta = document.createElement("div");
             meta.className = "lf-card-meta";
-            meta.textContent = [item.location, timeAgo(item.createdAt)].filter(Boolean).join(" · ");
+            meta.textContent = [item.location, timeAgo(item.createdAt), role === "finder" ? "posted by you" : ""].filter(Boolean).join(" · ");
             body.appendChild(meta);
 
-            const mine = isMine(item.reporterHash);
-
-            if (item.status === "claimed") {
+            if (item.atDesk) {
+                const chip = document.createElement("div");
+                chip.className = "lf-chip desk";
+                chip.textContent = "At the front desk";
+                body.appendChild(chip);
+                const note = document.createElement("div");
+                note.className = "lf-desk-note";
+                note.textContent = `Collect it from the ${libraryName || "library"} front desk.`;
+                body.appendChild(note);
+            } else if (item.status === "claimed") {
                 const chip = document.createElement("div");
                 chip.className = "lf-chip";
-                chip.textContent = `Claimed by ${item.claim.claimantNickname}`;
+                chip.textContent = role === "owner" ? "You claimed this" : `Claimed by ${item.claim.claimantNickname}`;
                 body.appendChild(chip);
+            }
 
-                if (item.claim.note) {
-                    const note = document.createElement("div");
-                    note.className = "lf-claim-note";
-                    note.textContent = `“${item.claim.note}”`;
-                    body.appendChild(note);
-                }
+            const actions = document.createElement("div");
+            actions.className = "lf-actions";
 
-                if (mine) {
-                    const resolveBtn = document.createElement("button");
-                    resolveBtn.className = "btn btn-tinted lf-resolve";
-                    resolveBtn.textContent = "Mark returned";
-                    resolveBtn.onclick = async () => {
-                        await resolveLostFoundItem(libraryId, item.id, identity);
+            // The two people on a claim talk in its private thread.
+            if (item.claim && role) {
+                const b = button(role === "finder" ? `Message ${item.claim.claimantNickname}` : "Message the finder", "btn-primary lf-thread-btn", () => openThread(item));
+                if (hasUnread(item)) b.insertAdjacentHTML("beforeend", '<span class="unread" aria-label="New messages"></span>');
+                actions.appendChild(b);
+            }
+            if (role === "finder") {
+                if (!item.atDesk) {
+                    actions.appendChild(button("Handed to the front desk", "btn-tinted", async () => {
+                        await markLostFoundAtDesk(libraryId, item.id, identity);
                         render();
-                    };
-                    body.appendChild(resolveBtn);
+                    }));
                 }
-            } else if (mine) {
-                const youChip = document.createElement("div");
-                youChip.className = "lf-card-meta";
-                youChip.textContent = "Posted by you";
-                body.appendChild(youChip);
-
-                const resolveBtn = document.createElement("button");
-                resolveBtn.className = "btn btn-tinted lf-resolve";
-                resolveBtn.textContent = "Remove (already handled)";
-                resolveBtn.onclick = async () => {
+                actions.appendChild(button(item.status === "claimed" || item.atDesk ? "Mark returned" : "Remove (already handled)", "btn-tinted", async () => {
                     await resolveLostFoundItem(libraryId, item.id, identity);
                     render();
-                };
-                body.appendChild(resolveBtn);
-            } else {
-                const claimBtn = document.createElement("button");
-                claimBtn.className = "btn btn-tinted lf-resolve";
-                claimBtn.textContent = "I think this is mine";
-                claimBtn.onclick = () => openClaimModal(item.id);
-                body.appendChild(claimBtn);
+                }));
+            } else if (!role && item.status !== "claimed" && !item.atDesk) {
+                actions.appendChild(button("I think this is mine", "btn-tinted", () => openClaimModal(item.id)));
             }
+            if (actions.children.length) body.appendChild(actions);
 
             card.appendChild(body);
             return card;
@@ -248,7 +467,135 @@
             if (!result.ok) {
                 alert("That item was just claimed by someone else.");
             }
+            await render();
+            // Straight into the conversation with the finder.
+            if (result.ok && result.item) openThread(result.item);
+        };
+
+        // --- The private thread ------------------------------------------------
+        // Finder and claimant only (the server checks). Polled every few
+        // seconds while open; a notification covers the rest of the time.
+
+        const seenKey = (id) => `navispace_lf_seen_${id}`;
+        function hasUnread(item) {
+            let seen = 0;
+            try { seen = Number(localStorage.getItem(seenKey(item.id))) || 0; } catch { }
+            return Boolean(item.lastMessageAt && item.lastMessageAt > seen);
+        }
+        function markSeen(id, at) {
+            try { localStorage.setItem(seenKey(id), String(at || Date.now())); } catch { }
+        }
+
+        const thread = document.getElementById("thread");
+        let threadItem = null;
+        let threadTimer = null;
+        let threadCount = -1;
+
+        function openThread(item) {
+            threadItem = item;
+            threadCount = -1;
+            document.getElementById("threadTitle").textContent = item.description;
+            document.getElementById("threadWho").textContent = "";
+            document.getElementById("threadList").innerHTML = '<p class="thread-empty">Loading…</p>';
+            thread.hidden = false;
+            document.documentElement.style.overflow = "hidden";
+            loadThread();
+            clearInterval(threadTimer);
+            threadTimer = setInterval(() => { if (!document.hidden) loadThread(); }, 5000);
+            offerNotifications();
+        }
+
+        function closeThread() {
+            thread.hidden = true;
+            document.documentElement.style.overflow = "";
+            clearInterval(threadTimer);
+            threadItem = null;
+            if (new URLSearchParams(location.search).has("thread")) history.replaceState(null, "", libraryUrl("/lost-found.html", libraryId));
             render();
+        }
+
+        async function loadThread() {
+            if (!threadItem) return;
+            let t;
+            try { t = await getLostFoundThread(libraryId, threadItem.id, identity); } catch { return; }
+            if (!threadItem) return;
+            if (!t.ok) {
+                document.getElementById("threadList").innerHTML = `<p class="thread-empty">${t.reason === "not_found" ? "This item has been returned or removed." : "Only the finder and the person who claimed it can read this."}</p>`;
+                document.getElementById("threadForm").hidden = true;
+                return;
+            }
+            document.getElementById("threadForm").hidden = false;
+            const other = t.role === "finder" ? t.owner : t.finder;
+            document.getElementById("threadWho").textContent = t.role === "finder" ? `With ${other}, who claimed it` : `With ${other}, who found it`;
+            if (t.messages.length === threadCount) return;
+            threadCount = t.messages.length;
+            const list = document.getElementById("threadList");
+            list.innerHTML = "";
+            if (!t.messages.length) {
+                list.innerHTML = `<p class="thread-empty">${t.role === "finder" ? `Say where and when ${other} can collect it.` : "Tell the finder how to recognise it's yours, and when you can collect it."}</p>`;
+            }
+            if (t.atDesk) {
+                const p = document.createElement("p");
+                p.className = "thread-empty";
+                p.textContent = `It's at the ${libraryName || "library"} front desk now.`;
+                list.appendChild(p);
+            }
+            for (const m of t.messages) {
+                const el = document.createElement("div");
+                el.className = "msg" + (m.from === t.role ? " mine" : "");
+                el.textContent = m.text;
+                const when = document.createElement("small");
+                when.textContent = `${m.from === t.role ? "You" : other} · ${timeAgo(m.at)}`;
+                el.appendChild(when);
+                list.appendChild(el);
+            }
+            list.scrollTop = list.scrollHeight;
+            const last = t.messages[t.messages.length - 1];
+            markSeen(threadItem.id, last ? last.at : 0);
+        }
+
+        // Replies arrive as notifications on phones that allow them.
+        function offerNotifications() {
+            const tip = document.getElementById("threadTip");
+            tip.textContent = "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
+            if (!("Notification" in window) || Notification.permission === "granted") return;
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = "Get a notification when they reply";
+            b.onclick = async () => {
+                const r = await enablePushReminders(identity);
+                b.replaceWith(document.createTextNode(r.ok ? "Notifications are on." :
+                    r.reason === "ios_not_installed" ? "On iPhone, add NaviSpace to your Home Screen first." : "Notifications aren't available here."));
+            };
+            tip.append(" ", b, ".");
+        }
+
+        document.getElementById("threadClose").onclick = closeThread;
+        thread.addEventListener("click", (e) => { if (e.target === thread) closeThread(); });
+        document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !thread.hidden) closeThread(); });
+
+        document.getElementById("threadForm").onsubmit = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById("threadInput");
+            const send = document.getElementById("threadSend");
+            const text = input.value.trim();
+            if (!text || !threadItem || send.disabled) return;
+            send.disabled = true;
+            try {
+                const r = await sendLostFoundMessage(libraryId, threadItem.id, identity, text);
+                if (r.ok) {
+                    input.value = "";
+                    markSeen(threadItem.id, r.message.at);
+                    threadCount = -1;
+                    await loadThread();
+                } else {
+                    alert(r.reason === "no_links" ? "Links aren't allowed here. Say it in words instead."
+                        : r.reason === "thread_full" ? "This conversation is full. Meet at the front desk to hand it over."
+                        : "Couldn't send that. Try again.");
+                }
+            } finally {
+                send.disabled = false;
+            }
         };
 
         // --- Report form -----------------------------------------------------
@@ -317,8 +664,12 @@
             }
         };
 
-        render();
-        setInterval(render, 20000);
+        // Opened from a message notification: straight into that thread.
+        render().then(() => {
+            const id = new URLSearchParams(location.search).get("thread");
+            if (id) openThread(lastItems.find((i) => i.id === id) || { id, description: "Messages" });
+        });
+        setInterval(() => { if (thread.hidden) render(); }, 20000);
     </script>
 </body>
 
