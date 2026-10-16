@@ -208,6 +208,8 @@ button {
     color: var(--muted);
     text-decoration: none;
     padding: 6px 0;
+    min-width: 24px; /* "MAP" alone is narrower than a fingertip */
+    text-align: center;
     white-space: nowrap;
     border-bottom: 1px solid transparent;
     transition: color 0.2s ease, border-color 0.2s ease;
