@@ -426,183 +426,138 @@
             text-decoration: none;
         }
 
-        /* --- Live on the floor ------------------------------------------------
-           A rotating line about the floor right now, beside a feed of what just
-           happened. The feed is tilted away in perspective: new events drop in
-           at the front, older ones sink back and fade. Each carries a little
-           3D seat block that stands tall when taken and lies flat when free. */
-        .live-meta {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .live-meta .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--free);
-            box-shadow: 0 0 0 0 rgba(140, 197, 164, 0.6);
-            animation: live-pulse 2.4s ease-out infinite;
-        }
-
-        @keyframes live-pulse {
-            0% { box-shadow: 0 0 0 0 rgba(140, 197, 164, 0.55); }
-            70%, 100% { box-shadow: 0 0 0 9px rgba(140, 197, 164, 0); }
-        }
-
-        .live-grid {
+        /* --- Your week ----------------------------------------------------------
+           This device's hours at a desk, Monday to Sunday, as a row of 3D
+           columns. Today's column is brass and, while you're seated, keeps
+           growing minute by minute with a soft glow on its top. */
+        .week-grid {
             display: grid;
             grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
             gap: 26px 48px;
-            align-items: start;
-        }
-
-        .highlight {
-            margin: 0;
-            min-height: 3.6em;
-            font: 400 clamp(24px, 2.6vw, 32px)/1.2 var(--font-serif);
-            letter-spacing: -0.005em;
-            transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-
-        .highlight.out {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-
-        .highlight em {
-            color: var(--free);
-            font-style: italic;
-        }
-
-        .highlight-dots {
-            display: flex;
-            gap: 6px;
-            margin-top: 18px;
-        }
-
-        .highlight-dots i {
-            width: 18px;
-            height: 2px;
-            background: rgba(236, 230, 214, 0.15);
-            transition: background 0.4s ease;
-        }
-
-        .highlight-dots i.on {
-            background: var(--brass);
-        }
-
-        .feed-stage {
-            perspective: 1000px;
-            perspective-origin: 50% -20%;
-            /* the tilt brings the front cards forward; leave them room */
-            padding: 0 18px;
-        }
-
-        .feed {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            transform: rotateX(12deg);
-            transform-origin: 50% 0;
-            transform-style: preserve-3d;
-        }
-
-        .feed li {
-            --i: 0;
-            display: grid;
-            grid-template-columns: 34px minmax(0, 1fr) auto;
             align-items: center;
-            gap: 14px;
-            padding: 11px 14px;
-            margin-bottom: 6px;
-            border: 1px solid var(--line);
-            background: linear-gradient(90deg, rgba(236, 230, 214, 0.04), rgba(236, 230, 214, 0.01));
-            transform: translateZ(calc(var(--i) * -26px));
-            opacity: calc(1 - var(--i) * 0.14);
-            transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.7s ease;
         }
 
-        .feed li.fresh {
-            animation: feed-drop 0.8s cubic-bezier(0.2, 0.75, 0.25, 1) both;
-            border-color: rgba(196, 163, 95, 0.45);
+        .week-lede {
+            margin: 0;
+            font: 400 clamp(24px, 2.6vw, 32px)/1.2 var(--font-serif);
+            text-wrap: pretty;
         }
 
-        @keyframes feed-drop {
-            from {
-                opacity: 0;
-                transform: translateY(-18px) translateZ(70px) rotateX(-18deg);
-            }
+        .week-lede em {
+            color: var(--free);
         }
 
-        .feed .what {
-            min-width: 0;
-            display: grid;
-            gap: 2px;
-        }
-
-        .feed .what b {
-            font-weight: 500;
-            color: var(--text);
-        }
-
-        .feed .what span {
-            font: 400 16px/1.3 var(--font-serif);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .feed .what small {
-            font: 400 11px/1.2 var(--font-mono);
-            letter-spacing: 0.06em;
+        .week-now {
+            margin: 14px 0 0;
             color: var(--muted);
+            max-width: 42ch;
         }
 
-        .feed time {
-            font: 400 11.5px/1 var(--font-mono);
-            color: var(--muted);
-            white-space: nowrap;
+        .week-now:empty {
+            display: none;
+        }
+
+        .week-now a {
+            color: var(--brass);
+        }
+
+        .week-kv {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px 30px;
+            margin: 24px 0 0;
+        }
+
+        .week-kv div {
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 7px;
+        }
+
+        .week-kv dd {
+            margin: 0;
+            font: 400 26px/1 var(--font-mono);
             font-variant-numeric: tabular-nums;
         }
 
-        .feed li.quiet {
-            grid-template-columns: 1fr;
-            font: 400 italic 16px/1.4 var(--font-serif);
+        .week-kv dt {
+            font: 400 11px/1 var(--font-mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
             color: var(--muted);
         }
 
-        /* The seat block: an isometric box drawn in SVG, grown from the floor. */
-        .block3d {
+        .week-art {
+            margin: 0;
+        }
+
+        .week-art svg {
             display: block;
-            width: 34px;
-            height: 40px;
+            width: 100%;
+            height: auto;
             overflow: visible;
         }
 
-        .block3d g {
+        .week-art text {
+            font-family: var(--font-mono);
+            font-size: 11.5px;
+            text-anchor: middle;
+            fill: var(--muted);
+        }
+
+        .week-art text.val {
+            fill: var(--text);
+            font-size: 12.5px;
+        }
+
+        .week-art text.today {
+            fill: var(--brass);
+        }
+
+        .week-art .bar {
             transform-box: fill-box;
             transform-origin: 50% 100%;
         }
 
-        .fresh .block3d g {
-            animation: block-grow 0.9s 0.25s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+        .week-art.grow .bar {
+            animation: bar-grow 1s calc(var(--i) * 70ms + 150ms) cubic-bezier(0.3, 1.3, 0.5, 1) both;
         }
 
-        @keyframes block-grow {
-            from { transform: scaleY(0.15); }
+        .week-art.grow text {
+            animation: fade-in 0.6s calc(var(--i, 3) * 70ms + 600ms) both;
+        }
+
+        @keyframes bar-grow {
+            from { transform: scaleY(0.04); }
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; }
+        }
+
+        .week-art .glow {
+            animation: glow 2.6s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.55; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .week-art.grow .bar,
+            .week-art.grow text,
+            .week-art .glow {
+                animation: none;
+            }
         }
 
         @media (max-width: 860px) {
-            .live-grid {
+            .week-grid {
                 grid-template-columns: 1fr;
             }
-
-            .highlight {
-                min-height: 0;
-            }
         }
+
         .steps {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -774,19 +729,22 @@
             </div>
         </section>
 
-        <section class="section" aria-labelledby="liveTitle">
+        <section class="section" aria-labelledby="weekTitle">
             <div class="section-head">
-                <h2 id="liveTitle">Live on the floor</h2>
-                <span class="eyebrow live-meta" id="areasMeta"><span class="dot"></span><span id="liveMetaText">Live</span></span>
+                <h2 id="weekTitle">Your week</h2>
+                <span class="eyebrow">Only on this device</span>
             </div>
-            <div class="live-grid">
+            <div class="week-grid">
                 <div>
-                    <p class="highlight" id="highlight" aria-live="polite">Reading the floor…</p>
-                    <div class="highlight-dots" id="highlightDots" aria-hidden="true"></div>
+                    <p class="week-lede" id="weekLede">Your week starts with a scan.</p>
+                    <p class="week-now" id="weekNow"></p>
+                    <dl class="week-kv">
+                        <div><dt>Streak</dt><dd id="wkStreak">—</dd></div>
+                        <div><dt>Longest sitting</dt><dd id="wkLongest">—</dd></div>
+                        <div><dt>Favourite seat</dt><dd id="wkSeat">—</dd></div>
+                    </dl>
                 </div>
-                <div class="feed-stage">
-                    <ol class="feed" id="feed" aria-label="Recent seat activity"></ol>
-                </div>
+                <figure class="week-art" id="weekArt"></figure>
             </div>
         </section>
 
@@ -974,7 +932,6 @@
                 ? hm(starts.reduce((a, t) => a + (now - t), 0) / starts.length)
                 : "—";
 
-            buildHighlights(seats);
         }
 
         async function refreshSeats(prefetched) {
@@ -983,163 +940,153 @@
                 const seats = await (prefetched || getAllSeats(library.id));
                 if (!Array.isArray(seats)) return;
                 seatsById = new Map(seats.map((s) => [String(s.id), s]));
-                $("liveMetaText").textContent = "Live";
                 paintNumbers(seats);
                 paintFloor();
-            } catch {
-                $("liveMetaText").textContent = "Reconnecting…";
-            }
-        }
-
-        // --- Live on the floor ----------------------------------------------------
-
-        const areaName = (seatId) => {
-            const key = (String(seatId).match(/^[A-Za-z]+/) || [""])[0].toUpperCase();
-            const names = (layout && layout.zoneNames) || {};
-            return names[key] || "";
-        };
-        const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-
-        // Observations about the floor right now, rebuilt with every refresh
-        // and shown one at a time, so the section keeps moving even when
-        // nobody is checking in.
-        let highlights = [];
-        let highlightAt = 0;
-        function buildHighlights(seats) {
-            const out = [];
-            const groups = new Map();
-            for (const seat of seats) {
-                const key = (String(seat.id).match(/^[A-Za-z]+/) || [""])[0].toUpperCase();
-                if (!groups.has(key)) groups.set(key, { key, total: 0, free: 0 });
-                const g = groups.get(key);
-                g.total++;
-                if (seat.state === "AVAILABLE") g.free++;
-            }
-            const names = (layout && layout.zoneNames) || {};
-            const areas = [...groups.values()].filter((g) => g.total);
-            const free = seats.filter((s) => s.state === "AVAILABLE").length;
-            const inUse = seats.filter((s) => s.state === "OCCUPIED").length;
-            const away = seats.filter((s) => s.state === "STEPPED_AWAY").length;
-
-            if (areas.length > 1) {
-                const quiet = areas.slice().sort((a, b) => b.free / b.total - a.free / a.total)[0];
-                if (quiet.free) out.push(`Quietest right now: <em>${esc((names[quiet.key] || "Area " + quiet.key).toLowerCase())}</em>, ${quiet.free} of ${quiet.total} free.`);
-                const busy = areas.slice().sort((a, b) => a.free / a.total - b.free / b.total)[0];
-                if (busy.total - busy.free >= 2 && busy !== quiet) out.push(`Filling up: <em>${esc((names[busy.key] || "Area " + busy.key).toLowerCase())}</em>, ${busy.total - busy.free} of ${busy.total} taken.`);
-            }
-            if (inUse) out.push(`<em>${inUse}</em> ${inUse === 1 ? "person is" : "people are"} studying on the floor right now.`);
-            else if (free === seats.length && seats.length) out.push("The whole floor is free. <em>Take your pick.</em>");
-
-            // Two free seats side by side at the same table: good for a pair.
-            if (layout) {
-                const pos = new Map(layout.seats.map((p) => [String(p.id), p]));
-                const freeSeats = seats.filter((s) => s.state === "AVAILABLE" && pos.has(String(s.id)));
-                for (let i = 0; i < freeSeats.length && out.length < 9; i++) {
-                    const a = pos.get(String(freeSeats[i].id));
-                    const b = freeSeats.slice(i + 1).map((s) => pos.get(String(s.id)))
-                        .find((p) => Math.abs(p.y - a.y) < 4 && Math.abs(p.x - a.x) <= 40);
-                    if (b) { out.push(`Studying with a friend? <em>${esc(a.id)}</em> and <em>${esc(b.id)}</em> are free side by side.`); break; }
-                }
-            }
-            const sittings = seats.filter((s) => s.state === "OCCUPIED" && s.sessionStart).map((s) => focusElapsedMs(s));
-            const longest = Math.max(0, ...sittings);
-            if (longest > 20 * 60 * 1000) out.push(`Longest sitting right now: <em>${hm(longest)}</em> and counting.`);
-            if (away) out.push(`${away} ${away === 1 ? "seat is" : "seats are"} on hold while ${away === 1 ? "its owner takes" : "their owners take"} a break.`);
-            if (layout && layout.hours && layout.hours.busiest) out.push(`Usually busiest from <em>${esc(layout.hours.busiest.replace("–", " to "))}</em>.`);
-            highlights = out.length ? out : ["The floor is <em>quiet</em> for now."];
-            if (!$("highlight").dataset.started) showHighlight(0);
-            paintHighlightDots();
-        }
-
-        function paintHighlightDots() {
-            $("highlightDots").innerHTML = highlights.map((_, i) => `<i class="${i === highlightAt % highlights.length ? "on" : ""}"></i>`).join("");
-        }
-
-        function showHighlight(i) {
-            const el = $("highlight");
-            highlightAt = i % highlights.length;
-            el.dataset.started = "1";
-            el.classList.add("out");
-            setTimeout(() => {
-                el.innerHTML = highlights[highlightAt];
-                el.classList.remove("out");
-                paintHighlightDots();
-            }, el.textContent ? 450 : 0);
-        }
-
-        // Recent seat events from the server, newest first. New ones drop in
-        // at the front with their seat block growing from the floor.
-        const EVENT_TEXT = {
-            taken: (id) => `Someone settled in at <b>${id}</b>`,
-            back: (id) => `Back at <b>${id}</b> after a break`,
-            away: (id) => `<b>${id}</b> is on hold, back soon`,
-            freed: (id) => `<b>${id}</b> just freed up`,
-            expired: (id) => `<b>${id}</b> freed up when its hold ran out`,
-        };
-        const BLOCK = {
-            taken: { h: 22, top: "#f0a58b", left: "#c2705a", right: "#a35d4b" },
-            back: { h: 22, top: "#f0a58b", left: "#c2705a", right: "#a35d4b" },
-            away: { h: 13, top: "#ecc380", left: "#c0924d", right: "#9f7a41" },
-            freed: { h: 4, top: "#a8d9bb", left: "#6fa587", right: "#5a8a70" },
-            expired: { h: 4, top: "#a8d9bb", left: "#6fa587", right: "#5a8a70" },
-        };
-        function block3d(type) {
-            const b = BLOCK[type] || BLOCK.freed;
-            const W = 26, D = 13, base = 38, h = b.h;
-            // Isometric box: a diamond top, left and right faces dropping to the floor.
-            const top = `13,${base - h - D} ${W},${base - h - D / 2} 13,${base - h} 0,${base - h - D / 2}`;
-            const left = `0,${base - h - D / 2} 13,${base - h} 13,${base} 0,${base - D / 2}`;
-            const right = `13,${base - h} ${W},${base - h - D / 2} ${W},${base - D / 2} 13,${base}`;
-            return `<svg class="block3d" viewBox="-4 0 34 40" aria-hidden="true"><g>` +
-                `<polygon points="${left}" fill="${b.left}"/><polygon points="${right}" fill="${b.right}"/><polygon points="${top}" fill="${b.top}"/>` +
-                `</g></svg>`;
-        }
-
-        function ago(ms) {
-            const m = Math.floor(ms / 60000);
-            if (m < 1) return "just now";
-            if (m < 60) return `${m} min ago`;
-            const h = Math.floor(m / 60);
-            return `${h} h ago`;
-        }
-
-        let feedEvents = [];
-        let feedSeen = null;
-        let serverSkew = 0;
-        async function refreshActivity() {
-            if (!library) return;
-            try {
-                const data = await apiGet(`/api/library/${encodeURIComponent(library.id)}/activity`);
-                if (!data || !Array.isArray(data.events)) return;
-                serverSkew = Date.now() - data.now;
-                feedEvents = data.events.slice(0, 7);
-                paintFeed();
             } catch { }
         }
 
-        function paintFeed() {
-            const feed = $("feed");
-            const key = (e) => `${e.at}-${e.type}-${e.seatId}`;
-            const firstPaint = feedSeen === null;
-            const seen = feedSeen || new Set();
-            if (!feedEvents.length) {
-                feed.innerHTML = '<li class="quiet">Nothing yet. Check-ins and free seats will appear here the moment they happen.</li>';
-                feedSeen = seen;
-                return;
-            }
-            feed.innerHTML = feedEvents.map((e, i) => {
-                const fresh = !firstPaint && !seen.has(key(e));
-                const area = areaName(e.seatId);
-                const text = (EVENT_TEXT[e.type] || EVENT_TEXT.freed)(esc(e.seatId));
-                return `<li class="${fresh ? "fresh" : ""}" style="--i:${i}">${block3d(e.type)}` +
-                    `<div class="what"><span>${text}</span>${area ? `<small>${esc(area)}</small>` : ""}</div>` +
-                    `<time datetime="${new Date(e.at).toISOString()}" data-at="${e.at}">${ago(Date.now() - serverSkew - e.at)}</time></li>`;
-            }).join("");
-            feedSeen = new Set(feedEvents.map(key));
+        // --- Your week ---------------------------------------------------------
+        // This device's sittings from the server, bucketed into local days.
+        // The sitting in progress (from /api/held) is added to today live.
+
+        const DAY = 24 * 60 * 60 * 1000;
+        const DAY_NAMES = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+        const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+        let sittings = null;
+        let weekPainted = false;
+
+        async function refreshSittings() {
+            const token = safeGet("navispace_token");
+            if (!token) { sittings = []; paintWeek(); return; }
+            try {
+                const res = await fetch("/api/me/sittings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ token }),
+                });
+                const data = await res.json();
+                if (data && Array.isArray(data.sittings)) { sittings = data.sittings; paintWeek(); }
+            } catch { }
         }
 
-        function tickFeedTimes() {
-            for (const t of document.querySelectorAll("#feed time")) t.textContent = ago(Date.now() - serverSkew - Number(t.dataset.at));
+        function startOfDay(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); }
+        function startOfWeek(t) {
+            const d = new Date(startOfDay(t));
+            d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
+            return d.getTime();
+        }
+        function hoursLabel(ms) {
+            const m = Math.round(ms / 60000);
+            return m < 60 ? `${m}m` : `${(m / 60).toFixed(1).replace(/\.0$/, "")}h`;
+        }
+
+        function weekStats(now = Date.now()) {
+            const all = (sittings || []).slice();
+            if (focusHeld) all.push({ seat: focusHeld.seatId, start: focusHeld.sessionStart, end: now, ms: focusElapsedMs(focusHeld, now), live: true });
+            const monday = startOfWeek(now);
+            const days = DAY_NAMES.map(() => 0);
+            let longest = 0, lastWeekSoFar = 0;
+            const bySeat = new Map(), active = new Set();
+            for (const s of all) {
+                const day = startOfDay(s.start);
+                active.add(day);
+                bySeat.set(s.seat, (bySeat.get(s.seat) || 0) + s.ms);
+                if (s.start >= monday) {
+                    days[Math.min(6, Math.round((day - monday) / DAY))] += s.ms;
+                    longest = Math.max(longest, s.ms);
+                } else if (s.start >= monday - 7 * DAY && s.start < now - 7 * DAY) {
+                    lastWeekSoFar += s.ms;
+                }
+            }
+            // Days in a row with a sitting, up to today (or yesterday, so the
+            // streak doesn't read 0 every morning before you've checked in).
+            let streak = 0;
+            let day = startOfDay(now);
+            if (!active.has(day)) day = startOfDay(day - DAY / 2);
+            while (active.has(day)) { streak++; day = startOfDay(day - DAY / 2); }
+            const favourite = [...bySeat].sort((a, b) => b[1] - a[1])[0];
+            const today = Math.min(6, Math.round((startOfDay(now) - monday) / DAY));
+            return { all, days, today, total: days.reduce((a, b) => a + b, 0), longest, lastWeekSoFar, streak, favourite: favourite && favourite[0] };
+        }
+
+        // Isometric box: x runs along the row, y into the page, z up.
+        const ISO_S = 24;
+        const isoPt = (x, y, z) => [(x - y) * 0.866 * ISO_S, (x + y) * 0.5 * ISO_S - z * ISO_S];
+        function isoBox(x, y, w, d, h, c) {
+            const P = (a, b, z) => isoPt(a, b, z).map((v) => v.toFixed(1)).join(",");
+            const top = [P(x, y, h), P(x + w, y, h), P(x + w, y + d, h), P(x, y + d, h)].join(" ");
+            const left = [P(x, y + d, h), P(x + w, y + d, h), P(x + w, y + d, 0), P(x, y + d, 0)].join(" ");
+            const right = [P(x + w, y, h), P(x + w, y + d, h), P(x + w, y + d, 0), P(x + w, y, 0)].join(" ");
+            return { svg: `<polygon points="${left}" fill="${c[1]}"/><polygon points="${right}" fill="${c[2]}"/><polygon points="${top}" fill="${c[0]}"/>`, top };
+        }
+        const BAR = {
+            done: ["#a8d9bb", "#6fa587", "#5a8a70"],
+            today: ["#e7cb8a", "#b8955a", "#957646"],
+            empty: ["#2f3632", "#222825", "#1b201d"],
+        };
+        const MAX_Z = 6.6;
+
+        function paintWeek() {
+            if (sittings === null) return;
+            const w = weekStats();
+            const { all } = w;
+            const name = safeGet("navispace_nickname");
+            $("weekTitle").textContent = name && name !== "Anonymous" ? `Your week, ${name}` : "Your week";
+
+            if (w.total) {
+                const diff = w.total - w.lastWeekSoFar;
+                let more = "";
+                if (w.lastWeekSoFar && diff >= 5 * 60000) more = ` That's <em>${hm(diff)}</em> more than this time last week.`;
+                else if (w.lastWeekSoFar && diff <= -5 * 60000) more = ` Last week by now you had <em>${hm(w.lastWeekSoFar)}</em>.`;
+                $("weekLede").innerHTML = `<em>${hm(w.total)}</em> at a desk this week.${more}`;
+            } else {
+                $("weekLede").innerHTML = "Your week starts with a scan. Check in at a desk and <em>your hours stack up here</em>, day by day.";
+            }
+            $("weekNow").innerHTML = focusHeld
+                ? (focusHeld.state === "STEPPED_AWAY"
+                    ? `Today's column is paused while you're away from <a href="/seat.html?lib=${encodeURIComponent(focusHeld.libraryId)}&seat=${encodeURIComponent(focusHeld.seatId)}">${esc(focusHeld.seatId)}</a>.`
+                    : `Today's column is growing: you're at <a href="/seat.html?lib=${encodeURIComponent(focusHeld.libraryId)}&seat=${encodeURIComponent(focusHeld.seatId)}">${esc(focusHeld.seatId)}</a> now.`)
+                : "";
+            // A brand-new device has no numbers yet: just the invitation.
+            document.querySelector(".week-kv").style.display = all.length ? "" : "none";
+            $("wkStreak").textContent = w.streak ? `${w.streak} ${w.streak === 1 ? "day" : "days"}` : "—";
+            $("wkLongest").textContent = w.longest ? hm(w.longest) : "—";
+            $("wkSeat").textContent = w.favourite || "—";
+
+            // Columns share a scale; a short week still reads as short.
+            const scale = MAX_Z / Math.max(3 * 60 * 60 * 1000, ...w.days);
+            let bars = "", labels = "";
+            w.days.forEach((ms, i) => {
+                const x = i * 1.5, y = -i * 1.1;
+                const isToday = i === w.today;
+                const h = ms ? Math.max(0.35, ms * scale) : 0.18;
+                const box = isoBox(x, y, 1.1, 1.1, h, isToday && ms ? BAR.today : ms ? BAR.done : BAR.empty);
+                const live = isToday && focusHeld && focusHeld.state === "OCCUPIED";
+                bars += `<g class="bar" style="--i:${i}"><title>${DAY_NAMES[i]}: ${ms ? hm(ms) : "no time"}</title>${box.svg}` +
+                    (live ? `<polygon class="glow" points="${box.top}" fill="#fff6dc"/>` : "") + "</g>";
+                const [lx, ly] = isoPt(x + 0.55, y + 0.55, 0);
+                labels += `<text x="${lx.toFixed(1)}" y="${(ly + 30).toFixed(1)}" class="${isToday ? "today" : ""}" style="--i:${i}">${DAY_NAMES[i]}</text>`;
+                if (ms) {
+                    const [tx, ty] = isoPt(x + 0.55, y + 0.55, h);
+                    labels += `<text x="${tx.toFixed(1)}" y="${(ty - 18).toFixed(1)}" class="val" style="--i:${i}">${hoursLabel(ms)}</text>`;
+                }
+            });
+            const art = $("weekArt");
+            const label = `Hours at a desk this week: ${w.days.map((ms, i) => `${DAY_NAMES[i]} ${ms ? hm(ms) : "none"}`).join(", ")}.`;
+            art.innerHTML = `<svg viewBox="-40 -205 410 300" role="img" aria-label="${label}">${bars}${labels}</svg>`;
+            // Columns rise the first time they're seen, then just update.
+            if (!weekPainted && "IntersectionObserver" in window) {
+                art.classList.add("grow");
+                art.style.visibility = "hidden";
+                const io = new IntersectionObserver((entries) => {
+                    if (!entries.some((e) => e.isIntersecting)) return;
+                    io.disconnect();
+                    art.style.visibility = "";
+                    setTimeout(() => art.classList.remove("grow"), 2000);
+                }, { threshold: 0.3 });
+                io.observe(art);
+            }
+            weekPainted = true;
         }
 
         // --- Your session ----------------------------------------------------
@@ -1151,7 +1098,8 @@
             try {
                 const held = await getHeldSeat(token);
                 if (!held || !held.seatId) {
-                    focusHeld = null;
+                    // A sitting just ended: it's in the history now.
+                    if (focusHeld) { focusHeld = null; refreshSittings(); }
                     $("focus").removeAttribute("href");
                     $("heldPill").hidden = true;
                     $("focus").classList.remove("live");
@@ -1165,6 +1113,7 @@
                 pill.hidden = false;
                 $("installBtn").hidden = true;
                 focusHeld = held.sessionStart ? held : null;
+                paintWeek();
                 $("focus").classList.toggle("live", Boolean(focusHeld) && held.state === "OCCUPIED");
                 if (held.state === "OCCUPIED") {
                     $("focus").href = `/focus.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`;
@@ -1290,6 +1239,7 @@
             const seatsNow = library.status === "active" ? getAllSeats(library.id) : null;
             if (seatsNow) seatsNow.catch(() => { });
             refreshHeld();
+            refreshSittings();
             refreshBoard();
             layout = cachedLayout(library.id);
             if (layout) {
@@ -1313,10 +1263,8 @@
             await refreshSeats(seatsNow);
 
             setInterval(() => { if (!document.hidden) refreshSeats(); }, 15000);
-            refreshActivity();
-            setInterval(() => { if (!document.hidden) refreshActivity(); }, 10000);
-            setInterval(() => { if (!document.hidden && highlights.length > 1) showHighlight(highlightAt + 1); }, 7000);
-            setInterval(tickFeedTimes, 30000);
+            setInterval(() => { if (!document.hidden) paintWeek(); }, 60000);
+            setInterval(() => { if (!document.hidden) refreshSittings(); }, 5 * 60000);
             setInterval(() => { if (!document.hidden) refreshHeld(); }, 60000);
             setInterval(tickFocus, 1000);
         }
