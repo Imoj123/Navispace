@@ -5,7 +5,7 @@ const QRCode = require("qrcode");
 const { store } = require("./store");
 const { getLibrary, isActiveLibrary } = require("./libraries");
 const { getSeatIds, getLayout } = require("./seats");
-const { getSeats, getSeat, saveSeat, resetToAvailable, SeatState } = require("./scan");
+const { getSeats, getSeat, saveSeat, resetToAvailable, SeatState, creditSessionDay } = require("./scan");
 const { recordSitting } = require("./history");
 const { listItems, staffThread, staffRemove } = require("./lostfound");
 const { seatCode, seatCodesRequired } = require("./seatcode");
@@ -15,6 +15,7 @@ const usage = require("./usage");
 const { limit } = require("./ratelimit");
 const waitlist = require("./waitlist");
 const { withLock, seatLock } = require("./lock");
+const { closingNoticeKey } = require("./reminders");
 const notices = require("./notices");
 const push = require("./push");
 
@@ -96,7 +97,7 @@ async function tellHolders(libId, body, { closingDate = null } = {}) {
       await withLock(seatLock(libId), async () => {
         const fresh = await getSeat(libId, seat.id);
         if (fresh.holderToken !== seat.holderToken) return;
-        fresh.closingNoticeDate = closingDate;
+        fresh.closingNoticeFor = closingNoticeKey(closingDate.date, closingDate.time, fresh.sessionStart);
         await saveSeat(fresh);
       });
     }
@@ -197,10 +198,13 @@ function mountStaff(app, { siteOrigin }) {
     if (!r.ok) return res.status(400).json(r);
     const e = r.earlyClose;
     const release = hhmmPlus(e.time, closingGraceMinutes());
-    const told = tell
+    // Closing within 10 minutes (or "now"): the usual 10-minute notice may
+    // already have been missed, so everyone holding a seat is told now
+    // whatever the box says, and this counts as that notice.
+    const soon = (closingSoon(notices.libraryHours(libId)) || {}).minutes <= 10;
+    const told = tell || soon
       ? await tellHolders(libId, (seat) => `The library closes early today at ${e.time}${e.reason ? ` (${e.reason})` : ""}. Seat ${seat.id} is released at ${release}.`,
-        // Closing within the 10-minute notice anyway: this is that notice.
-        { closingDate: (closingSoon(notices.libraryHours(libId)) || {}).minutes <= 10 ? e.date : null })
+        { closingDate: soon ? { date: e.date, time: e.time } : null })
       : 0;
     res.json({ ...r, told });
   });
@@ -218,7 +222,12 @@ function mountStaff(app, { siteOrigin }) {
     const freed = await withLock(seatLock(libId), async () => {
       const seat = await getSeat(libId, req.params.id);
       if (seat.state === SeatState.AVAILABLE) return false;
-      await recordSitting(libId, seat, Date.now());
+      const now = Date.now();
+      await recordSitting(libId, seat, now);
+      // A real sitting still earns its day (15 minutes or more).
+      if (seat.holderToken && seat.sessionStart && now - seat.sessionStart >= 15 * 60 * 1000) {
+        await creditSessionDay(libId, seat.holderToken, seat.holderNickname, seat.id, seat.sessionStart);
+      }
       resetToAvailable(seat);
       await saveSeat(seat);
       return true;

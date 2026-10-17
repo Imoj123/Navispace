@@ -380,7 +380,10 @@ function createApp() {
     // Everything after that is limited to the device holding the seat.
     // Outside opening hours nobody can take a seat (and the sweep frees
     // every seat at closing time).
-    if (action === "checkIn") {
+    // After closing nothing extends a hold (Still here, I'm back): the seat
+    // is released a few minutes after closing whatever it says. Checking
+    // out and stepping away still work.
+    if (action === "checkIn" || action === "stillHere" || action === "imBack") {
       const hours = openStatus(libraryHours(libId));
       if (!hours.open) {
         const seat = await getSeat(libId, req.params.id);
@@ -728,6 +731,15 @@ function start() {
     (libraryId, seats, now) => busy.observe(libraryId, seats, now, libraryHours(libraryId))
   );
 
+  // Once a library has closed, nobody is waiting for a seat there any more
+  // (waitlist.js), whether or not a seat happened to free up after closing.
+  const clearWaiting = setInterval(() => {
+    for (const { libraryId, hours } of activeLibrarySeatGroups()) {
+      if (!openStatus(hours).open) waitlist.clearWaitlist(libraryId).catch(() => { });
+    }
+  }, 60 * 1000);
+  if (clearWaiting.unref) clearWaiting.unref();
+
   const stopReminders = startReminderLoop(
     () => notices.noticesReady().then(activeLibrarySeatGroups),
     config.REMINDER_CHECK_INTERVAL_MS,
@@ -744,6 +756,7 @@ function start() {
     stopSweep();
     stopReminders();
     stopNotices();
+    clearInterval(clearWaiting);
     server.close(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);

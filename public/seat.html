@@ -237,6 +237,7 @@
 
     const identity = getOrCreateIdentity();
     let promptTimer = null;
+    let heldHereBefore = false;
     let reminderEnabled = false;
 
     const nicknameInput = document.getElementById("nicknameInput");
@@ -326,6 +327,10 @@
       actions.innerHTML = "";
 
       const isHolder = isMine(seat.holderHash);
+      // Was this device's, isn't now: the hold ran out (or staff freed it) while away.
+      if (heldHereBefore && !isHolder && seat.state !== undefined) toast("Your hold on this seat has ended. Scan the code to check in again.");
+      heldHereBefore = isHolder && seat.state !== "AVAILABLE";
+      syncPrompt(seat);
 
       // The holder sees how long this sitting has lasted.
       focusSeat = isHolder && seat.state !== "AVAILABLE" && seat.sessionStart ? seat : null;
@@ -462,21 +467,31 @@
           toast("Couldn't do that — refreshing status.");
         }
       }
+      // Checking out yourself isn't "your hold has ended".
+      if (action === "leaving" && result.ok) heldHereBefore = false;
       render(result.seat);
-
-      if (action === "checkIn" || action === "imBack") {
-        scheduleNextPrompt();
-      }
-      if (action === "leaving") {
-        clearTimeout(promptTimer);
-      }
     }
 
-    function scheduleNextPrompt() {
+    // The "still studying?" prompt follows the seat itself, not this tab's
+    // taps: 50 minutes after the last confirmation (STILL_HERE_PROMPT_INTERVAL_MS
+    // in config.js), whether the page was just opened, reloaded or brought
+    // back. Only while checked in here; never while stepped away or after the
+    // seat has gone. The server owns the real expiry.
+    const PROMPT_AFTER_MS = 50 * 60 * 1000;
+    let promptDue = null;
+    function syncPrompt(seat) {
+      const mine = seat && seat.state === "OCCUPIED" && isMine(seat.holderHash);
+      const due = mine ? (seat.lastConfirmTime || seat.sessionStart || Date.now()) + PROMPT_AFTER_MS : null;
+      if (due === promptDue) return;
+      promptDue = due;
       clearTimeout(promptTimer);
-      // STILL_HERE_PROMPT_INTERVAL_MS in config.js. Just the client timer:
-      // the server owns the real expiry.
-      promptTimer = setTimeout(showStillStudyingPrompt, 50 * 60 * 1000);
+      if (!mine) {
+        if (document.getElementById("modal").style.display === "flex") hideModal();
+        return;
+      }
+      // Past due already (reopened late): ask now, unless the hold has run out.
+      const expired = seat.checkInExpiry && seat.checkInExpiry <= Date.now();
+      if (!expired) promptTimer = setTimeout(showStillStudyingPrompt, Math.max(0, due - Date.now()));
     }
 
     // The "still studying?" prompt is a real dialog (holdDialog in client.js):
@@ -509,10 +524,9 @@
         return;
       }
       render(result.seat);
-      if (result.ok) {
-        toast(randomEncouragement());
-        scheduleNextPrompt();
-      }
+      if (result.ok) toast(randomEncouragement());
+      else if (result.seat.state === "STEPPED_AWAY") toast("You're stepped away. Tap I'm back when you're at your desk.");
+      else toast("This seat isn't held for you any more. Scan the code to check in again.");
     };
     document.getElementById("modalDone").onclick = async () => {
       hideModal();
@@ -560,6 +574,11 @@
 
     refresh();
     refreshHours();
+    // Keep the seat current: a hold can end, or be freed, while the page sits
+    // open or in the background.
+    setInterval(() => { if (!document.hidden) refresh(); }, 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+    window.addEventListener("pageshow", (e) => { if (e.persisted) refresh(); });
     setInterval(() => { if (!document.hidden) refreshHours(); }, 5 * 60 * 1000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshHours(); });
   </script>
