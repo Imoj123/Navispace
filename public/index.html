@@ -345,9 +345,12 @@
             background: #262b28;
         }
 
+        /* The glow stays inside the seat's top: an outer glow spread over the
+           neighbouring seats' tops, in the very same plane, and Safari on
+           iPhone flickered choosing which to draw. */
         .cube.free i:nth-child(1) {
-            background: var(--free);
-            box-shadow: 0 0 12px rgba(140, 197, 164, 0.75);
+            background: radial-gradient(circle, #b4e2c8 0%, var(--free) 70%);
+            box-shadow: inset 0 0 3px rgba(220, 255, 236, 0.6);
         }
 
         .cube.free i:nth-child(2) {
