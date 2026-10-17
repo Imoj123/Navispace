@@ -210,7 +210,7 @@
             padding: 10px 13px;
             border: 1px solid var(--line-strong);
             background: var(--panel);
-            font: 400 15px/1.4 var(--font-sans);
+            font: 400 15px/1.4 var(--font-body);
             overflow-wrap: anywhere;
         }
 
@@ -313,6 +313,7 @@
             <div class="toast" id="reportToast"></div>
         </form>
 
+        <p class="toast" id="lfOffline" role="status" hidden>Lost &amp; found will appear once NaviSpace is reachable.</p>
         <div class="lf-grid" id="grid"></div>
         <div class="empty-state" id="empty" style="display:none;">
             <h2>Nothing lost, nothing found.</h2>
@@ -386,7 +387,18 @@
 
         let lastItems = [];
         const BASE_TITLE = document.title;
+        // Drawn again every 20 seconds; if NaviSpace can't be reached, say so
+        // (and keep what's already on screen) rather than fail silently.
         async function render() {
+            try {
+                await drawBoard();
+                document.getElementById("lfOffline").hidden = true;
+            } catch {
+                document.getElementById("lfOffline").hidden = false;
+            }
+        }
+
+        async function drawBoard() {
             const items = await getLostFoundItems(libraryId);
             if (!Array.isArray(items)) return; // an unknown library or an error: nothing to draw
             lastItems = items;

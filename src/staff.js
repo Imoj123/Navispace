@@ -273,6 +273,8 @@ function mountStaff(app, { siteOrigin }) {
   figcaption span { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
   figcaption small { font-size: 9px; color: #555; }
   @media print { header, .warn { display: none; } .sticker { border-color: #ccc; } }
+  /* On a phone, one sticker per row to look at; print still lays out three to a page. */
+  @media screen and (max-width: 560px) { .sheet { grid-template-columns: 1fr; padding: 0 16px 16px; } header { padding: 16px; } }
 </style></head><body>
 <header><h1>${escapeHtml(lib.name)}: ${stickers.length} seat stickers</h1>
 <button onclick="print()">Print or save as PDF</button></header>${warning}
@@ -342,8 +344,18 @@ function mountPoster(app, { siteOrigin }) {
   .step p { margin: 0; font-size: 13.5px; line-height: 1.45; color: #3a403b; }
   .foot { display: flex; justify-content: space-between; gap: 8mm; margin-top: 9mm; padding-top: 4mm; border-top: 0.3mm solid var(--line); font: 500 10.5px/1.5 "Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   @media print { html { background: none; } .bar { display: none; } .page { margin: 0; box-shadow: none; } }
-  @media screen and (max-width: 820px) { .page { transform: scale(calc(100vw / 220mm)); transform-origin: top left; margin: 0 0 calc(297mm * (100vw / 220mm) - 297mm); } .bar { padding: 12px 16px; } }
+  /* Phones preview the A4 page scaled to fit. The scale comes from a line of
+     script (--fit): dividing a width by a length isn't CSS Firefox understands. */
+  @media screen and (max-width: 820px) { .page { transform: scale(var(--fit, 1)); transform-origin: top left; margin: 0 0 calc(297mm * var(--fit, 1) - 297mm); } .bar { padding: 12px 16px; } }
 </style></head><body>
+<script>
+  function fit() {
+    const page = 210 * 96 / 25.4; // A4 width in CSS pixels
+    document.documentElement.style.setProperty("--fit", Math.min(1, document.documentElement.clientWidth / (page + 40)));
+  }
+  fit();
+  addEventListener("resize", fit);
+</script>
 <div class="bar"><span>Launch poster · A4 · ${escapeHtml(lib.name)}</span><button onclick="print()">Print or save as PDF</button></div>
 <article class="page">
   <div class="top">

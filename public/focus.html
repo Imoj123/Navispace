@@ -412,6 +412,8 @@
         const pad = (n) => String(n).padStart(2, "0");
         const hms = (s) => `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
         const ms2 = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+        // A step-away hold runs past an hour (1:15:00), so hours show when there are any.
+        const held = (s) => s >= 3600 ? `${Math.floor(s / 3600)}:${ms2(s % 3600)}` : ms2(s);
         function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } }
 
         let identity = null;
@@ -845,6 +847,7 @@
 
         function spoken(sec) {
             const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60;
+            if (!h && !m) return "Under a minute";
             if (!h) return `${m} minute${m === 1 ? "" : "s"}`;
             return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? "" : "s"}`;
         }
@@ -937,7 +940,7 @@
                 // The clock stays where it stopped; the line says how long the seat is held.
                 const left = seat.stepAwayExpiry ? Math.max(0, Math.floor((seat.stepAwayExpiry - Date.now()) / 1000)) : 0;
                 if (mode === "open") $("clock").textContent = hms(elapsed);
-                $("sub").textContent = left ? `Paused · your seat is held for ${ms2(left)}` : "Paused";
+                $("sub").textContent = left ? `Paused · your seat is held for ${held(left)}` : "Paused";
                 return;
             }
             if (mode === "open") {

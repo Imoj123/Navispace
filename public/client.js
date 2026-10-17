@@ -271,6 +271,7 @@ function notificationGuide(state = notificationState()) {
     return {
       title: `On ${os === "ipad" ? "an iPad" : "an iPhone"}, notifications only work from the Home Screen`,
       steps: [
+        ...(browser === "Safari" ? [] : ["Open this page in Safari (copy the address into it)."]),
         "In Safari, tap the Share button (the square with an arrow).",
         "Choose Add to Home Screen, then Add.",
         "Open NaviSpace from the new icon on your Home Screen.",
@@ -279,7 +280,12 @@ function notificationGuide(state = notificationState()) {
     };
   }
   if (state === "unsupported") {
-    return { title: "This browser can't show notifications", steps: ["Open NaviSpace in Chrome, Edge, Safari or Firefox and turn them on there."] };
+    return {
+      title: "This browser can't show notifications",
+      steps: [browser === "Safari"
+        ? "This Safari is too old for them. Update your Mac (Safari 16 or newer), or open NaviSpace in Chrome, Edge or Firefox."
+        : "Open NaviSpace in Chrome, Edge, Safari or Firefox and turn them on there."],
+    };
   }
   if (state === "blocked") {
     if (os === "iphone" || os === "ipad") return { title: "Notifications are blocked for NaviSpace", steps: ["Open the Settings app, then Notifications.", "Tap NaviSpace and turn on Allow Notifications.", "Come back and reload this page."] };
@@ -289,7 +295,9 @@ function notificationGuide(state = notificationState()) {
     return { title: `Notifications are blocked for this site in ${browser}`, steps: ["Click the icon to the left of the address, then Site settings.", "Set Notifications to Allow.", "Reload this page."] };
   }
   // On, or about to be turned on: what makes a delivered notification stay hidden.
-  const first = state === "off" ? [`Tap Turn on notifications, then Allow when ${browser} asks.`] : [];
+  // The Home Screen app asks for itself, not as Safari.
+  const asker = installed ? "NaviSpace" : browser;
+  const first = state === "off" ? [`Tap Turn on notifications, then Allow when ${asker} asks.`] : [];
   if (os === "mac") {
     const app = browser === "your browser" ? "your browser" : browser === "Chrome" ? "Google Chrome" : browser === "Edge" ? "Microsoft Edge" : browser;
     return {
@@ -784,6 +792,9 @@ function downscaleImageFile(file, maxDimension = 900, quality = 0.7) {
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
         const ctx = canvas.getContext("2d");
+        // JPEG has no transparency: a see-through PNG would turn black.
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };
@@ -927,7 +938,8 @@ function mountWaitCard(box, libraryId) {
   let chosen = null;     // the area picked, kept across repaints
   const token = () => getOrCreateIdentity().token;
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  // 24-hour with ordinary digits, whatever language the phone is set to.
+  const hhmm = (ms) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
   // Shown when the floor is full or nearly: the seats left go fast.
   const NEARLY_FULL = 3;
@@ -1000,8 +1012,10 @@ function mountWaitCard(box, libraryId) {
     const picker = box.querySelector("[data-wait=area]");
     const area = (picker && picker.value) || null;
     busy = true;
-    message = "";
+    // The browser may be showing its "allow notifications?" prompt meanwhile.
+    message = action === "join" ? "Asking…" : "";
     paint();
+    message = "";
     try {
       if (action === "leave") {
         await waitlistPost(libraryId, "/leave", { token: token() });
