@@ -1092,3 +1092,37 @@ html.welcome-open {
 .lib-notice-x:focus-visible {
     color: var(--text);
 }
+
+/* --- Pill buttons in the top bar (home: your seat, Add to Home Screen; staff: Sign out) */
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 9px 14px;
+    font: 400 11.5px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.pill:hover {
+    border-color: var(--brass);
+}
+
+.pill[hidden] {
+    display: none;
+}
+
+/* Placeholders in every text field, not only one-line ones. */
+textarea::placeholder {
+    color: var(--faint);
+}

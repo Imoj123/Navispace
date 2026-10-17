@@ -678,10 +678,13 @@
             const spot = planSeats && planSeats.get(spotSeat);
             if (spot && !spotScrolled) {
                 spotScrolled = true;
-                // Bring it into view inside the sideways-scrolling plan only.
+                // Bring it into view: sideways inside the plan (landscape), and
+                // down the page when the plan is tall (portrait phones).
                 const wrap = document.getElementById("planWrap");
                 const r = spot.g.getBoundingClientRect(), w = wrap.getBoundingClientRect();
                 wrap.scrollLeft += r.left + r.width / 2 - (w.left + w.width / 2);
+                const top = spot.g.getBoundingClientRect().top;
+                if (top > innerHeight - 80) window.scrollBy({ top: top - innerHeight * 0.55, behavior: "smooth" });
             }
         }
 
