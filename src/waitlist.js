@@ -151,10 +151,16 @@ async function announceFreed(libraryId, seatIds, now = Date.now()) {
     const { openStatus } = require("./hours");
     const { libraryHours } = require("./notices");
     const layout = getLayout(libraryId) || {};
-    if (!openStatus(libraryHours(libraryId, now), now).open) {
+    const hours = libraryHours(libraryId, now);
+    if (!openStatus(hours, now).open) {
       await clearWaitlist(libraryId);
       return 0;
     }
+    // The last ten minutes before closing: a seat isn't worth walking over
+    // for when check-ins are about to stop. Nobody's sent anywhere.
+    const { closingSoon } = require("./hours");
+    const closing = closingSoon(hours, now);
+    if (closing && closing.minutes <= 10) return 0;
     const seats = await getSeats(libraryId, getSeatIds(libraryId));
     const holders = new Set(seats.filter((s) => s && s.state !== SeatState.AVAILABLE).map((s) => s.holderToken));
     // A seat taken again in the meantime isn't news.

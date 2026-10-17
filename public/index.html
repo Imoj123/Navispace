@@ -1259,10 +1259,13 @@
             }
             // Days in a row with a sitting, up to today (or yesterday, so the
             // streak doesn't read 0 every morning before you've checked in).
+            // Weekends don't break it: the library is closed then.
+            const weekend = (d) => [0, 6].includes(new Date(d).getDay());
+            const before = (d) => { let p = startOfDay(d - DAY / 2); while (weekend(p)) p = startOfDay(p - DAY / 2); return p; };
             let streak = 0;
             let day = startOfDay(now);
-            if (!active.has(day)) day = startOfDay(day - DAY / 2);
-            while (active.has(day)) { streak++; day = startOfDay(day - DAY / 2); }
+            if (!active.has(day)) day = before(day);
+            while (active.has(day)) { streak++; day = before(day); }
             const favourite = [...bySeat].sort((a, b) => b[1] - a[1])[0];
             const today = Math.min(6, Math.round((startOfDay(now) - monday) / DAY));
             return { all, days, today, total: days.reduce((a, b) => a + b, 0), longest, lastWeekSoFar, streak, favourite: favourite && favourite[0] };

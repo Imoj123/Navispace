@@ -146,7 +146,7 @@ test("time stepped away is recorded so focus timers can leave it out", async () 
   const { handleScan } = require("../src/scan");
   const id = { token: "123e4567-e89b-12d3-a456-426614174000", nickname: "Thandi" };
   const seatId = getSeatIds("engineering")[0];
-  const t0 = Date.UTC(2026, 9, 15, 8, 0, 0);
+  const t0 = Date.now() - 60 * 60 * 1000; // an hour ago: the hold is still running now
   const min = 60 * 1000;
 
   let r = await handleScan("engineering", seatId, "checkIn", id, t0);
