@@ -195,7 +195,7 @@
     getLibraries().then((libs) => {
       const lib = libs.find((l) => l.id === libraryId);
       document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
-    });
+    }.catch(() => { });
 
     async function render() {
       const entries = await getLeaderboard(libraryId);

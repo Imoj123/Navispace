@@ -233,7 +233,7 @@
     getLibraries().then((libs) => {
       const lib = libs.find((l) => l.id === libraryId);
       document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
-    });
+    }.catch(() => { });
 
     const identity = getOrCreateIdentity();
     let promptTimer = null;
@@ -282,10 +282,13 @@
 
     function render(seat) {
       lastSeat = seat;
-      if (seat && seat.reason === "unknown_seat") {
+      if (seat && (seat.reason === "unknown_seat" || seat.reason === "unknown_library")) {
         renderUnknownSeat();
         return;
       }
+      // Anything that isn't a seat (an error answer) must never be drawn as
+      // one: the state would be missing and read as "stepped away".
+      if (!seat || !seat.state) throw new Error(seat && seat.reason || "no_seat");
       const statusEl = document.getElementById("status");
       statusEl.className = "status-band " + seat.state;
       statusEl.innerHTML = "";
@@ -413,6 +416,9 @@
         toast(`That's a lot of taps. Try again in ${result.retryAfter || 30} seconds.`);
         return;
       }
+      // Offline or a server error: no seat came back. The button handler
+      // says "couldn't reach NaviSpace" and the status stays as it was.
+      if (!result.ok && !result.seat) throw new Error(result.reason || "failed");
       if (!result.ok) {
         if (result.reason === "library_closed") {
           const h = result.hours || {};
@@ -451,7 +457,16 @@
 
     document.getElementById("modalKeepGoing").onclick = async () => {
       document.getElementById("modal").style.display = "none";
-      const result = await postScan(libraryId, seatId, "stillHere", identity);
+      let result;
+      try {
+        result = await postScan(libraryId, seatId, "stillHere", identity);
+      } catch {
+        result = {};
+      }
+      if (!result.seat) {
+        toast("Couldn't reach NaviSpace — check your connection and try again.");
+        return;
+      }
       render(result.seat);
       if (result.ok) {
         toast(randomEncouragement());
@@ -460,7 +475,11 @@
     };
     document.getElementById("modalDone").onclick = async () => {
       document.getElementById("modal").style.display = "none";
-      await act("leaving");
+      try {
+        await act("leaving");
+      } catch {
+        toast("Couldn't reach NaviSpace — check your connection and try again.");
+      }
     };
 
     document.getElementById("enableReminders").onclick = async () => {

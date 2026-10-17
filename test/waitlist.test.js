@@ -22,7 +22,7 @@ async function withServer(fn) {
 }
 
 const json = (body) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-const sub = { endpoint: "https://push.example/1", keys: { p256dh: "x", auth: "y" } };
+const sub = { endpoint: "https://fcm.googleapis.com/fcm/send/1", keys: { p256dh: "x", auth: "y" } };
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
 test.beforeEach(() => { store.clear(); require("../src/ratelimit").reset(); });
