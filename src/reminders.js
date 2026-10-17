@@ -1,6 +1,7 @@
 "use strict";
 
-const { SeatState, getSeats, saveSeat } = require("./scan");
+const { SeatState, getSeats, getSeat, saveSeat } = require("./scan");
+const { withLock, seatLock } = require("./lock");
 // Imported as a module object (not destructured) so tests can
 // monkeypatch push.sendPush without a real VAPID/web-push round trip.
 const push = require("./push");
@@ -45,8 +46,8 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now(), hours =
                 seatId: seat.id,
                 libraryId,
             });
-            seat.closingNoticeDate = closing.date; // once a day, sent or not
-            await saveSeat(seat);
+            // Once a day, sent or not.
+            await updateSameSitting(seat, (fresh) => { fresh.closingNoticeDate = closing.date; });
             if (result.sent) reminded.push(seatId);
         }
 
@@ -79,13 +80,29 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now(), hours =
         });
 
         if (result.sent) {
-            seat.remindersSent = due;
-            await saveSeat(seat);
+            await updateSameSitting(seat, (fresh) => { fresh.remindersSent = due; });
             reminded.push(seatId);
         }
     }
 
     return reminded;
+}
+
+/**
+ * Saves a reminder's bookkeeping on the seat, re-read under the seat lock
+ * (lock.js): a push can take a while, and the student may have checked
+ * out, confirmed or stepped away meanwhile. Saving the copy read before
+ * the push would undo that, so only the same sitting, unchanged, is touched.
+ */
+async function updateSameSitting(seen, change) {
+    await withLock(seatLock(seen.libraryId), async () => {
+        const fresh = await getSeat(seen.libraryId, seen.id);
+        if (fresh.holderToken !== seen.holderToken || fresh.sessionStart !== seen.sessionStart ||
+            fresh.state !== seen.state || fresh.checkInExpiry !== seen.checkInExpiry ||
+            fresh.stepAwayExpiry !== seen.stepAwayExpiry) return;
+        change(fresh);
+        await saveSeat(fresh);
+    });
 }
 
 /**

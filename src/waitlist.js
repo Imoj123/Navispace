@@ -2,6 +2,7 @@
 
 const { store } = require("./store");
 const push = require("./push");
+const { withLock } = require("./lock");
 
 /**
  * "Tell me when a seat frees up": when the floor is full or nearly, a
@@ -53,8 +54,16 @@ async function waitStatus(libraryId, token, now = Date.now()) {
   return { waiting: true, area: mine.area, until: mine.at + WAIT_HOURS * 3600 * 1000, ahead };
 }
 
+// Changes to one library's list take turns (lock.js), so people joining
+// at the same moment are all kept.
+const listLock = (libraryId) => `waitlist:${libraryId}`;
+
 /** Joins (or changes the area of) this device's place on the list. */
-async function joinWaitlist(libraryId, token, area, now = Date.now()) {
+function joinWaitlist(libraryId, token, area, now = Date.now()) {
+  return withLock(listLock(libraryId), () => join(libraryId, token, area, now));
+}
+
+async function join(libraryId, token, area, now) {
   const list = await current(libraryId, now);
   const existing = list.find((w) => w.token === token);
   if (existing) {
@@ -67,15 +76,17 @@ async function joinWaitlist(libraryId, token, area, now = Date.now()) {
   return { ok: true, ...(await waitStatus(libraryId, token, now)) };
 }
 
-async function leaveWaitlist(libraryId, token, now = Date.now()) {
-  const list = await current(libraryId, now);
-  await save(libraryId, list.filter((w) => w.token !== token));
-  return { ok: true, waiting: false };
+function leaveWaitlist(libraryId, token, now = Date.now()) {
+  return withLock(listLock(libraryId), async () => {
+    const list = await current(libraryId, now);
+    await save(libraryId, list.filter((w) => w.token !== token));
+    return { ok: true, waiting: false };
+  });
 }
 
 /** Everyone off the list (closing time). */
-async function clearWaitlist(libraryId) {
-  await store.delete(waitKey(libraryId));
+function clearWaitlist(libraryId) {
+  return withLock(listLock(libraryId), () => store.delete(waitKey(libraryId)));
 }
 
 /**
@@ -90,22 +101,24 @@ async function clearWaitlist(libraryId) {
 async function seatsFreed(libraryId, seatIds, { libraryName = "the library", names = {}, holders = new Set(), now = Date.now() } = {}) {
   try {
     if (!seatIds.length) return 0;
-    let list = await current(libraryId, now);
-    if (!list.length) return 0;
-    list = list.filter((w) => !holders.has(w.token));
-
-    const told = [];
-    for (const seatId of seatIds) {
-      const area = seatArea(seatId);
-      const forArea = list.filter((w) => w.area === area);
-      const forAny = list.filter((w) => !w.area);
-      const pick = [...forArea, ...forAny].slice(0, TOLD_PER_SEAT);
-      for (const w of pick) {
-        told.push({ w, seatId, area });
-        list = list.filter((x) => x !== w);
+    // Pick who's told and take them off the list in one turn; the
+    // notifications themselves go out after, without holding it up.
+    const told = await withLock(listLock(libraryId), async () => {
+      let list = await current(libraryId, now);
+      if (!list.length) return [];
+      const picked = [];
+      const waiting = list.filter((w) => !holders.has(w.token));
+      for (const seatId of seatIds) {
+        const area = seatArea(seatId);
+        const left = waiting.filter((w) => !picked.some((p) => p.w === w));
+        const pick = [...left.filter((w) => w.area === area), ...left.filter((w) => !w.area)].slice(0, TOLD_PER_SEAT);
+        for (const w of pick) picked.push({ w, seatId, area });
       }
-    }
-    await save(libraryId, list);
+      // Holding a seat now: no longer waiting either.
+      list = list.filter((w) => !holders.has(w.token) && !picked.some((p) => p.w === w));
+      await save(libraryId, list);
+      return picked;
+    });
 
     for (const { w, seatId, area } of told) {
       const where = names[area] ? `${names[area]}, seat ${seatId}` : `Seat ${seatId}`;

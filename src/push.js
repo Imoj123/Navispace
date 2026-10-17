@@ -52,6 +52,28 @@ function ensureConfigured() {
     }
 }
 
+// The browsers' push services. A subscription is only ever one of these:
+// accepting any address would let anyone make the server send requests to
+// hosts of their choosing (including ones inside its own network).
+const PUSH_HOSTS = [
+    /(^|\.)googleapis\.com$/,          // Chrome, Edge on Android, Samsung Internet, Opera
+    /(^|\.)push\.services\.mozilla\.com$/, // Firefox
+    /(^|\.)push\.apple\.com$/,         // Safari on Mac, iPhone and iPad
+    /(^|\.)notify\.windows\.com$/,     // Edge on Windows
+];
+
+/** Whether this looks like a real PushSubscription from a browser's push service. */
+function validSubscription(sub) {
+    if (!sub || typeof sub !== "object" || typeof sub.endpoint !== "string" || sub.endpoint.length > 1000) return false;
+    let url;
+    try { url = new URL(sub.endpoint); } catch { return false; }
+    if (url.protocol !== "https:" || url.port) return false;
+    if (!PUSH_HOSTS.some((re) => re.test(url.hostname))) return false;
+    const keys = sub.keys;
+    return Boolean(keys && typeof keys.p256dh === "string" && typeof keys.auth === "string" &&
+        keys.p256dh.length < 200 && keys.auth.length < 100);
+}
+
 async function saveSubscription(token, subscription) {
     await store.put(pushKey(token), subscription);
 }
@@ -108,6 +130,7 @@ module.exports = {
     ensureConfigured,
     vapidConfigured,
     vapidPublicKey,
+    validSubscription,
     saveSubscription,
     removeSubscription,
     hasSubscription,

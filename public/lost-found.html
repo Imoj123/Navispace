@@ -373,7 +373,7 @@
             document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
             // Cards drawn before the name arrived say "the library front desk".
             if (libraryName && lastItems.some((i) => i.atDesk)) render();
-        });
+        }).catch(() => { });
 
         function timeAgo(ms) {
             const mins = Math.round((Date.now() - ms) / 60000);
@@ -388,6 +388,7 @@
         const BASE_TITLE = document.title;
         async function render() {
             const items = await getLostFoundItems(libraryId);
+            if (!Array.isArray(items)) return; // an unknown library or an error: nothing to draw
             lastItems = items;
             // Unread messages show in the tab title too, for a tab left open on a computer.
             const unread = items.filter((i) => i.claim && roleFor(i) && hasUnread(i)).length;

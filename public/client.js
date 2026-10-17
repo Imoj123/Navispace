@@ -544,10 +544,18 @@ async function apiGet(url) {
     const timer = setTimeout(() => ctrl.abort(), 10000);
     try {
       const res = await fetch(url, { signal: ctrl.signal });
-      if (res.status >= 500 && attempt < waits.length) throw new Error(`HTTP ${res.status}`);
+      if (res.status >= 500) {
+        // Down or unreachable (the service worker answers 503 when offline):
+        // retry, then fail, rather than hand the page an error as if it were
+        // the data it asked for.
+        const err = new Error(`HTTP ${res.status}`);
+        err.retryable = true;
+        throw err;
+      }
       return await res.json();
     } catch (err) {
       if (attempt >= waits.length) throw err;
+      if (!err.retryable && err.name !== "AbortError" && !(err instanceof TypeError)) throw err;
       await new Promise((r) => setTimeout(r, waits[attempt]));
     } finally {
       clearTimeout(timer);
@@ -614,6 +622,9 @@ function getLibraries() {
       })
       .catch((err) => {
         _librariesPromise = null;
+        // Unreachable: the list seen last time will do (names don't change).
+        const cached = cachedLibraries();
+        if (cached) return cached;
         throw err;
       });
   }
@@ -835,6 +846,21 @@ function confidenceLevel(seat, config, now = Date.now()) {
   const cached = cachedLibraries();
   if (cached) paintRoom(libraryTheme(cached, id));
   getLibraries().then((list) => paintRoom(libraryTheme(list, id))).catch(() => {});
+})();
+
+/**
+ * A page for a library that doesn't exist (an old or mistyped link,
+ * ?lib=whatever): go to the list of libraries rather than show an empty
+ * page named after the typo.
+ */
+(function leaveUnknownLibrary() {
+  const lib = new URLSearchParams(window.location.search).get("lib");
+  if (!lib || !["/library.html", "/seat.html", "/focus.html", "/leaderboard.html", "/lost-found.html"].includes(window.location.pathname)) return;
+  getLibraries()
+    .then((list) => {
+      if (Array.isArray(list) && list.length && !list.some((l) => l.id === lib)) window.location.replace("/libraries.html");
+    })
+    .catch(() => { });
 })();
 
 /**

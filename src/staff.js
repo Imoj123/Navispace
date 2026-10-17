@@ -14,6 +14,7 @@ const busy = require("./busy");
 const usage = require("./usage");
 const { limit } = require("./ratelimit");
 const waitlist = require("./waitlist");
+const { withLock, seatLock } = require("./lock");
 const notices = require("./notices");
 const push = require("./push");
 
@@ -44,7 +45,9 @@ function sameText(a, b) {
 function readCookie(req, name) {
   for (const part of (req.headers.cookie || "").split(";")) {
     const i = part.indexOf("=");
-    if (i > -1 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+    if (i > -1 && part.slice(0, i).trim() === name) {
+      try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return null; } // a mangled cookie is just "not signed in"
+    }
   }
   return null;
 }
@@ -90,8 +93,12 @@ async function tellHolders(libId, body, { closingDate = null } = {}) {
   for (const seat of seats.filter((x) => x.state !== SeatState.AVAILABLE && x.holderToken)) {
     // Told about closing already: no second notice 10 minutes before (reminders.js).
     if (closingDate) {
-      seat.closingNoticeDate = closingDate;
-      await saveSeat(seat);
+      await withLock(seatLock(libId), async () => {
+        const fresh = await getSeat(libId, seat.id);
+        if (fresh.holderToken !== seat.holderToken) return;
+        fresh.closingNoticeDate = closingDate;
+        await saveSeat(fresh);
+      });
     }
     const r = await push.sendPush(seat.holderToken, {
       title: getLibrary(libId).name,
@@ -110,7 +117,8 @@ function mountStaff(app, { siteOrigin }) {
   mountPoster(app, { siteOrigin });
   app.post("/api/staff/login", limit("staffLogin"), (req, res) => {
     if (!password()) return res.status(503).json({ ok: false, reason: "staff_disabled" });
-    if (!sameText((req.body && req.body.password) || "", password())) {
+    const given = req.body && req.body.password;
+    if (typeof given !== "string" || !sameText(given, password())) {
       return res.status(401).json({ ok: false, reason: "wrong_password" });
     }
     const exp = Date.now() + SESSION_HOURS * 60 * 60 * 1000;
@@ -207,13 +215,15 @@ function mountStaff(app, { siteOrigin }) {
   app.post("/api/staff/seat/:id/free", requireStaff, async (req, res) => {
     const libId = libraryFrom(req);
     if (!libId || !getSeatIds(libId).includes(req.params.id)) return res.status(404).json({ ok: false, reason: "unknown_seat" });
-    const seat = await getSeat(libId, req.params.id);
-    if (seat.state !== SeatState.AVAILABLE) {
+    const freed = await withLock(seatLock(libId), async () => {
+      const seat = await getSeat(libId, req.params.id);
+      if (seat.state === SeatState.AVAILABLE) return false;
       await recordSitting(libId, seat, Date.now());
       resetToAvailable(seat);
       await saveSeat(seat);
-      waitlist.announceFreed(libId, [seat.id]);
-    }
+      return true;
+    });
+    if (freed) waitlist.announceFreed(libId, [req.params.id]);
     res.json({ ok: true });
   });
 

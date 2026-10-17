@@ -7,6 +7,7 @@ const { findHeldSeat, saveSeat, resetToAvailable, studentKey } = require("./scan
 const { removeSubscription } = require("./push");
 const { leaveWaitlist } = require("./waitlist");
 const config = require("./config");
+const { withLock, seatLock } = require("./lock");
 
 /**
  * "Delete my data" (privacy page): removes everything NaviSpace keeps under
@@ -34,12 +35,14 @@ async function forgetDevice(token) {
 
     const seatIds = lib.status === "active" ? getSeatIds(lib.id) : [];
     if (seatIds.length) {
-      const held = await findHeldSeat(lib.id, token, seatIds);
-      if (held) {
-        resetToAvailable(held);
-        await saveSeat(held);
-        removed.seats++;
-      }
+      await withLock(seatLock(lib.id), async () => {
+        const held = await findHeldSeat(lib.id, token, seatIds);
+        if (held) {
+          resetToAvailable(held);
+          await saveSeat(held);
+          removed.seats++;
+        }
+      });
     }
 
     const keys = await store.listKeys(`lostfound:${lib.id}:`);

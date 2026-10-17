@@ -3,6 +3,8 @@
 const { store } = require("./store");
 const config = require("./config");
 const { recordSitting } = require("./history");
+const { withLock, seatLock } = require("./lock");
+const { localParts } = require("./hours");
 
 /**
  * Seat states, mirroring the AVAILABLE / OCCUPIED / STEPPED_AWAY
@@ -30,13 +32,13 @@ function studentKey(libraryId, token) {
   return `student:${libraryId}:${token}`;
 }
 
-function creditKey(libraryId, token, seatId, dayKey) {
-  return `credit:${libraryId}:${token}:${seatId}:${dayKey}`;
+function creditKey(libraryId, token, dayKey) {
+  return `credit:${libraryId}:${token}:${dayKey}`;
 }
 
-/** Local YYYY-MM-DD, used as the leaderboard's one-credit-per-day unit. */
+/** The library's local YYYY-MM-DD, the study board's one-point-per-day unit. */
 function dayKeyFor(timestampMs) {
-  return new Date(timestampMs).toISOString().slice(0, 10);
+  return localParts(timestampMs).date;
 }
 
 /** How long a check-in (or a "still here") holds the seat. */
@@ -82,16 +84,16 @@ async function saveSeat(seat) {
 }
 
 /**
- * Credits one leaderboard "session day" for this student+seat, capped
- * at one per seat per day (extension against the unbounded-duration
- * gaming vector — see design notes). No-ops silently if already
+ * Credits one leaderboard "session day" for this student, capped at one
+ * per day however many seats they use (moving desks, or hopping between
+ * them to farm points, still earns one). No-ops silently if already
  * credited today. Leaderboards are per-library — a library's board is
  * its own community, and it keeps the credit key naturally scoped
  * alongside everything else.
  */
 async function creditSessionDay(libraryId, token, nickname, seatId, now = Date.now()) {
   const dKey = dayKeyFor(now);
-  const cKey = creditKey(libraryId, token, seatId, dKey);
+  const cKey = creditKey(libraryId, token, dKey);
 
   const alreadyCredited = await store.get(cKey);
   if (alreadyCredited) return false;
@@ -159,7 +161,13 @@ async function findHeldSeat(libraryId, token, seatIds, excludeSeatId = null) {
  * no-ops that report ok:false with a reason, rather than throwing —
  * a stale client (e.g. two tabs) shouldn't crash the request.
  */
-async function handleScan(libraryId, seatId, action, identity, now = Date.now(), allSeatIds = null) {
+function handleScan(libraryId, seatId, action, identity, now = Date.now(), allSeatIds = null) {
+  // One change to a library's seats at a time (see lock.js): otherwise two
+  // check-ins a moment apart could both take one seat, or one person three.
+  return withLock(seatLock(libraryId), () => applyScan(libraryId, seatId, action, identity, now, allSeatIds));
+}
+
+async function applyScan(libraryId, seatId, action, identity, now, allSeatIds) {
   const seat = await getSeat(libraryId, seatId);
 
   switch (action) {

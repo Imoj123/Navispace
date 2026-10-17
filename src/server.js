@@ -16,7 +16,7 @@ const { getSittings } = require("./history");
 const { openStatus } = require("./hours");
 const busy = require("./busy");
 const { reportSeat } = require("./reports");
-const { saveSubscription, removeSubscription, hasSubscription, sendPush, vapidPublicKey } = require("./push");
+const { saveSubscription, removeSubscription, hasSubscription, sendPush, vapidPublicKey, validSubscription } = require("./push");
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, reportThread } = require("./lostfound");
 const { seatCodeValid, seatCodesRequired } = require("./seatcode");
@@ -26,6 +26,35 @@ const { mountStaff } = require("./staff");
 const { forgetDevice } = require("./forget");
 const waitlist = require("./waitlist");
 const notices = require("./notices");
+const input = require("./input");
+
+/**
+ * Express 4 doesn't catch a rejected promise from an async route: the
+ * request just hangs. Wraps every route so a failure reaches the error
+ * handler at the end of createApp instead.
+ */
+function catchAsyncErrors(app) {
+  for (const method of ["get", "post", "use"]) {
+    const original = app[method].bind(app);
+    app[method] = (...args) => {
+      // app.get("setting") with one argument reads a setting: leave it be.
+      if (method === "get" && args.length === 1 && typeof args[0] === "string") return original(...args);
+      return original(...args.map((fn) => typeof fn === "function" && fn.length < 4 ? wrapAsync(fn) : fn));
+    };
+  }
+}
+
+function wrapAsync(fn) {
+  return function (req, res, next) {
+    try {
+      const result = fn.call(this, req, res, next);
+      if (result && typeof result.catch === "function") result.catch(next);
+      return result;
+    } catch (err) {
+      next(err);
+    }
+  };
+}
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -172,7 +201,18 @@ function createApp() {
   // first X-Forwarded-For entry (used for speed limits, see ratelimit.js).
   app.set("trust proxy", 1);
   app.use(compression());
+  catchAsyncErrors(app);
   app.use(express.json({ limit: "3mb" })); // lost & found photos ride in the JSON body
+
+  // Every request naming a device does it with a short string (see
+  // input.js); anything else (a number, an object, 10,000 characters) is
+  // turned away here rather than in every route.
+  app.use((req, res, next) => {
+    if (req.body && typeof req.body === "object" && "token" in req.body && !input.token(req.body.token)) {
+      return res.status(400).json({ ok: false, reason: "bad_token" });
+    }
+    next();
+  });
 
   // Uptime pings (cron-job.org / UptimeRobot) hit this to keep the
   // instance awake: cheap, touches no store, never cached.
@@ -322,7 +362,8 @@ function createApp() {
 
   app.post("/api/library/:libId/scan/:id", limit("scan"), async (req, res) => {
     const { libId } = req.params;
-    const { action, token, nickname, k } = req.body || {};
+    const { action, token, k } = req.body || {};
+    const nickname = input.nickname((req.body || {}).nickname);
 
     if (!isActiveLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "library_not_active" });
@@ -558,7 +599,11 @@ function createApp() {
     if (!token || !subscription) {
       return res.status(400).json({ ok: false, reason: "missing_fields" });
     }
-    await saveSubscription(token, subscription);
+    if (!validSubscription(subscription)) {
+      return res.status(400).json({ ok: false, reason: "bad_subscription" });
+    }
+    // Only what a subscription is made of, nothing else that came along.
+    await saveSubscription(token, { endpoint: subscription.endpoint, keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth } });
     // A quiet re-sync (the page refreshing an existing permission) skips the test.
     if (quiet) return res.json({ ok: true, testSent: false, testReason: "quiet" });
     // Send one right away so the student sees reminders work end to end
@@ -630,6 +675,18 @@ function createApp() {
     const { token } = req.body || {};
     if (!token) return res.status(400).json({ ok: false, reason: "missing_token" });
     res.json(await forgetDevice(token));
+  });
+
+  // A request that failed: a short JSON answer, never a hung request or a
+  // stack trace. Unreadable or oversized bodies are the sender's mistake.
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, _next) => {
+    if (err.type === "entity.parse.failed") return res.status(400).json({ ok: false, reason: "bad_json" });
+    if (err.type === "entity.too.large") return res.status(413).json({ ok: false, reason: "too_large" });
+    if (err instanceof URIError) return res.status(400).json({ ok: false, reason: "bad_request" });
+    console.error(`[server] ${req.method} ${req.path} failed: ${err && err.message}`);
+    if (res.headersSent) return;
+    res.status(500).json({ ok: false, reason: "server_error" });
   });
 
   // Anything else: data requests get JSON, people get the not-found page.

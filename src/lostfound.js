@@ -3,6 +3,8 @@
 const crypto = require("crypto");
 const { store } = require("./store");
 const config = require("./config");
+const input = require("./input");
+const { withLock } = require("./lock");
 
 function itemKey(libraryId, itemId) {
     return `lostfound:${libraryId}:${itemId}`;
@@ -40,11 +42,18 @@ const LINK_RE = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|co|ly|me|app|l
  * than risking a store write that's too large for the backend (a
  * free-tier Redis has per-value size limits).
  */
-async function reportItem(libraryId, { description, location, photoDataUrl, reporterToken, reporterNickname }, now = Date.now()) {
+async function reportItem(libraryId, fields, now = Date.now()) {
+    const description = input.text(fields.description, 200);
+    const location = input.text(fields.location, 120);
+    const photoDataUrl = typeof fields.photoDataUrl === "string" ? fields.photoDataUrl : "";
+    const reporterToken = input.token(fields.reporterToken);
+    const reporterNickname = input.nickname(fields.reporterNickname);
     if (!description || !photoDataUrl || !reporterToken) {
         return { ok: false, reason: "missing_fields" };
     }
-    if (!photoDataUrl.startsWith("data:image/")) {
+    // An ordinary photo only (the page sends a JPEG): no SVG, which can
+    // carry script, and nothing that isn't base64 image data.
+    if (!/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(photoDataUrl)) {
         return { ok: false, reason: "invalid_photo" };
     }
     if (photoDataUrl.length > config.LOST_FOUND_MAX_PHOTO_CHARS) {
@@ -53,7 +62,7 @@ async function reportItem(libraryId, { description, location, photoDataUrl, repo
 
     const twin = (await listItems(libraryId)).find((i) =>
         i.reporterToken === reporterToken &&
-        i.description === String(description).slice(0, 200) &&
+        i.description === description &&
         i.photoDataUrl === photoDataUrl &&
         now - i.createdAt < DUPLICATE_WINDOW_MS);
     if (twin) return { ok: true, item: twin, duplicate: true };
@@ -61,8 +70,8 @@ async function reportItem(libraryId, { description, location, photoDataUrl, repo
     const item = {
         id: crypto.randomUUID(),
         libraryId,
-        description: String(description).slice(0, 200),
-        location: location ? String(location).slice(0, 120) : "",
+        description,
+        location,
         photoDataUrl,
         reporterToken,
         reporterNickname: reporterNickname || "Anonymous",
@@ -104,7 +113,13 @@ async function listItems(libraryId) {
  * returned (see resolveItem). First claim wins; a second claimant
  * sees the existing claim rather than overwriting it.
  */
-async function claimItem(libraryId, itemId, { claimantToken, claimantNickname, note }, now = Date.now()) {
+async function claimItem(libraryId, itemId, fields, now = Date.now()) {
+    const claimantToken = input.token(fields.claimantToken);
+    const claimantNickname = input.nickname(fields.claimantNickname);
+    const note = input.text(fields.note, 200);
+    if (!claimantToken) return { ok: false, reason: "missing_fields" };
+    // The note opens the private chat, so the chat's no-links rule applies.
+    if (LINK_RE.test(note)) return { ok: false, reason: "no_links" };
     const key = itemKey(libraryId, itemId);
     const item = await store.get(key);
     if (!item) return { ok: false, reason: "not_found" };
@@ -114,7 +129,7 @@ async function claimItem(libraryId, itemId, { claimantToken, claimantNickname, n
     item.claim = {
         claimantToken,
         claimantNickname: claimantNickname || "Anonymous",
-        note: note ? String(note).slice(0, 200) : "",
+        note,
         claimedAt: now,
     };
     // The claim note opens the private thread between the two of them.
@@ -200,7 +215,7 @@ async function sendMessage(libraryId, itemId, token, text, now = Date.now()) {
     if (!item || !item.claim) return { ok: false, reason: "not_found" };
     const role = roleOf(item, token);
     if (!role) return { ok: false, reason: "not_allowed" };
-    const clean = String(text || "").replace(/\s+/g, " ").trim().slice(0, MAX_MESSAGE_CHARS);
+    const clean = input.text(text, MAX_MESSAGE_CHARS);
     if (!clean) return { ok: false, reason: "empty" };
     if (LINK_RE.test(clean)) return { ok: false, reason: "no_links" };
 
@@ -254,7 +269,24 @@ async function staffRemove(libraryId, itemId) {
     return { ok: true };
 }
 
+// Changes to one item take turns (lock.js): two claims, or two messages,
+// arriving together can't overwrite each other. Posting takes turns per
+// library, so the duplicate check sees the post just before it.
+const itemLock = (libraryId, itemId) => `lostfound:${libraryId}:${itemId}`;
+const oneAtATime = (fn) => (libraryId, itemId, ...rest) =>
+    withLock(itemLock(libraryId, itemId), () => fn(libraryId, itemId, ...rest));
+
 module.exports = {
-    reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, reportThread,
-    staffThread, staffRemove, MAX_MESSAGE_CHARS,
+    reportItem: (libraryId, ...rest) => withLock(`lostfound-post:${libraryId}`, () => reportItem(libraryId, ...rest)),
+    listItems,
+    claimItem: oneAtATime(claimItem),
+    resolveItem: oneAtATime(resolveItem),
+    markAtDesk: oneAtATime(markAtDesk),
+    getThread,
+    sendMessage: oneAtATime(sendMessage),
+    reportThread: oneAtATime(reportThread),
+    staffThread,
+    staffRemove: oneAtATime(staffRemove),
+    itemLock,
+    MAX_MESSAGE_CHARS,
 };

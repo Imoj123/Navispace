@@ -314,11 +314,25 @@ test("lost & found: the claim note and thread stay private to finder and claiman
 
 test("a quiet push re-sync saves the subscription without a test notification", async () => {
   await withServer(async (base) => {
-    const res = await fetch(`${base}/api/push/subscribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "tok-sync", subscription: { endpoint: "https://push.example/x", keys: {} }, quiet: true }) });
+    const sub = { endpoint: "https://fcm.googleapis.com/fcm/send/abc123", keys: { p256dh: "BNcR", auth: "tBHI" } };
+    const res = await fetch(`${base}/api/push/subscribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "tok-sync", subscription: sub, quiet: true }) });
     const body = await res.json();
     assert.equal(body.ok, true);
     assert.equal(body.testReason, "quiet");
-    assert.equal((await store.get("push:tok-sync")).endpoint, "https://push.example/x");
+    assert.equal((await store.get("push:tok-sync")).endpoint, "https://fcm.googleapis.com/fcm/send/abc123");
+  });
+});
+
+test("notification sign-ups only go to the browsers' push services", async () => {
+  await withServer(async (base) => {
+    const keys = { p256dh: "BNcR", auth: "tBHI" };
+    const subscribe = async (endpoint) => (await fetch(`${base}/api/push/subscribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "tok-ssrf", subscription: { endpoint, keys }, quiet: true }) })).status;
+    for (const ok of ["https://fcm.googleapis.com/fcm/send/x", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/QX", "https://wns2-par02p.notify.windows.com/w/?token=x"]) {
+      assert.equal(await subscribe(ok), 200, ok);
+    }
+    for (const bad of ["https://127.0.0.1/x", "http://fcm.googleapis.com/x", "https://10.0.0.5/x", "https://evil.example/fcm.googleapis.com", "https://googleapis.com.evil.example/x", "https://fcm.googleapis.com:8443/x", "javascript:alert(1)"]) {
+      assert.equal(await subscribe(bad), 400, bad);
+    }
   });
 });
 

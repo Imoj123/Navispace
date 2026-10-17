@@ -4,6 +4,7 @@ const { store } = require("./store");
 const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
 const { recordSitting } = require("./history");
 const { releaseDue, releasedAtToday } = require("./hours");
+const { withLock, seatLock } = require("./lock");
 
 /**
  * Reclaims seats whose expiry has passed without a confirming scan —
@@ -21,7 +22,13 @@ const { releaseDue, releasedAtToday } = require("./hours");
  * seat after the sweep, which is how busy.js learns the busiest hours
  * without a second read.
  */
-async function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), { hours, observe } = {}) {
+function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), opts = {}) {
+  // Takes its turn with check-ins and the rest (see lock.js), so a seat
+  // confirmed a moment ago isn't freed from a stale read.
+  return withLock(seatLock(libraryId), () => sweepNow(libraryId, seatIds, now, opts));
+}
+
+async function sweepNow(libraryId, seatIds, now, { hours, observe } = {}) {
   const reclaimed = [];
   // A few minutes after the library closes (see closingGraceMinutes), every
   // seat is freed: nobody holds a desk overnight or over a weekend. Their
