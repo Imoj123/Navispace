@@ -417,7 +417,7 @@
         if (result.reason === "library_closed") {
           const h = result.hours || {};
           const when = h.nextOpen === "today" ? `at ${h.opens}` : h.nextOpen ? `${h.nextOpen} at ${h.opens}` : "soon";
-          toast(`The library is closed${h.closedFor && h.closedFor !== "Weekend" ? ` for ${h.closedFor}` : ""}. Check-ins open again ${when}.`);
+          toast(`${h.closedFor === "Closed early today" ? "The library closed early today" : h.closedFor === "Closed today" ? "The library is closed today" : `The library is closed${h.closedFor && h.closedFor !== "Weekend" ? ` for ${h.closedFor}` : ""}`}. Check-ins open again ${when}.`);
         } else if (result.reason === "scan_required") {
           codeRequired = true;
           toast("Scan the code on the desk to check in.");

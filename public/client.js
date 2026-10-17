@@ -1011,3 +1011,61 @@ function mountWaitCard(box, libraryId) {
     if (!busy) paint();
   };
 }
+
+/* --- Announcements and closing early (from the front desk) ----------------- */
+
+/**
+ * A slim banner under the top bar of the library's pages: the front desk's
+ * announcement, and "closes early today at 15:00" when staff set one (see
+ * notices.js). Each can be dismissed on this device; a new one shows again.
+ */
+(function showLibraryNotices() {
+  const bar = document.querySelector(".topbar");
+  if (!bar || location.pathname === "/libraries.html" || location.pathname === "/staff.html") return;
+  let lib = new URLSearchParams(location.search).get("lib");
+  if (!lib && location.pathname === "/") {
+    try { lib = localStorage.getItem("navispace_last_lib"); } catch { }
+  }
+  lib = lib || "engineering";
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const DISMISSED = "navispace_dismissed_notices";
+  const dismissed = () => { try { return JSON.parse(localStorage.getItem(DISMISSED) || "[]"); } catch { return []; } };
+  const box = document.createElement("div");
+  box.className = "lib-notices";
+  box.setAttribute("role", "status");
+  bar.insertAdjacentElement("afterend", box);
+
+  async function refresh() {
+    let data;
+    try { data = await apiGet(`/api/library/${encodeURIComponent(lib)}/notices`); } catch { return; }
+    if (!data || !data.ok) return;
+    const gone = dismissed();
+    const items = [];
+    if (data.earlyClose) {
+      const id = `close:${data.earlyClose.time}:${new Date().toDateString()}`;
+      if (!gone.includes(id)) {
+        items.push({ id, kind: "close", html: `<b>Closing early today at ${esc(data.earlyClose.time)}</b>${data.earlyClose.reason ? ` · ${esc(data.earlyClose.reason)}` : ""}. Seats are released a few minutes after.` });
+      }
+    }
+    if (data.notice) {
+      const id = `notice:${data.notice.at}`;
+      if (!gone.includes(id)) items.push({ id, kind: "notice", html: `<b>From the front desk:</b> ${esc(data.notice.text)}` });
+    }
+    box.innerHTML = items.map((it) => `
+      <p class="lib-notice" data-kind="${it.kind}"><span class="lib-notice-dot" aria-hidden="true"></span><span class="lib-notice-text">${it.html}</span><button type="button" class="lib-notice-x" data-id="${esc(it.id)}" aria-label="Dismiss">×</button></p>`).join("");
+    box.hidden = !items.length;
+  }
+
+  box.addEventListener("click", (e) => {
+    const x = e.target.closest(".lib-notice-x");
+    if (!x) return;
+    try { localStorage.setItem(DISMISSED, JSON.stringify(dismissed().concat(x.dataset.id).slice(-20))); } catch { }
+    x.closest(".lib-notice").remove();
+    box.hidden = !box.querySelector(".lib-notice");
+  });
+
+  box.hidden = true;
+  refresh();
+  setInterval(() => { if (!document.hidden) refresh(); }, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+})();

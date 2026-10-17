@@ -136,8 +136,9 @@ async function announceFreed(libraryId, seatIds, now = Date.now()) {
     const { getSeatIds, getLayout } = require("./seats");
     const { getSeats, SeatState } = require("./scan");
     const { openStatus } = require("./hours");
+    const { libraryHours } = require("./notices");
     const layout = getLayout(libraryId) || {};
-    if (!openStatus(layout.hours || null, now).open) {
+    if (!openStatus(libraryHours(libraryId, now), now).open) {
       await clearWaitlist(libraryId);
       return 0;
     }
