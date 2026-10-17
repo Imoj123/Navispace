@@ -405,7 +405,7 @@
         getLibraries().then((libs) => {
             const lib = libs.find((l) => l.id === libraryId);
             document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
-        }.catch(() => { });
+        }).catch(() => { });
 
         // --- Floor plan ----------------------------------------------------
 
