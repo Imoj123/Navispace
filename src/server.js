@@ -59,6 +59,7 @@ function wrapAsync(fn) {
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const BASE_MANIFEST = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, "manifest.json"), "utf8"));
+const LOST_FOUND_PUBLIC_MAX = 120;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A device token is a bearer credential: anyone who has it can step
@@ -496,7 +497,9 @@ function createApp() {
       return res.status(404).json({ ok: false, reason: "unknown_library" });
     }
     const items = await listItems(libId);
-    res.json(items.map(publicItem));
+    // Unclaimed first, newest first (listItems): a board flooded with posts
+    // stays a page a phone can draw. Staff see everything on their page.
+    res.json(items.slice(0, LOST_FOUND_PUBLIC_MAX).map(publicItem));
   });
 
   app.post("/api/library/:libId/lostfound", limit("lfPost"), async (req, res) => {
