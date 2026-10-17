@@ -9,11 +9,13 @@ const { getSeats, getSeat, saveSeat, resetToAvailable, SeatState } = require("./
 const { recordSitting } = require("./history");
 const { listItems, staffThread, staffRemove } = require("./lostfound");
 const { seatCode, seatCodesRequired } = require("./seatcode");
-const { openStatus } = require("./hours");
+const { openStatus, closingGraceMinutes, closingSoon } = require("./hours");
 const busy = require("./busy");
 const usage = require("./usage");
 const { limit } = require("./ratelimit");
 const waitlist = require("./waitlist");
+const notices = require("./notices");
+const push = require("./push");
 
 /**
  * The staff page (/staff.html): one password, set as STAFF_PASSWORD on the
@@ -74,6 +76,34 @@ function seatLink(origin, libraryId, seatId) {
   return `${origin}/seat.html?${query}${code ? `&k=${code}` : ""}`;
 }
 
+/** "15:00" plus some minutes, as "15:05". */
+function hhmmPlus(time, minutes) {
+  const [h, m] = String(time).split(":").map(Number);
+  const t = h * 60 + m + minutes;
+  return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/** Sends a notification to everyone holding a seat now; body(seat) gives the text. Returns how many were sent. */
+async function tellHolders(libId, body, { closingDate = null } = {}) {
+  const seats = await getSeats(libId, getSeatIds(libId));
+  let sent = 0;
+  for (const seat of seats.filter((x) => x.state !== SeatState.AVAILABLE && x.holderToken)) {
+    // Told about closing already: no second notice 10 minutes before (reminders.js).
+    if (closingDate) {
+      seat.closingNoticeDate = closingDate;
+      await saveSeat(seat);
+    }
+    const r = await push.sendPush(seat.holderToken, {
+      title: getLibrary(libId).name,
+      body: body(seat),
+      url: `/seat.html?lib=${encodeURIComponent(libId)}&seat=${encodeURIComponent(seat.id)}`,
+      tag: `notice-${libId}`,
+    }, { ttlSeconds: 30 * 60 });
+    if (r.sent) sent++;
+  }
+  return sent;
+}
+
 const escapeHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 function mountStaff(app, { siteOrigin }) {
@@ -109,7 +139,9 @@ function mountStaff(app, { siteOrigin }) {
     res.json({
       ok: true,
       library: { id: libId, name: getLibrary(libId).name, active: isActiveLibrary(libId) },
-      hours: openStatus(layout && layout.hours),
+      hours: openStatus(notices.libraryHours(libId)),
+      usualHours: openStatus((layout && layout.hours) || null),
+      notices: notices.publicNotices(libId),
       stickers: { signed: seatCodesRequired(), count: seatIds.length },
       seats: seats
         .filter((s) => s.state !== SeatState.AVAILABLE)
@@ -127,6 +159,48 @@ function mountStaff(app, { siteOrigin }) {
       usage: use,
       hourly,
     });
+  });
+
+  // --- Announcements and closing early (notices.js) ------------------------
+  // Body: { lib, text, days, tell } — days 0 is "until the end of today";
+  // tell also sends it to everyone holding a seat right now.
+  app.post("/api/staff/notice", requireStaff, async (req, res) => {
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    const { text, days, tell } = req.body || {};
+    const r = await notices.setNotice(libId, { text, days });
+    if (!r.ok) return res.status(400).json(r);
+    const told = tell ? await tellHolders(libId, () => r.notice.text) : 0;
+    res.json({ ...r, told });
+  });
+
+  app.post("/api/staff/notice/clear", requireStaff, async (req, res) => {
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    res.json(await notices.clearNotice(libId));
+  });
+
+  // Body: { lib, time: "15:00", reason, tell } — today only.
+  app.post("/api/staff/earlyclose", requireStaff, async (req, res) => {
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    const { time, reason, tell } = req.body || {};
+    const r = await notices.setEarlyClose(libId, { time, reason });
+    if (!r.ok) return res.status(400).json(r);
+    const e = r.earlyClose;
+    const release = hhmmPlus(e.time, closingGraceMinutes());
+    const told = tell
+      ? await tellHolders(libId, (seat) => `The library closes early today at ${e.time}${e.reason ? ` (${e.reason})` : ""}. Seat ${seat.id} is released at ${release}.`,
+        // Closing within the 10-minute notice anyway: this is that notice.
+        { closingDate: (closingSoon(notices.libraryHours(libId)) || {}).minutes <= 10 ? e.date : null })
+      : 0;
+    res.json({ ...r, told });
+  });
+
+  app.post("/api/staff/earlyclose/clear", requireStaff, async (req, res) => {
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    res.json(await notices.clearEarlyClose(libId));
   });
 
   // A seat someone forgot to release (or left their things on).

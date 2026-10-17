@@ -45,6 +45,142 @@
             color: var(--muted);
         }
 
+        /* Tell everyone: announcement and closing early */
+        .tell {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+        }
+
+        .panel {
+            display: grid;
+            gap: 14px;
+            align-content: start;
+            padding: 22px;
+            border: 1px solid var(--line-strong);
+            background: var(--surface);
+        }
+
+        .panel h3 {
+            margin: 0;
+            font: 400 11.5px/1 var(--font-mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .panel [hidden] {
+            display: none !important;
+        }
+
+        #closeFields {
+            display: grid;
+            gap: 14px;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+        }
+
+        .field > span {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .field small {
+            justify-self: end;
+            font: 400 11px var(--font-mono);
+            color: var(--faint);
+        }
+
+        .field textarea {
+            resize: vertical;
+            min-height: 84px;
+        }
+
+        .field select {
+            min-height: 46px;
+            padding: 0 14px;
+            font: 400 16px var(--font-body);
+            color: var(--text);
+            background: var(--well, var(--ground-2));
+            border: 1px solid var(--line);
+            border-radius: 0;
+            color-scheme: dark;
+        }
+
+        .check {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 14.5px;
+            line-height: 1.4;
+        }
+
+        .check input {
+            width: 18px;
+            height: 18px;
+            margin: 1px 0 0;
+            accent-color: var(--brass);
+        }
+
+        .panel .btn {
+            margin: 0;
+        }
+
+        .panel .hint {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--muted);
+        }
+
+        .panel .result {
+            margin: 0;
+            font: 400 italic 15px/1.4 var(--font-serif);
+        }
+
+        .panel .result:empty {
+            display: none;
+        }
+
+        .current {
+            display: grid;
+            gap: 10px;
+            padding: 14px 16px;
+            border-left: 3px solid var(--brass);
+            background: rgba(196, 163, 95, 0.09);
+        }
+
+        .current p {
+            margin: 0;
+            line-height: 1.45;
+        }
+
+        .current .meta {
+            font: 400 12px/1.5 var(--font-mono);
+            color: var(--muted);
+        }
+
+        .current .btn {
+            justify-self: start;
+            width: auto;
+            padding: 9px 14px;
+            font-size: 11px;
+        }
+
+        #closeNow {
+            border-left-color: var(--away);
+            background: rgba(220, 174, 99, 0.12);
+        }
+
+        @media (max-width: 720px) {
+            .tell {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* Sign in */
         .signin {
             max-width: 420px;
@@ -338,6 +474,48 @@
         <div id="dash" hidden>
             <p class="page-subtitle" id="status"></p>
 
+            <section class="staff-section" aria-labelledby="tellTitle">
+                <header>
+                    <h2 id="tellTitle">Tell everyone</h2>
+                    <p class="eyebrow">Shown at the top of every page</p>
+                </header>
+                <div class="tell">
+                    <form class="panel" id="noticeForm">
+                        <h3>Announcement</h3>
+                        <div class="current" id="noticeNow" hidden></div>
+                        <label class="field"><span>Message</span>
+                            <textarea id="noticeText" maxlength="200" rows="3" placeholder="e.g. The group rooms are closed for exams today."></textarea>
+                            <small id="noticeCount">0 / 200</small></label>
+                        <label class="field"><span>Show it</span>
+                            <select id="noticeDays">
+                                <option value="0">Until the end of today</option>
+                                <option value="3">For 3 days</option>
+                                <option value="7">For a week</option>
+                            </select></label>
+                        <label class="check"><input type="checkbox" id="noticeTell" /> Also send it to everyone holding a seat now</label>
+                        <button class="btn btn-primary" type="submit">Post announcement</button>
+                        <p class="result" id="noticeResult" role="status"></p>
+                    </form>
+
+                    <form class="panel" id="closeForm">
+                        <h3>Close early today</h3>
+                        <div class="current" id="closeNow" hidden></div>
+                        <p class="muted" id="closeShut" hidden>The library is closed right now. This works on days it's open.</p>
+                        <div id="closeFields">
+                            <label class="field"><span>Closing time today</span>
+                                <select id="closeTime"></select></label>
+                            <label class="field"><span>Reason (optional)</span>
+                                <input type="text" id="closeReason" maxlength="80" placeholder="e.g. Staff training" /></label>
+                            <label class="check"><input type="checkbox" id="closeTell" checked /> Tell everyone holding a seat now</label>
+                            <button class="btn btn-primary" type="submit">Close early today</button>
+                            <p class="hint">Check-ins stop at that time. Everyone with a seat is reminded 10 minutes before,
+                                and held seats are released a few minutes after. Tomorrow is back to normal.</p>
+                        </div>
+                        <p class="result" id="closeResult" role="status"></p>
+                    </form>
+                </div>
+            </section>
+
             <section class="staff-section" aria-labelledby="seatsTitle">
                 <header>
                     <h2 id="seatsTitle">Seats in use</h2>
@@ -451,8 +629,10 @@
             $("libName").textContent = `${d.library.name} · staff`;
             const h = d.hours;
             $("status").textContent = h.open
-                ? `Open until ${h.closes}. ${d.seats.length} of ${d.seatCount} seats in use.`
-                : `Closed${h.closedFor && h.closedFor !== "Weekend" ? ` (${h.closedFor})` : ""}. Opens ${h.nextOpen === "today" ? "today" : h.nextOpen} at ${h.opens}.`;
+                ? `Open until ${h.closes}${h.closesEarly ? " (closing early today)" : ""}. ${d.seats.length} of ${d.seatCount} seats in use.`
+                : `${h.closedFor === "Closed early today" ? "Closed early today" : `Closed${h.closedFor && h.closedFor !== "Weekend" ? ` (${h.closedFor})` : ""}`}. Opens ${h.nextOpen === "today" ? "today" : h.nextOpen} at ${h.opens}.`;
+
+            paintTell();
 
             // Seats
             $("seatsCount").textContent = `${d.seats.length} of ${d.seatCount}`;
@@ -540,6 +720,106 @@
                 ? "One sticker per seat on A4, each with its signed code. Print them (or save as a PDF) and stick each on its desk. Reprint after changing the floor plan or the signing secret."
                 : "SEAT_SIGNING_SECRET isn't set on the server, so stickers would carry no seat code. Set it first, then print.";
         }
+
+        // --- Tell everyone: announcement and closing early -------------------
+        // Only the "now" boxes repaint on refresh, never the fields being typed in.
+        function paintTell() {
+            const { notice, earlyClose } = data.notices;
+            const until = (n) => n.days
+                ? `until ${new Date(n.until).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}, ${clock(n.until)}`
+                : "until the end of today";
+            $("noticeNow").hidden = !notice;
+            $("noticeNow").innerHTML = notice
+                ? `<p>${esc(notice.text)}</p><span class="meta">Showing now, ${esc(until(notice))}</span><button class="btn" type="button" id="noticeClear">Take it down</button>`
+                : "";
+            if (notice) $("noticeClear").onclick = async () => {
+                await api("/api/staff/notice/clear", {});
+                $("noticeResult").textContent = "Taken down.";
+                refresh();
+            };
+
+            $("closeNow").hidden = !earlyClose;
+            $("closeNow").innerHTML = earlyClose
+                ? `<p>Closing today at <b>${esc(earlyClose.time)}</b> instead of ${esc(earlyClose.usual)}${earlyClose.reason ? ` · ${esc(earlyClose.reason)}` : ""}.</p><button class="btn" type="button" id="closeClear">Undo: close at ${esc(earlyClose.usual)}</button>`
+                : "";
+            if (earlyClose) $("closeClear").onclick = async () => {
+                await api("/api/staff/earlyclose/clear", {});
+                $("closeResult").textContent = `Back to closing at ${earlyClose.usual}.`;
+                refresh();
+            };
+            const shut = !earlyClose && !data.usualHours.regularOpen;
+            $("closeShut").hidden = !shut;
+            $("closeFields").hidden = shut || Boolean(earlyClose);
+            fillCloseTimes(data.usualHours.closes);
+        }
+
+        // Closing times to choose from: now, then every 15 minutes until the
+        // usual close, on the library's clock (24-hour, whatever the device).
+        function fillCloseTimes(usual) {
+            const sel = $("closeTime");
+            if (!usual) return;
+            const [uh, um] = usual.split(":").map(Number);
+            const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+                .formatToParts(new Date()).map((x) => [x.type, x.value]));
+            const nowMin = Number(p.hour) * 60 + Number(p.minute);
+            const pad = (n) => String(n).padStart(2, "0");
+            const times = [];
+            for (let m = Math.ceil((nowMin + 1) / 15) * 15; m < uh * 60 + um; m += 15) times.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
+            const key = usual + "|" + times[0];
+            if (sel.dataset.key === key) return; // unchanged: keep the choice
+            const keep = sel.value;
+            sel.dataset.key = key;
+            sel.innerHTML = `<option value="${pad(Math.floor(nowMin / 60))}:${pad(nowMin % 60)}">Now</option>` + times.map((t) => `<option>${t}</option>`).join("");
+            // A sensible start: an hour before the usual close.
+            const start = `${pad(Math.max(0, uh - 1))}:${pad(um)}`;
+            sel.value = times.includes(keep) ? keep : times.includes(start) ? start : (times[times.length - 1] || sel.options[0].value);
+        }
+
+        $("noticeText").addEventListener("input", () => {
+            $("noticeCount").textContent = `${$("noticeText").value.length} / 200`;
+        });
+
+        // What happened to "tell everyone holding a seat".
+        const tellNote = (told, asked) => !asked ? ""
+            : told ? ` Sent to ${told} ${told === 1 ? "person" : "people"} with a seat.`
+                : " Nobody holding a seat has notifications on, so it shows on the pages only.";
+
+        const tellReasons = {
+            empty: "Write the message first.",
+            too_long: "Keep it to 200 characters.",
+            bad_time: "Pick a time, like 15:00.",
+            not_earlier: "That isn't earlier than the usual closing time.",
+            closed_now: "The library is closed right now.",
+        };
+
+        $("noticeForm").onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = e.submitter || $("noticeForm").querySelector("button[type=submit]");
+            btn.disabled = true;
+            const r = await api("/api/staff/notice", { text: $("noticeText").value, days: Number($("noticeDays").value), tell: $("noticeTell").checked });
+            btn.disabled = false;
+            if (!r.ok) { $("noticeResult").textContent = tellReasons[r.reason] || "Couldn't post it. Try again."; return; }
+            $("noticeText").value = "";
+            $("noticeCount").textContent = "0 / 200";
+            $("noticeResult").textContent = `Posted.${tellNote(r.told, $("noticeTell").checked)}`;
+            $("noticeTell").checked = false;
+            refresh();
+        };
+
+        $("closeForm").onsubmit = async (e) => {
+            e.preventDefault();
+            const time = $("closeTime").value;
+            const label = $("closeTime").selectedOptions[0].textContent;
+            if (!confirm(`${label === "Now" ? "Close the library now" : `Close the library at ${time} today`}? Check-ins stop then, and held seats are released a few minutes after.`)) return;
+            const btn = e.submitter || $("closeForm").querySelector("button[type=submit]");
+            btn.disabled = true;
+            const r = await api("/api/staff/earlyclose", { time, reason: $("closeReason").value, tell: $("closeTell").checked });
+            btn.disabled = false;
+            if (!r.ok) { $("closeResult").textContent = tellReasons[r.reason] || "Couldn't do that. Try again."; return; }
+            $("closeReason").value = "";
+            $("closeResult").textContent = `Closing today at ${r.earlyClose.time}.${tellNote(r.told, $("closeTell").checked)}`;
+            refresh();
+        };
 
         start();
         setInterval(() => { if (!document.hidden && data) refresh(); }, 30000);

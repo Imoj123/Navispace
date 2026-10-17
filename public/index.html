@@ -1115,7 +1115,7 @@
                 const when = h.nextOpen === "today" ? `today at ${h.opens}` : h.nextOpen === "tomorrow" ? `tomorrow at ${h.opens}` : `${h.nextOpen} at ${h.opens}`;
                 if (libraryOpen !== Boolean(h.open)) { libraryOpen = Boolean(h.open); paintWait(); }
                 $("openNow").innerHTML = h.open
-                    ? `Open until <b>${esc(h.closes)}</b>`
+                    ? (h.closesEarly ? `Closes early today at <b>${esc(h.closes)}</b>` : `Open until <b>${esc(h.closes)}</b>`)
                     : `${h.closedFor && h.closedFor !== "Weekend" ? esc(h.closedFor) + ". " : "Closed. "}Opens <b>${esc(when)}</b>`;
             } catch { }
         }
