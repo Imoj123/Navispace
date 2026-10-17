@@ -260,6 +260,12 @@
             font: 400 12px/1.5 var(--font-mono);
         }
 
+        /* Long nicknames and descriptions wrap rather than widen the page. */
+        .row > div {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
         .row .who {
             display: block;
             color: var(--text);
@@ -653,9 +659,16 @@
             const r = await api(`/api/staff/overview?lib=${encodeURIComponent(libraryId)}`);
             if (r.status === 401) { location.reload(); return; }
             if (!r.ok) return;
+            // Unchanged since the last look (most 30-second refreshes): leave
+            // the page alone, so focus, an open menu or a half-read list stay put.
+            const key = JSON.stringify(r);
+            if (key === lastKey) return;
+            lastKey = key;
             data = r;
             paint();
         }
+        let lastKey = null;
+        const openThreads = new Set(); // conversations staff have open: kept open across refreshes
 
         function paint() {
             const d = data;
@@ -703,9 +716,17 @@
                     <div class="actions">${i.messages ? '<button class="btn read" type="button">Read conversation</button>' : ""}
                     <button class="btn btn-tinted remove" type="button">${i.atDesk ? "Collected: remove" : "Remove"}</button></div>`;
                 const read = row.querySelector(".read");
+                if (read) read.setAttribute("aria-expanded", "false");
                 if (read) read.onclick = async () => {
                     const open = row.querySelector(".thread-view");
-                    if (open) { open.remove(); return; }
+                    if (open) {
+                        open.remove();
+                        openThreads.delete(i.id);
+                        read.setAttribute("aria-expanded", "false");
+                        return;
+                    }
+                    openThreads.add(i.id);
+                    read.setAttribute("aria-expanded", "true");
                     const t = await api(`/api/staff/lostfound/${encodeURIComponent(i.id)}/thread?lib=${encodeURIComponent(libraryId)}`);
                     const view = document.createElement("div");
                     view.className = "thread-view";
@@ -718,6 +739,7 @@
                     refresh();
                 };
                 $("items").appendChild(row);
+                if (read && openThreads.has(i.id)) read.onclick();
             }
 
             // Usage

@@ -186,7 +186,7 @@
 
       <button id="enableReminders" class="btn btn-tinted" style="display:none;">Remind me before my seat runs out</button>
       <button id="reportLink" class="btn-quiet" style="display:none;">This looks wrong — report it</button>
-      <div id="toast" class="toast"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <div class="nickname-row">
         <input type="text" id="nicknameInput" placeholder="Your leaderboard nickname" maxlength="24" />
@@ -195,7 +195,7 @@
     </div>
   </main>
 
-  <div id="modal" class="modal-overlay">
+  <div id="modal" class="modal-overlay" aria-labelledby="modalMessage">
     <div class="modal-box">
       <p id="modalMessage"></p>
       <button class="btn btn-primary" id="modalKeepGoing">Keep going</button>
@@ -280,6 +280,26 @@
       return note;
     }
 
+    // Opening hours: while the library is closed a free seat says so, rather
+    // than offering a Check in that can only be refused.
+    let hoursNow = null;
+    function closedMessage(h) {
+      const when = h.nextOpen === "today" ? `at ${h.opens}` : h.nextOpen ? `${h.nextOpen} at ${h.opens}` : "soon";
+      const what = h.closedFor === "Closed early today" ? "The library closed early today"
+        : h.closedFor === "Closed today" ? "The library is closed today"
+          : `The library is closed${h.closedFor && h.closedFor !== "Weekend" ? ` for ${h.closedFor}` : ""}`;
+      return `${what}. Check-ins open again ${when}.`;
+    }
+    async function refreshHours() {
+      try {
+        const h = await apiGet(`/api/library/${encodeURIComponent(libraryId)}/hours`);
+        if (!h || typeof h.open !== "boolean") return;
+        const changed = !hoursNow || hoursNow.open !== h.open;
+        hoursNow = h;
+        if (changed && lastSeat && lastSeat.state) render(lastSeat);
+      } catch { }
+    }
+
     function render(seat) {
       lastSeat = seat;
       if (seat && (seat.reason === "unknown_seat" || seat.reason === "unknown_library")) {
@@ -312,7 +332,17 @@
       document.getElementById("seatFocus").hidden = !focusSeat;
       tickSeatFocus();
 
-      if (seat.state === "AVAILABLE") {
+      const closedNow = hoursNow && !hoursNow.open;
+      if (seat.state === "AVAILABLE" && closedNow) {
+        label.textContent = "Library closed";
+        statusEl.className = "status-band";
+        dot.className = "signal-dot";
+        const note = document.createElement("div");
+        note.className = "scan-note";
+        note.innerHTML = `<strong></strong><span>Come back then and scan the code on this desk.</span>`;
+        note.querySelector("strong").textContent = closedMessage(hoursNow);
+        actions.appendChild(note);
+      } else if (seat.state === "AVAILABLE") {
         if (codeRequired && !seatCodeFor(libraryId, seatId)) actions.appendChild(scanNote());
         else actions.appendChild(makeButton("Check in", true, () => act("checkIn")));
       } else if (seat.state === "OCCUPIED" && isHolder) {
@@ -421,9 +451,8 @@
       if (!result.ok && !result.seat) throw new Error(result.reason || "failed");
       if (!result.ok) {
         if (result.reason === "library_closed") {
-          const h = result.hours || {};
-          const when = h.nextOpen === "today" ? `at ${h.opens}` : h.nextOpen ? `${h.nextOpen} at ${h.opens}` : "soon";
-          toast(`${h.closedFor === "Closed early today" ? "The library closed early today" : h.closedFor === "Closed today" ? "The library is closed today" : `The library is closed${h.closedFor && h.closedFor !== "Weekend" ? ` for ${h.closedFor}` : ""}`}. Check-ins open again ${when}.`);
+          hoursNow = result.hours || hoursNow;
+          toast(closedMessage(result.hours || {}));
         } else if (result.reason === "scan_required") {
           codeRequired = true;
           toast("Scan the code on the desk to check in.");
@@ -450,13 +479,25 @@
       promptTimer = setTimeout(showStillStudyingPrompt, 50 * 60 * 1000);
     }
 
+    // The "still studying?" prompt is a real dialog (holdDialog in client.js):
+    // announced, focus on Keep going, Escape counts as Keep going.
+    let releaseModal = null;
     function showStillStudyingPrompt() {
       document.getElementById("modalMessage").textContent = "Still studying? " + randomEncouragement();
-      document.getElementById("modal").style.display = "flex";
+      const modal = document.getElementById("modal");
+      modal.style.display = "flex";
+      if (releaseModal) releaseModal({ returnFocus: false });
+      releaseModal = holdDialog(modal, { initial: "#modalKeepGoing", onEscape: () => document.getElementById("modalKeepGoing").click() });
+    }
+
+    function hideModal() {
+      document.getElementById("modal").style.display = "none";
+      if (releaseModal) releaseModal();
+      releaseModal = null;
     }
 
     document.getElementById("modalKeepGoing").onclick = async () => {
-      document.getElementById("modal").style.display = "none";
+      hideModal();
       let result;
       try {
         result = await postScan(libraryId, seatId, "stillHere", identity);
@@ -474,7 +515,7 @@
       }
     };
     document.getElementById("modalDone").onclick = async () => {
-      document.getElementById("modal").style.display = "none";
+      hideModal();
       try {
         await act("leaving");
       } catch {
@@ -518,6 +559,9 @@
     };
 
     refresh();
+    refreshHours();
+    setInterval(() => { if (!document.hidden) refreshHours(); }, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshHours(); });
   </script>
 </body>
 </html>

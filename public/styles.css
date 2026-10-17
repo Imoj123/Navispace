@@ -209,6 +209,7 @@ button {
     text-decoration: none;
     padding: 6px 0;
     min-width: 24px; /* "MAP" alone is narrower than a fingertip */
+    flex-shrink: 0; /* never squeezed narrower than its words (large text) */
     text-align: center;
     white-space: nowrap;
     border-bottom: 1px solid transparent;
@@ -292,9 +293,10 @@ main {
 /* The library a page belongs to, and the way back to the picker. */
 .context-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 6px 12px;
     max-width: 760px;
     margin: 0 auto;
     padding: 18px max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px));
@@ -636,6 +638,8 @@ input[type="text"]:focus,
 textarea:focus {
     border-color: var(--brass);
     outline: none;
+    /* A clear ring, not just a 1px colour change. */
+    box-shadow: 0 0 0 2px rgba(196, 163, 95, 0.45);
 }
 
 input[type="text"]::placeholder {
@@ -1039,7 +1043,7 @@ html.welcome-open {
 
 .lib-notice {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     margin: 0;
     padding: 10px max(20px, env(safe-area-inset-right, 0px)) 10px max(20px, env(safe-area-inset-left, 0px));
@@ -1060,6 +1064,8 @@ html.welcome-open {
 
 .lib-notice-dot {
     flex: 0 0 auto;
+    align-self: flex-start;
+    margin-top: 0.5em; /* level with the first line, however many lines follow */
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -1074,6 +1080,28 @@ html.welcome-open {
     flex: 1 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+/* On a phone a long announcement shows two lines, with More for the rest:
+   the seat card (just scanned) must stay on screen. */
+@media (max-width: 560px) {
+    .lib-notice-text.clamped {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+.lib-notice-more {
+    border: 0;
+    background: none;
+    padding: 0;
+    margin-left: 4px;
+    color: var(--brass);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .lib-notice-x {
@@ -1125,4 +1153,33 @@ html.welcome-open {
 /* Placeholders in every text field, not only one-line ones. */
 textarea::placeholder {
     color: var(--faint);
+}
+
+/* High Contrast / forced colours: keep the colour keys, or nothing on the
+   page says which colour means free, taken or stepped away. */
+@media (forced-colors: active) {
+    .signal-dot,
+    .model-legend i,
+    .lib-notice-dot,
+    .wait-pulse {
+        forced-color-adjust: none;
+    }
+}
+
+/* Read by screen readers, not shown. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus moved here by script (after a dialog closes): no ring on the whole page. */
+[tabindex="-1"]:focus {
+    outline: none;
 }
