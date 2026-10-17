@@ -1019,8 +1019,16 @@
                 plate.appendChild(w);
             }
 
-            // One block per seat, at its real position.
-            const u = Math.max(8, 30 * s);
+            // One block per seat, at its real position. Never wider than the
+            // gap to the nearest seat allows: on phones the 8px minimum made
+            // neighbours overlap, and Safari glitches drawing 3D blocks that
+            // cut into each other (Chrome hides it).
+            let nearest = Infinity;
+            const ss = layout.seats;
+            for (let i = 0; i < ss.length; i++) for (let j = i + 1; j < ss.length; j++) {
+                nearest = Math.min(nearest, Math.max(Math.abs(ss[i].x - ss[j].x), Math.abs(ss[i].y - ss[j].y)));
+            }
+            const u = Math.min(Math.max(8, 30 * s), nearest * s * 0.85);
             for (const seat of layout.seats) {
                 const c = document.createElement("div");
                 c.className = "cube";
