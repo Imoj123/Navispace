@@ -69,23 +69,34 @@ history on cron-job.org first: failed pings mean the server was asleep.
   (including Good Friday, Family Day and Sunday holidays moved to the Monday),
   plus any `CLOSED_DAYS`. Set in `hours` in `src/layouts/engineering.json`
   (`opens`, `closes`, and `closesOn` such as `{"Fri": "17:00"}`).
-- **Check-ins** are refused outside opening hours. The seat page says when they reopen.
+- **Check-ins** are refused outside opening hours. While closed, a seat page
+  says "Library closed" and when check-ins reopen, and the home page says when
+  the library opens.
 - **A check-in holds the seat for 2 hours.** "Still here" on the seat page
-  (asked every 50 minutes) starts the 2 hours again.
+  (asked 50 minutes after the last confirmation, also after a reload or from
+  the Home Screen app) starts the 2 hours again.
 - **Reminders** go out 10 and 5 minutes before a hold ends. Ignore them and the
-  seat frees itself when the hold ends (the server checks every minute).
+  seat frees itself when the hold ends (the server checks every minute; a seat
+  whose hold has just ended can be taken straight away).
 - **Stepping away** holds the seat for 1 hour 15 minutes.
 - **Closing early:** staff can close early for one day from the staff page
   (see below); everything here then follows the earlier time.
-- **Closing:** 10 minutes before closing, everyone holding a seat gets a
-  notification. Check-ins stop at closing time, and every held seat is released
-  5 minutes later (`CLOSING_GRACE_MINUTES`).
+- **Closing:** 10 minutes before closing, everyone holding a seat gets one
+  notification (and no other reminders after it). Check-ins, Still here and
+  I'm back stop at closing time, and every held seat is released 5 minutes
+  later (`CLOSING_GRACE_MINUTES`). If the server was asleep through closing,
+  sittings still end at that release time.
 - **Full floor:** when 3 seats or fewer are left, the home page and the map
   offer **Notify me**: any seat, or a favourite area. When a seat frees up
   (checked out, hold ran out, freed by staff or by reports), up to 3 people
   waiting for it get a notification, oldest first; whoever scans first gets it.
   The notification opens the map with that seat pointed out. Waiting lapses
-  after 3 hours and is cleared at closing. Needs notifications on.
+  after 3 hours and is cleared at closing; nobody is sent to a seat in the last
+  10 minutes before closing. Needs notifications on.
+- **Study board:** one point for each day a student studies (Still here, Check
+  out, or a sitting of 15 minutes or more that ends on its own), however many
+  seats they use that day. The board is a calendar week, Monday to Sunday, and
+  starts fresh every Monday.
 - **Busiest hours** on the home page are learned from how full the library is.
   Until each open hour has about three days of data, the plan's estimate
   (`hours.busiest`) shows.
@@ -120,6 +131,18 @@ Timings live in `src/config.js`.
 - **Launch poster:** an A4 poster for the entrance and the front desk: a QR code
   to the home page, the three steps (scan your desk, keep your seat, check out)
   and the opening hours. Print in colour if you can.
+
+## Robustness
+
+- Changes to a library's seats, its wait list and each Lost & Found item take
+  turns inside the server (`src/lock.js`), so two people can't both get one
+  seat. This assumes **one** server instance, which is how Render's plan runs
+  it. Running several instances would need a lock in Upstash instead.
+- Anything a request sends is checked for type and length (`src/input.js`);
+  bad requests get a short JSON answer, never a crash or a stack trace.
+- Notification sign-ups are only accepted for the browsers' own push services
+  (Google, Mozilla, Apple, Microsoft).
+- The public Lost & Found board shows the newest 120 items; staff see all.
 
 ## Speed limits
 
