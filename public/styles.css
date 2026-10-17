@@ -1030,3 +1030,65 @@ html.welcome-open {
 @media (max-width: 420px) {
     .wait-row .btn { flex: 1 1 100%; }
 }
+
+/* --- Announcements and closing early (showLibraryNotices in client.js) ---- */
+
+.lib-notices[hidden] {
+    display: none;
+}
+
+.lib-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 10px max(20px, env(safe-area-inset-right, 0px)) 10px max(20px, env(safe-area-inset-left, 0px));
+    border-bottom: 1px solid var(--line);
+    background: rgba(196, 163, 95, 0.09);
+    font-size: 14.5px;
+    line-height: 1.45;
+    color: var(--text);
+}
+
+.lib-notice[data-kind="close"] {
+    background: rgba(220, 174, 99, 0.14);
+}
+
+.lib-notice b {
+    font-weight: 600;
+}
+
+.lib-notice-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brass);
+}
+
+.lib-notice[data-kind="close"] .lib-notice-dot {
+    background: var(--away);
+}
+
+.lib-notice-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.lib-notice-x {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    margin: -8px -10px -8px 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 400 22px/1 var(--font-body);
+    cursor: pointer;
+}
+
+.lib-notice-x:hover,
+.lib-notice-x:focus-visible {
+    color: var(--text);
+}

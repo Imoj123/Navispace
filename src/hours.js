@@ -84,9 +84,15 @@ function extraClosedDays() {
   return new Set(String(process.env.CLOSED_DAYS || "").split(",").map((s) => s.trim()).filter(Boolean));
 }
 
-/** Closing time on a weekday (0 is Monday), e.g. "17:00" on Fridays. */
-function closesOn(hours, weekday) {
-  const special = hours && hours.closesOn && hours.closesOn[WEEKDAYS[weekday]];
+/**
+ * Closing time on a local day (parts from localParts): "17:00" on Fridays
+ * (hours.closesOn), or earlier when staff close early that day
+ * (hours.earlyClose = { date, time }, see notices.js).
+ */
+function closesOn(hours, parts) {
+  const early = hours && hours.earlyClose;
+  if (early && early.date === parts.date && early.time) return early.time;
+  const special = hours && hours.closesOn && hours.closesOn[WEEKDAYS[parts.weekday]];
   return special || (hours && hours.closes) || DEFAULT_CLOSES;
 }
 
@@ -107,7 +113,7 @@ function closedDayReason(parts) {
 function openStatus(hours, ms = Date.now()) {
   const opens = (hours && hours.opens) || DEFAULT_OPENS;
   const p = localParts(ms);
-  const closes = closesOn(hours, p.weekday);
+  const closes = closesOn(hours, p);
   const closedFor = closedDayReason(p);
   const inHours = p.minutes >= toMinutes(opens) && p.minutes < toMinutes(closes, DEFAULT_CLOSES);
   const regularOpen = !closedFor && inHours;
@@ -123,7 +129,11 @@ function openStatus(hours, ms = Date.now()) {
       }
     }
   }
-  return { open, regularOpen, opens, closes, closedFor: open ? null : closedFor, nextOpen };
+  // Staff closed early today (notices.js): when, and why.
+  const early = hours && hours.earlyClose && hours.earlyClose.date === p.date && !closedFor
+    ? { time: hours.earlyClose.time, reason: hours.earlyClose.reason || null }
+    : null;
+  return { open, regularOpen, opens, closes, closesEarly: early, closedFor: open ? null : (early && p.minutes >= toMinutes(early.time) ? "Closed early today" : closedFor), nextOpen };
 }
 
 /**
@@ -132,7 +142,7 @@ function openStatus(hours, ms = Date.now()) {
  */
 function closedAtToday(hours, ms = Date.now()) {
   const p = localParts(ms);
-  const close = toMinutes(closesOn(hours, p.weekday), DEFAULT_CLOSES);
+  const close = toMinutes(closesOn(hours, p), DEFAULT_CLOSES);
   if (closedDayReason(p) || p.minutes < close) return null;
   return ms - (p.minutes - close) * 60 * 1000 - (ms % 60000);
 }
@@ -159,7 +169,7 @@ function releaseDue(hours, ms = Date.now()) {
   if (status.regularOpen) return false;
   const p = localParts(ms);
   if (closedDayReason(p)) return true;
-  const close = toMinutes(closesOn(hours, p.weekday), DEFAULT_CLOSES);
+  const close = toMinutes(closesOn(hours, p), DEFAULT_CLOSES);
   return !(p.minutes >= close && p.minutes < close + closingGraceMinutes());
 }
 
@@ -178,7 +188,7 @@ function releasedAtToday(hours, ms = Date.now()) {
 function closingSoon(hours, ms = Date.now()) {
   if (!openStatus(hours, ms).regularOpen) return null;
   const p = localParts(ms);
-  const close = toMinutes(closesOn(hours, p.weekday), DEFAULT_CLOSES);
+  const close = toMinutes(closesOn(hours, p), DEFAULT_CLOSES);
   return { minutes: close - p.minutes, closes: hhmm(close), releasedAt: hhmm(close + closingGraceMinutes()), date: p.date };
 }
 

@@ -75,6 +75,8 @@ history on cron-job.org first: failed pings mean the server was asleep.
 - **Reminders** go out 10 and 5 minutes before a hold ends. Ignore them and the
   seat frees itself when the hold ends (the server checks every minute).
 - **Stepping away** holds the seat for 1 hour 15 minutes.
+- **Closing early:** staff can close early for one day from the staff page
+  (see below); everything here then follows the earlier time.
 - **Closing:** 10 minutes before closing, everyone holding a seat gets a
   notification. Check-ins stop at closing time, and every held seat is released
   5 minutes later (`CLOSING_GRACE_MINUTES`).
@@ -95,6 +97,17 @@ Timings live in `src/config.js`.
 `https://navispace-1.onrender.com/staff.html`, behind `STAFF_PASSWORD`
 (sign-in lasts 12 hours, 10 wrong guesses lock it for 15 minutes):
 
+- **Tell everyone:**
+  - **Announcement:** one line (up to 200 characters) shown at the top of
+    every library page, until the end of today, for 3 days or for a week.
+    Tick the box to also send it as a notification to everyone holding a seat.
+    **Take it down** removes it at once.
+  - **Close early today:** pick a time ("Now", or every 15 minutes until the
+    usual close) and an optional reason. Check-ins stop then, everyone with a
+    seat is told (now, if ticked, and 10 minutes before), held seats are
+    released 5 minutes after, and the pages and home screen show the new time.
+    **Undo** goes back to the usual time. It's for today only: tomorrow is
+    normal. For a whole closed day, use `CLOSED_DAYS` instead.
 - **Seats in use:** who holds which seat and until when, with **Free this seat**
   for someone who left without checking out.
 - **Lost & found:** every item, reported conversations first, then items at the
@@ -176,3 +189,5 @@ In Render → Logs:
 - `[sweep] engineering reclaimed: …`: seats freed (hold ran out, or closing time).
 - `[reminders] engineering sent: …`: reminders and closing notices that went out.
 - `[waitlist] engineering told N waiting`: people told a seat freed up.
+- `[notices] load failed`: the announcement and early close couldn't be read
+  from Upstash at start-up (they reload every 5 minutes).

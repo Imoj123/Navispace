@@ -25,6 +25,7 @@ const usage = require("./usage");
 const { mountStaff } = require("./staff");
 const { forgetDevice } = require("./forget");
 const waitlist = require("./waitlist");
+const notices = require("./notices");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -69,11 +70,9 @@ function activeLibrarySeatGroups() {
   }));
 }
 
-/** A library's opening hours from its plan (defaults in hours.js). */
-function libraryHours(libraryId) {
-  const layout = getLayout(libraryId);
-  return (layout && layout.hours) || null;
-}
+// A library's opening hours: its plan's, with today's early close if staff
+// set one (notices.js).
+const { libraryHours } = notices;
 
 /** Minimal Cookie header parser — the one cookie we read doesn't justify a dependency. */
 function readCookie(req, name) {
@@ -284,6 +283,14 @@ function createApp() {
       busiest: learned || (hours && hours.busiest) || null,
       busiestLearned: Boolean(learned),
     });
+  });
+
+  // The front desk's announcement and today's early close, for the banner
+  // at the top of the library's pages (see notices.js).
+  app.get("/api/library/:libId/notices", (req, res) => {
+    const { libId } = req.params;
+    if (!getLibrary(libId)) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    res.set("Cache-Control", "no-cache").json({ ok: true, ...notices.publicNotices(libId) });
   });
 
   // --- Seat state ----------------------------------------------------------
@@ -648,8 +655,11 @@ function start() {
   // rather than at the first reminder.
   require("./push").ensureConfigured();
 
+  // Announcements and early closes, loaded before the loops first read hours.
+  const stopNotices = notices.startNotices(LIBRARIES.map((l) => l.id));
+
   const stopSweep = startSweepLoop(
-    () => Promise.resolve(activeLibrarySeatGroups()),
+    () => notices.noticesReady().then(activeLibrarySeatGroups),
     config.SWEEP_INTERVAL_MS,
     (libraryId, reclaimed) => {
       console.log(`[sweep] ${libraryId} reclaimed: ${reclaimed.join(", ")}`);
@@ -659,7 +669,7 @@ function start() {
   );
 
   const stopReminders = startReminderLoop(
-    () => Promise.resolve(activeLibrarySeatGroups()),
+    () => notices.noticesReady().then(activeLibrarySeatGroups),
     config.REMINDER_CHECK_INTERVAL_MS,
     (libraryId, reminded) => {
       console.log(`[reminders] ${libraryId} sent: ${reminded.join(", ")}`);
@@ -673,6 +683,7 @@ function start() {
   const shutdown = () => {
     stopSweep();
     stopReminders();
+    stopNotices();
     server.close(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);
