@@ -235,9 +235,11 @@
             width: 100%;
             height: 100%;
             overflow: visible;
-            /* Its own layer on the tilted plate: without it Firefox paints the
-               drawing flat at the top of the page, over the headline. */
-            transform: translateZ(0);
+            /* Its own layer on the tilted plate (without one Firefox paints the
+               drawing flat at the top of the page, over the headline), set a
+               pixel below the floor: at z=0 it shared a plane with the foot of
+               every seat and wall, and Safari on iPhone flickered sorting them. */
+            transform: translateZ(-1px);
         }
 
         .plate .floor-fill {
