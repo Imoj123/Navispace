@@ -236,6 +236,53 @@
             border-color: rgba(227, 140, 112, 0.6);
         }
 
+        /* Phones on their side: everything must fit in about 320-410px of
+           height, or End session ends up off the screen. A smaller clock,
+           scenes and buttons side by side, and scrolling as a last resort. */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .ui {
+                overflow-y: auto;
+                padding-top: max(10px, env(safe-area-inset-top, 0px));
+                padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+            }
+
+            .center {
+                gap: 6px;
+            }
+
+            .clock {
+                font-size: clamp(44px, 17vh, 84px);
+            }
+
+            .sub {
+                font-size: 15px;
+            }
+
+            .modes {
+                margin-top: 2px;
+            }
+
+            .modes button {
+                padding: 8px 12px;
+            }
+
+            .bottom {
+                grid-template-columns: auto auto;
+                align-items: center;
+                justify-content: center;
+                column-gap: 28px;
+            }
+
+            .scene-btn .sw {
+                width: 34px;
+                height: 34px;
+            }
+
+            .ctl {
+                padding: 10px 12px;
+            }
+        }
+
         [hidden] {
             display: none !important;
         }
@@ -858,7 +905,7 @@
             [1, (m, n) => [`Settle in${n}. Phone face down, one thing at a time.`, `Deep breath${n}. Let's begin.`]],
             [15, (m, n) => lateNight()
                 ? [`Late one${n}? Make these minutes count.`, `Only ${m} min. The night is young${n}. Lock in.`]
-                : [`Only ${m} min? Lock in${n}.`, `${m} minutes. Warm-up's over${n}. Lock in.`, `Just getting started${n}. Leave the phone alone.`]],
+                : [`Only ${m} min? Lock in${n}.`, `${m} minute${m === 1 ? "" : "s"}. Warm-up's over${n}. Lock in.`, `Just getting started${n}. Leave the phone alone.`]],
             [30, (m, n) => [`${m} minutes in. You're finding your rhythm${n}.`, `Past the hardest part${n}. Keep going.`]],
             [45, (m, n) => [`Half an hour deep${n}. This is where it sticks.`, `${m} minutes of real focus. Most people never get this far.`]],
             [60, (m, n) => [`Almost an hour${n}. Push through.`, `${m} minutes. Hour one is right there${n}.`]],
@@ -1064,6 +1111,7 @@
             $("doneTitle").textContent = end.title;
             $("doneText").textContent = end.text;
             $("done").hidden = false;
+            coverControls();
         });
 
         // ===== Idle: fade the controls ============================================
@@ -1084,6 +1132,15 @@
             $("gateText").textContent = text;
             $("gateLink").href = libraryUrl("/library.html", libraryId);
             $("gate").hidden = false;
+            coverControls();
+            $("gateLink").focus();
+        }
+
+        // While a full-screen message covers the page (check in first, or the
+        // session's end), the controls under it are out of reach: no Tab into
+        // a Step away or End session nobody can see.
+        function coverControls() {
+            document.querySelector(".ui").inert = true;
         }
 
         async function boot() {
@@ -1097,6 +1154,13 @@
             wake();
 
             if (!seatId) {
+                // Opened without a seat (a bookmark, the app): use the one this device holds.
+                const token = (() => { try { return localStorage.getItem("navispace_token"); } catch { return null; } })();
+                const held = token ? await getHeldSeat(token).catch(() => null) : null;
+                if (held && held.seatId) {
+                    location.replace(`/focus.html?lib=${encodeURIComponent(held.libraryId)}&seat=${encodeURIComponent(held.seatId)}`);
+                    return;
+                }
                 showGate("Check in first.", "Focus sessions start from the seat you're checked into. Scan the code on your desk, check in, then come back.");
                 return;
             }

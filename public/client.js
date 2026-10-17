@@ -423,17 +423,25 @@ function showWelcome() {
       <h2 id="welcomeTitle">What should we call you?</h2>
       <p class="welcome-text">Your nickname goes on the study board and on any seat you check into. No sign-up, no email. <a href="/privacy.html">What's kept</a>.</p>
       <label class="welcome-label" for="welcomeName">Nickname</label>
-      <input id="welcomeName" type="text" maxlength="24" autocomplete="nickname" autocapitalize="words" placeholder="e.g. Lerato" required />
-      <p class="welcome-error" id="welcomeError" hidden>Pick a name with at least two letters.</p>
+      <input id="welcomeName" type="text" maxlength="24" autocomplete="nickname" autocapitalize="words" placeholder="e.g. Lerato" required aria-describedby="welcomeError" />
+      <p class="welcome-error" id="welcomeError" role="alert" hidden>Pick a name with at least two letters.</p>
       <button class="btn btn-primary" type="submit">Continue</button>
       <button class="welcome-later" type="button">Not now</button>
     </form>`;
   document.body.appendChild(wrap);
   document.documentElement.classList.add("welcome-open");
   const input = wrap.querySelector("input");
+  // Focus in, Tab kept inside, Escape = Not now, focus back afterwards.
+  const release = holdDialog(wrap, { initial: "#welcomeName", onEscape: () => wrap.querySelector(".welcome-later").click() });
   const close = () => {
     wrap.classList.add("leaving");
     document.documentElement.classList.remove("welcome-open");
+    release();
+    // Nothing was focused before it opened: start the page from its content.
+    if (!document.activeElement || document.activeElement === document.body) {
+      const main = document.querySelector("main");
+      if (main) { if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1"); main.focus({ preventScroll: true }); }
+    }
     setTimeout(() => wrap.remove(), 250);
   };
   wrap.querySelector("form").addEventListener("submit", (e) => {
@@ -452,10 +460,6 @@ function showWelcome() {
     try { sessionStorage.setItem("navispace_welcome_later", "1"); } catch { }
     close();
   });
-  wrap.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") wrap.querySelector(".welcome-later").click();
-  });
-  setTimeout(() => input.focus(), 350);
 }
 
 (function welcomeNewVisitor() {
@@ -948,42 +952,52 @@ function mountWaitCard(box, libraryId) {
     return (ctx.seats || []).filter((s) => s.state === "AVAILABLE").length;
   }
 
+  // Redrawn only when what it says changes (the page refreshes every few
+  // seconds): rebuilding it each time threw away keyboard focus and an open
+  // menu, and made screen readers repeat it.
+  let lastHtml = null;
   function paint() {
     if (!ctx) return;
     const names = ctx.zoneNames || {};
-    box.innerHTML = "";
+    let html;
     if (status && status.waiting) {
-      box.hidden = false;
-      box.dataset.state = "waiting";
       const what = status.area && names[status.area] ? `a seat in ${names[status.area]}` : "any seat";
-      box.innerHTML = `
+      html = `
         <p class="wait-title"><span class="wait-pulse" aria-hidden="true"></span>Watching for ${esc(what)}</p>
         <p class="wait-sub">We'll notify this device the moment one frees up${status.until ? `, until ${esc(hhmm(status.until))}` : ""}.${status.ahead ? ` ${status.ahead} ${status.ahead === 1 ? "person is" : "people are"} ahead of you; the first to scan gets the seat.` : ""}</p>
         <div class="wait-row"><button class="btn" type="button" data-wait="leave">Stop watching</button></div>`;
     } else {
       const free = freeCount();
-      if (!ctx.open || ctx.holding || !(ctx.seats || []).length || free > NEARLY_FULL) { box.hidden = true; return; }
-      box.hidden = false;
-      box.dataset.state = "idle";
+      if (!ctx.open || ctx.holding || !(ctx.seats || []).length || free > NEARLY_FULL) {
+        box.hidden = true;
+        lastHtml = null;
+        return;
+      }
       // Any seat, or a favourite area.
       const areas = [...new Set((ctx.seats || []).map((s) => (/^[A-Za-z]+/.exec(String(s.id)) || [""])[0].toUpperCase()))].filter((a) => names[a]);
       const options = [["", "Any seat"]].concat(areas.map((a) => [a, names[a]]));
-      box.innerHTML = `
-        <p class="wait-title">${free === 0 ? "Every seat is taken." : `Only ${free} ${free === 1 ? "seat" : "seats"} left.`}</p>
+      html = `
+        <p class="wait-title">${free === 0 ? "Get the next free seat." : `Only ${free} ${free === 1 ? "seat" : "seats"} left.`}</p>
         <p class="wait-sub">Get a notification the moment a seat frees up, instead of walking around looking. Pick an area if you have a favourite.</p>
         <div class="wait-row">
           <label class="wait-area"><select data-wait="area" aria-label="Which seats">${options.map(([v, label]) => `<option value="${esc(v)}"${v === (chosen || "") ? " selected" : ""}>${esc(label)}</option>`).join("")}</select></label>
           <button class="btn btn-primary" type="button" data-wait="join">Notify me</button>
         </div>`;
     }
-    if (message) {
-      const p = document.createElement("p");
-      p.className = "wait-msg";
-      p.setAttribute("role", "status");
-      p.innerHTML = message;
-      box.appendChild(p);
-    }
+    if (message) html += `<p class="wait-msg" role="status">${message}</p>`;
+    const key = html + "|" + busy;
+    box.hidden = false;
+    box.dataset.state = status && status.waiting ? "waiting" : "idle";
+    if (key === lastHtml) return;
+    lastHtml = key;
+    // Keep keyboard focus on the same control across a redraw.
+    const focused = document.activeElement && box.contains(document.activeElement) && document.activeElement.dataset.wait;
+    box.innerHTML = html;
     for (const b of box.querySelectorAll("button")) b.disabled = busy;
+    if (focused) {
+      const again = box.querySelector(`[data-wait="${focused}"]`);
+      if (again && !again.disabled) again.focus({ preventScroll: true });
+    }
   }
 
   async function refreshStatus(force) {
@@ -1084,7 +1098,14 @@ function mountWaitCard(box, libraryId) {
     if (data.earlyClose) {
       const id = `close:${data.earlyClose.time}:${new Date().toDateString()}`;
       if (!gone.includes(id)) {
-        items.push({ id, kind: "close", html: `<b>Closing early today at ${esc(data.earlyClose.time)}</b>${data.earlyClose.reason ? ` · ${esc(data.earlyClose.reason)}` : ""}. Seats are released a few minutes after.` });
+        // The library's own clock, whatever time zone the phone is in.
+        const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+          .formatToParts(new Date()).map((x) => [x.type, x.value]));
+        const passed = `${p.hour}:${p.minute}` >= data.earlyClose.time;
+        const why = data.earlyClose.reason ? ` · ${esc(data.earlyClose.reason)}` : "";
+        items.push({ id, kind: "close", html: passed
+          ? `<b>Closed early today at ${esc(data.earlyClose.time)}</b>${why}.`
+          : `<b>Closing early today at ${esc(data.earlyClose.time)}</b>${why}. Seats are released a few minutes after.` });
       }
     }
     if (data.notice) {
@@ -1092,16 +1113,42 @@ function mountWaitCard(box, libraryId) {
       if (!gone.includes(id)) items.push({ id, kind: "notice", html: `<b>From the front desk:</b> ${esc(data.notice.text)}` });
     }
     box.innerHTML = items.map((it) => `
-      <p class="lib-notice" data-kind="${it.kind}"><span class="lib-notice-dot" aria-hidden="true"></span><span class="lib-notice-text">${it.html}</span><button type="button" class="lib-notice-x" data-id="${esc(it.id)}" aria-label="Dismiss">×</button></p>`).join("");
+      <p class="lib-notice" data-kind="${it.kind}"><span class="lib-notice-dot" aria-hidden="true"></span><span class="lib-notice-text clamped">${it.html}</span><button type="button" class="lib-notice-x" data-id="${esc(it.id)}" aria-label="${it.kind === "close" ? "Hide the early closing notice" : "Hide the announcement"}">×</button></p>`).join("");
     box.hidden = !items.length;
+    // A long one cut to two lines (phones): offer the rest.
+    for (const t of box.querySelectorAll(".lib-notice-text")) {
+      if (t.scrollHeight > t.clientHeight + 2) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "lib-notice-more";
+        more.textContent = "More";
+        more.setAttribute("aria-expanded", "false");
+        t.after(more);
+      }
+    }
   }
 
   box.addEventListener("click", (e) => {
+    const more = e.target.closest(".lib-notice-more");
+    if (more) {
+      more.previousElementSibling.classList.remove("clamped");
+      more.remove();
+      return;
+    }
     const x = e.target.closest(".lib-notice-x");
     if (!x) return;
     try { localStorage.setItem(DISMISSED, JSON.stringify(dismissed().concat(x.dataset.id).slice(-20))); } catch { }
+    const next = x.closest(".lib-notice").nextElementSibling;
     x.closest(".lib-notice").remove();
     box.hidden = !box.querySelector(".lib-notice");
+    // Keep keyboard focus somewhere sensible: the next banner's ×, or the page.
+    const target = next && next.querySelector(".lib-notice-x");
+    if (target) target.focus();
+    else {
+      const main = document.querySelector("main") || document.body;
+      if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+      main.focus({ preventScroll: true });
+    }
   });
 
   box.hidden = true;
@@ -1109,3 +1156,46 @@ function mountWaitCard(box, libraryId) {
   setInterval(() => { if (!document.hidden) refresh(); }, 5 * 60 * 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 })();
+
+/* --- Dialogs ------------------------------------------------------------- */
+
+/**
+ * Makes an overlay behave as a proper dialog while it's open: announced as
+ * a dialog, focus moves into it, Tab stays inside, Escape does onEscape, and
+ * when it closes focus goes back to whatever opened it.
+ * Returns release(), to call when it closes.
+ */
+function holdDialog(el, { label, initial, onEscape } = {}) {
+  const opener = document.activeElement;
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  if (label) el.setAttribute("aria-label", label);
+  const focusables = () => [...el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter((x) => !x.disabled && !x.closest("[hidden]") && x.getClientRects().length);
+  const onKey = (e) => {
+    if (e.key === "Escape" && onEscape) {
+      e.preventDefault();
+      onEscape();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const f = focusables();
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener("keydown", onKey, true);
+  setTimeout(() => {
+    const target = (initial && el.querySelector(initial)) || focusables()[0];
+    if (target) target.focus();
+  }, 0);
+  let released = false;
+  return function release({ returnFocus = true } = {}) {
+    if (released) return;
+    released = true;
+    document.removeEventListener("keydown", onKey, true);
+    if (returnFocus && opener && document.contains(opener) && typeof opener.focus === "function") opener.focus({ preventScroll: true });
+  };
+}

@@ -115,6 +115,8 @@
         }
 
         .focus {
+            display: inline-block;
+            padding: 12px 0; /* a fingertip-sized target when it's a link */
             font: 400 12px/1.4 var(--font-mono);
             letter-spacing: 0.06em;
             color: var(--muted);
@@ -170,6 +172,19 @@
         .hours b {
             color: var(--text);
             font-weight: 500;
+        }
+
+        /* Phones: one per line, no divider left dangling at a line's end. */
+        @media (max-width: 560px) {
+            .hours {
+                flex-direction: column;
+            }
+
+            .hours span {
+                border: 0;
+                margin: 0;
+                padding: 0;
+            }
         }
 
         /* --- The 3D floor ----------------------------------------------------- */
@@ -809,7 +824,7 @@
                     <a class="focus" id="focus">Your focus session · <b id="focusTime">starts when you check
                             in</b></a>
                 </div>
-                <div class="wait" id="wait" hidden aria-live="polite"></div>
+                <div class="wait" id="wait" hidden></div>
                 <div class="hours"><span>Busiest <b id="busiest">11:00–14:00</b></span><span id="openNow">Weekdays <b
                             id="closes">08:00–20:00</b></span></div>
             </div>
@@ -1039,7 +1054,13 @@
             const free = seats.filter((s) => s.state === "AVAILABLE").length;
             const starts = seats.map((s) => s.sessionStart).filter(Boolean);
 
-            if (total && free === 0) {
+            if (hoursNow && !hoursNow.open) {
+                // Closed: every seat is "free", but none can be taken until it opens.
+                const h = hoursNow;
+                const when = h.nextOpen === "today" ? `today at ${h.opens}` : h.nextOpen === "tomorrow" ? `tomorrow at ${h.opens}` : `${h.nextOpen} at ${h.opens}`;
+                $("heroLine1").textContent = h.closedFor === "Closed early today" ? "Closed early today." : "The library is closed.";
+                $("heroLine2").innerHTML = `<em>Opens ${esc(when)}.</em>`;
+            } else if (total && free === 0) {
                 $("heroLine1").textContent = "Every seat is taken.";
                 $("heroLine2").innerHTML = "<em>Check back soon.</em>";
             } else {
@@ -1069,6 +1090,7 @@
         // "Tell me when a seat frees up", when the floor or an area is full.
         let waitCard = null;
         let libraryOpen = true;
+        let hoursNow = null; // the last /hours answer: open or closed, and when it next opens
         function paintWait() {
             if (!library || library.status !== "active") return;
             if (!waitCard) waitCard = mountWaitCard($("wait"), library.id);
@@ -1092,6 +1114,9 @@
                 if (h.busiest) $("busiest").textContent = h.busiest;
                 $("busiest").title = h.busiestLearned ? "Learned from how full the library has been" : "";
                 const when = h.nextOpen === "today" ? `today at ${h.opens}` : h.nextOpen === "tomorrow" ? `tomorrow at ${h.opens}` : `${h.nextOpen} at ${h.opens}`;
+                const openChanged = !hoursNow || hoursNow.open !== h.open;
+                hoursNow = h;
+                if (openChanged && seatsById.size) paintNumbers([...seatsById.values()]);
                 if (libraryOpen !== Boolean(h.open)) { libraryOpen = Boolean(h.open); paintWait(); }
                 $("openNow").innerHTML = h.open
                     ? (h.closesEarly ? `Closes early today at <b>${esc(h.closes)}</b>` : `Open until <b>${esc(h.closes)}</b>`)
