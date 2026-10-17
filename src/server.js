@@ -185,6 +185,32 @@ function pageWithVersions(file) {
   return html;
 }
 
+/**
+ * Link previews (WhatsApp, iMessage, Slack...): a page shared as a link
+ * shows the NaviSpace "N" with its title and description. Pages that don't
+ * set their own preview tags get them here, from their <title> and meta
+ * description, so every page previews the same way.
+ */
+function withLinkPreview(html, origin, pagePath) {
+  if (html.includes('property="og:image"')) return html;
+  const attr = (t) => String(t).replace(/&(?!amp;|lt;|gt;|quot;|#)/g, "&amp;").replace(/"/g, "&quot;");
+  const title = (/<title>([^<]*)<\/title>/.exec(html) || [, "NaviSpace"])[1];
+  const description = (/<meta name="description" content="([^"]*)"/.exec(html) || [, "Live seat status, study board, and lost & found for Wits libraries."])[1];
+  const tags = `
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NaviSpace" />
+    <meta property="og:title" content="${attr(title)}" />
+    <meta property="og:description" content="${attr(description)}" />
+    <meta property="og:url" content="${origin}${pagePath}" />
+    <meta property="og:image" content="${origin}/icons/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="NaviSpace" />
+    <meta name="twitter:card" content="summary" />
+`;
+  return html.replace("</head>", `${tags}</head>`);
+}
+
 /** Focus-mode scenes whose clip is deployed (public/media/<key>.mp4). */
 function availableScenes() {
   try {
@@ -266,7 +292,8 @@ function createApp() {
     const file = path.join(PUBLIC_DIR, name);
     if (!fs.existsSync(file)) return next();
     // Canonical links must be absolute; the pages say where, the server says which host.
-    const html = pageWithVersions(file).replace('<link rel="canonical" href="/', `<link rel="canonical" href="${siteOrigin(req)}/`);
+    let html = pageWithVersions(file).replace('<link rel="canonical" href="/', `<link rel="canonical" href="${siteOrigin(req)}/`);
+    html = withLinkPreview(html, siteOrigin(req), req.path);
     res.set("Cache-Control", "no-cache").type("html").send(html);
   });
 
@@ -699,7 +726,7 @@ function createApp() {
   app.use((req, res) => {
     if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false, reason: "not_found" });
     res.status(404).set("Cache-Control", "no-cache").type("html")
-      .send(pageWithVersions(path.join(PUBLIC_DIR, "404.html")));
+      .send(withLinkPreview(pageWithVersions(path.join(PUBLIC_DIR, "404.html")), siteOrigin(req), "/"));
   });
 
   return app;
