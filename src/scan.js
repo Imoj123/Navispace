@@ -3,6 +3,8 @@
 const { store } = require("./store");
 const config = require("./config");
 const { recordSitting } = require("./history");
+const { withLock, seatLock } = require("./lock");
+const { localParts, weekStart } = require("./hours");
 
 /**
  * Seat states, mirroring the AVAILABLE / OCCUPIED / STEPPED_AWAY
@@ -30,13 +32,13 @@ function studentKey(libraryId, token) {
   return `student:${libraryId}:${token}`;
 }
 
-function creditKey(libraryId, token, seatId, dayKey) {
-  return `credit:${libraryId}:${token}:${seatId}:${dayKey}`;
+function creditKey(libraryId, token, dayKey) {
+  return `credit:${libraryId}:${token}:${dayKey}`;
 }
 
-/** Local YYYY-MM-DD, used as the leaderboard's one-credit-per-day unit. */
+/** The library's local YYYY-MM-DD, the study board's one-point-per-day unit. */
 function dayKeyFor(timestampMs) {
-  return new Date(timestampMs).toISOString().slice(0, 10);
+  return localParts(timestampMs).date;
 }
 
 /** How long a check-in (or a "still here") holds the seat. */
@@ -82,16 +84,16 @@ async function saveSeat(seat) {
 }
 
 /**
- * Credits one leaderboard "session day" for this student+seat, capped
- * at one per seat per day (extension against the unbounded-duration
- * gaming vector — see design notes). No-ops silently if already
+ * Credits one leaderboard "session day" for this student, capped at one
+ * per day however many seats they use (moving desks, or hopping between
+ * them to farm points, still earns one). No-ops silently if already
  * credited today. Leaderboards are per-library — a library's board is
  * its own community, and it keeps the credit key naturally scoped
  * alongside everything else.
  */
 async function creditSessionDay(libraryId, token, nickname, seatId, now = Date.now()) {
   const dKey = dayKeyFor(now);
-  const cKey = creditKey(libraryId, token, seatId, dKey);
+  const cKey = creditKey(libraryId, token, dKey);
 
   const alreadyCredited = await store.get(cKey);
   if (alreadyCredited) return false;
@@ -101,25 +103,32 @@ async function creditSessionDay(libraryId, token, nickname, seatId, now = Date.n
   await store.put(cKey, true, { expirationTtl: 60 * 60 * 24 * 2 });
 
   const sKey = studentKey(libraryId, token);
-  const student = (await store.get(sKey)) ?? {
-    token,
-    nickname,
-    weeklySessionDays: 0,
-    windowStart: now,
-  };
-
-  const windowMs = config.LEADERBOARD_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  if (now - student.windowStart > windowMs) {
+  // The board is a calendar week (Monday to Sunday, library time): it starts
+  // fresh every Monday for everyone at once.
+  const week = weekStart(now);
+  const student = (await store.get(sKey)) ?? { token, nickname, weeklySessionDays: 0, week };
+  if (studentWeek(student) !== week) {
     student.weeklySessionDays = 0;
-    student.windowStart = now;
+    student.week = week;
   }
 
   student.weeklySessionDays += 1;
+  student.week = week;
   student.nickname = nickname; // keep nickname fresh in case it changed
-  // Gone two weeks after the last study day (the privacy page promises a
-  // rolling week; the extra week covers the window that's still counting).
+  // Gone two weeks after the last study day (the privacy page says so).
   await store.put(sKey, student, { expirationTtl: 2 * config.LEADERBOARD_WINDOW_DAYS * 24 * 60 * 60 });
   return true;
+}
+
+/** The week a study-board record counts for (records from before weeks were stored: their first day's week). */
+function studentWeek(student) {
+  return student.week || (student.windowStart ? weekStart(student.windowStart) : null);
+}
+
+/** Whether a held seat's hold has run out (the sweep frees it within a minute). */
+function holdExpired(seat, now = Date.now()) {
+  const expiry = seat.state === SeatState.OCCUPIED ? seat.checkInExpiry : seat.state === SeatState.STEPPED_AWAY ? seat.stepAwayExpiry : null;
+  return Boolean(expiry && now > expiry);
 }
 
 /**
@@ -138,7 +147,9 @@ async function findHeldSeat(libraryId, token, seatIds, excludeSeatId = null) {
     seats.find(
       (seat) =>
         seat.holderToken === token &&
-        (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY)
+        (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY) &&
+        // A hold that has run out doesn't count, even before the sweep frees it.
+        !holdExpired(seat)
     ) || null
   );
 }
@@ -159,11 +170,24 @@ async function findHeldSeat(libraryId, token, seatIds, excludeSeatId = null) {
  * no-ops that report ok:false with a reason, rather than throwing —
  * a stale client (e.g. two tabs) shouldn't crash the request.
  */
-async function handleScan(libraryId, seatId, action, identity, now = Date.now(), allSeatIds = null) {
+function handleScan(libraryId, seatId, action, identity, now = Date.now(), allSeatIds = null) {
+  // One change to a library's seats at a time (see lock.js): otherwise two
+  // check-ins a moment apart could both take one seat, or one person three.
+  return withLock(seatLock(libraryId), () => applyScan(libraryId, seatId, action, identity, now, allSeatIds));
+}
+
+async function applyScan(libraryId, seatId, action, identity, now, allSeatIds) {
   const seat = await getSeat(libraryId, seatId);
 
   switch (action) {
     case "checkIn": {
+      // Its hold ran out a moment ago and the sweep hasn't got to it yet:
+      // it's free, so free it now rather than turn the next person away.
+      if (seat.state !== SeatState.AVAILABLE && holdExpired(seat, now)) {
+        const expiry = seat.state === SeatState.OCCUPIED ? seat.checkInExpiry : seat.stepAwayExpiry;
+        await recordSitting(libraryId, seat, expiry);
+        resetToAvailable(seat);
+      }
       if (seat.state !== SeatState.AVAILABLE) {
         return { ok: false, seat, reason: "seat_not_available" };
       }
@@ -279,6 +303,7 @@ function resetToAvailable(seat) {
   seat.sessionStart = null;
   seat.awayMs = 0;
   seat.awayStart = null;
+  seat.closingNoticeFor = null;
 }
 
 module.exports = {
@@ -294,4 +319,6 @@ module.exports = {
   handleScan,
   findHeldSeat,
   resetToAvailable,
+  holdExpired,
+  studentWeek,
 };

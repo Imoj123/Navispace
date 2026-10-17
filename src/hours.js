@@ -192,4 +192,21 @@ function closingSoon(hours, ms = Date.now()) {
   return { minutes: close - p.minutes, closes: hhmm(close), releasedAt: hhmm(close + closingGraceMinutes()), date: p.date };
 }
 
-module.exports = { TIME_ZONE, localParts, toMinutes, publicHolidays, openStatus, closedAtToday, closingGraceMinutes, releaseDue, releasedAtToday, closingSoon };
+/** The library-local date (YYYY-MM-DD) of the Monday starting ms's week. */
+function weekStart(ms) {
+  const p = localParts(ms);
+  return localParts(ms - p.weekday * 24 * 60 * 60 * 1000).date;
+}
+
+/**
+ * When seats were (or will be) released on the library-local day of ms:
+ * that day's closing time plus the grace, in ms. Used to end a sitting
+ * properly when the server slept through closing.
+ */
+function releaseAtOn(hours, ms) {
+  const p = localParts(ms);
+  const close = toMinutes(closesOn(hours, p), DEFAULT_CLOSES);
+  return ms - (ms % 60000) + (close + closingGraceMinutes() - p.minutes) * 60000;
+}
+
+module.exports = { weekStart, releaseAtOn, TIME_ZONE, localParts, toMinutes, publicHolidays, openStatus, closedAtToday, closingGraceMinutes, releaseDue, releasedAtToday, closingSoon };

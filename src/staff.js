@@ -5,7 +5,7 @@ const QRCode = require("qrcode");
 const { store } = require("./store");
 const { getLibrary, isActiveLibrary } = require("./libraries");
 const { getSeatIds, getLayout } = require("./seats");
-const { getSeats, getSeat, saveSeat, resetToAvailable, SeatState } = require("./scan");
+const { getSeats, getSeat, saveSeat, resetToAvailable, SeatState, creditSessionDay } = require("./scan");
 const { recordSitting } = require("./history");
 const { listItems, staffThread, staffRemove } = require("./lostfound");
 const { seatCode, seatCodesRequired } = require("./seatcode");
@@ -14,6 +14,8 @@ const busy = require("./busy");
 const usage = require("./usage");
 const { limit } = require("./ratelimit");
 const waitlist = require("./waitlist");
+const { withLock, seatLock } = require("./lock");
+const { closingNoticeKey } = require("./reminders");
 const notices = require("./notices");
 const push = require("./push");
 
@@ -44,7 +46,9 @@ function sameText(a, b) {
 function readCookie(req, name) {
   for (const part of (req.headers.cookie || "").split(";")) {
     const i = part.indexOf("=");
-    if (i > -1 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+    if (i > -1 && part.slice(0, i).trim() === name) {
+      try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return null; } // a mangled cookie is just "not signed in"
+    }
   }
   return null;
 }
@@ -90,8 +94,12 @@ async function tellHolders(libId, body, { closingDate = null } = {}) {
   for (const seat of seats.filter((x) => x.state !== SeatState.AVAILABLE && x.holderToken)) {
     // Told about closing already: no second notice 10 minutes before (reminders.js).
     if (closingDate) {
-      seat.closingNoticeDate = closingDate;
-      await saveSeat(seat);
+      await withLock(seatLock(libId), async () => {
+        const fresh = await getSeat(libId, seat.id);
+        if (fresh.holderToken !== seat.holderToken) return;
+        fresh.closingNoticeFor = closingNoticeKey(closingDate.date, closingDate.time, fresh.sessionStart);
+        await saveSeat(fresh);
+      });
     }
     const r = await push.sendPush(seat.holderToken, {
       title: getLibrary(libId).name,
@@ -110,7 +118,8 @@ function mountStaff(app, { siteOrigin }) {
   mountPoster(app, { siteOrigin });
   app.post("/api/staff/login", limit("staffLogin"), (req, res) => {
     if (!password()) return res.status(503).json({ ok: false, reason: "staff_disabled" });
-    if (!sameText((req.body && req.body.password) || "", password())) {
+    const given = req.body && req.body.password;
+    if (typeof given !== "string" || !sameText(given, password())) {
       return res.status(401).json({ ok: false, reason: "wrong_password" });
     }
     const exp = Date.now() + SESSION_HOURS * 60 * 60 * 1000;
@@ -189,10 +198,13 @@ function mountStaff(app, { siteOrigin }) {
     if (!r.ok) return res.status(400).json(r);
     const e = r.earlyClose;
     const release = hhmmPlus(e.time, closingGraceMinutes());
-    const told = tell
+    // Closing within 10 minutes (or "now"): the usual 10-minute notice may
+    // already have been missed, so everyone holding a seat is told now
+    // whatever the box says, and this counts as that notice.
+    const soon = (closingSoon(notices.libraryHours(libId)) || {}).minutes <= 10;
+    const told = tell || soon
       ? await tellHolders(libId, (seat) => `The library closes early today at ${e.time}${e.reason ? ` (${e.reason})` : ""}. Seat ${seat.id} is released at ${release}.`,
-        // Closing within the 10-minute notice anyway: this is that notice.
-        { closingDate: (closingSoon(notices.libraryHours(libId)) || {}).minutes <= 10 ? e.date : null })
+        { closingDate: soon ? { date: e.date, time: e.time } : null })
       : 0;
     res.json({ ...r, told });
   });
@@ -207,13 +219,20 @@ function mountStaff(app, { siteOrigin }) {
   app.post("/api/staff/seat/:id/free", requireStaff, async (req, res) => {
     const libId = libraryFrom(req);
     if (!libId || !getSeatIds(libId).includes(req.params.id)) return res.status(404).json({ ok: false, reason: "unknown_seat" });
-    const seat = await getSeat(libId, req.params.id);
-    if (seat.state !== SeatState.AVAILABLE) {
-      await recordSitting(libId, seat, Date.now());
+    const freed = await withLock(seatLock(libId), async () => {
+      const seat = await getSeat(libId, req.params.id);
+      if (seat.state === SeatState.AVAILABLE) return false;
+      const now = Date.now();
+      await recordSitting(libId, seat, now);
+      // A real sitting still earns its day (15 minutes or more).
+      if (seat.holderToken && seat.sessionStart && now - seat.sessionStart >= 15 * 60 * 1000) {
+        await creditSessionDay(libId, seat.holderToken, seat.holderNickname, seat.id, seat.sessionStart);
+      }
       resetToAvailable(seat);
       await saveSeat(seat);
-      waitlist.announceFreed(libId, [seat.id]);
-    }
+      return true;
+    });
+    if (freed) waitlist.announceFreed(libId, [req.params.id]);
     res.json({ ok: true });
   });
 
@@ -263,6 +282,8 @@ function mountStaff(app, { siteOrigin }) {
   figcaption span { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
   figcaption small { font-size: 9px; color: #555; }
   @media print { header, .warn { display: none; } .sticker { border-color: #ccc; } }
+  /* On a phone, one sticker per row to look at; print still lays out three to a page. */
+  @media screen and (max-width: 560px) { .sheet { grid-template-columns: 1fr; padding: 0 16px 16px; } header { padding: 16px; } }
 </style></head><body>
 <header><h1>${escapeHtml(lib.name)}: ${stickers.length} seat stickers</h1>
 <button onclick="print()">Print or save as PDF</button></header>${warning}
@@ -332,8 +353,18 @@ function mountPoster(app, { siteOrigin }) {
   .step p { margin: 0; font-size: 13.5px; line-height: 1.45; color: #3a403b; }
   .foot { display: flex; justify-content: space-between; gap: 8mm; margin-top: 9mm; padding-top: 4mm; border-top: 0.3mm solid var(--line); font: 500 10.5px/1.5 "Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   @media print { html { background: none; } .bar { display: none; } .page { margin: 0; box-shadow: none; } }
-  @media screen and (max-width: 820px) { .page { transform: scale(calc(100vw / 220mm)); transform-origin: top left; margin: 0 0 calc(297mm * (100vw / 220mm) - 297mm); } .bar { padding: 12px 16px; } }
+  /* Phones preview the A4 page scaled to fit. The scale comes from a line of
+     script (--fit): dividing a width by a length isn't CSS Firefox understands. */
+  @media screen and (max-width: 820px) { .page { transform: scale(var(--fit, 1)); transform-origin: top left; margin: 0 0 calc(297mm * var(--fit, 1) - 297mm); } .bar { padding: 12px 16px; } }
 </style></head><body>
+<script>
+  function fit() {
+    const page = 210 * 96 / 25.4; // A4 width in CSS pixels
+    document.documentElement.style.setProperty("--fit", Math.min(1, document.documentElement.clientWidth / (page + 40)));
+  }
+  fit();
+  addEventListener("resize", fit);
+</script>
 <div class="bar"><span>Launch poster · A4 · ${escapeHtml(lib.name)}</span><button onclick="print()">Print or save as PDF</button></div>
 <article class="page">
   <div class="top">

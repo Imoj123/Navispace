@@ -149,7 +149,7 @@
 
         .plan-wrap.portrait .plan-card {
             min-width: 0;
-            max-width: 460px;
+            max-width: 520px;
             margin: 0 auto;
             padding: 12px;
         }
@@ -330,8 +330,10 @@
         .plan-table { fill: rgba(236, 230, 214, 0.08); stroke: rgba(236, 230, 214, 0.2); }
         .plan-seat text { font-family: var(--font-mono); font-weight: 500; }
         .plan-seat.state-AVAILABLE rect { fill: var(--free-dim); stroke: var(--free); }
-        .plan-seat.state-OCCUPIED rect { fill: var(--taken-dim); stroke: var(--taken); }
+        .plan-seat.state-OCCUPIED rect { fill: url(#taken-hatch); stroke: var(--taken); }
         .plan-seat.state-STEPPED_AWAY rect { fill: var(--away-dim); stroke: var(--away); }
+        .hatch-bg { fill: var(--taken-dim); }
+        .hatch-line { stroke: rgba(227, 140, 112, 0.35); stroke-width: 2.5; }
         .plan-entrance { fill: var(--brass); }
         .plan-entrance-label { fill: var(--brass); font-family: var(--font-mono); }
         .plan-meta { font-family: var(--font-mono); color: var(--brass); }
@@ -362,7 +364,9 @@
         <a href="/libraries.html" data-change-library>Change library</a>
     </div>
 
-    <main>
+    <!-- Wide from the start (has-plan): widening once the plan arrived made
+         the whole page jump on desktop. -->
+    <main class="has-plan">
         <h1 class="page-title">The floor, <em>live.</em></h1>
         <p class="page-subtitle">Every seat as it is right now. To claim one, scan the code on the desk itself.</p>
         <div class="readout" id="mapReadout" aria-live="polite">
@@ -372,7 +376,7 @@
         </div>
 
         <p class="spot-note" id="spotNote" role="status" hidden></p>
-        <div class="wait" id="wait" hidden aria-live="polite"></div>
+        <div class="wait" id="wait" hidden></div>
 
         <div class="legend">
             <span><span class="signal-dot signal-AVAILABLE"></span>Available</span>
@@ -382,8 +386,9 @@
         </div>
 
         <p class="plan-meta" id="planMeta" hidden></p>
-        <div class="plan-wrap" id="planWrap" hidden>
-            <div class="plan-card"><svg class="plan" id="plan" role="img" aria-label="Floor plan with live seat status"></svg></div>
+        <div class="plan-wrap" id="planWrap" hidden tabindex="0" role="region" aria-label="Floor plan (scrolls sideways on small screens)">
+            <p class="sr-only" id="planSummary"></p>
+            <div class="plan-card"><svg class="plan" id="plan" role="img" aria-label="Floor plan with live seat status" aria-describedby="planSummary"></svg></div>
             <p class="plan-hint">Swipe sideways to see the whole floor →</p>
         </div>
         <div id="map"></div>
@@ -405,7 +410,7 @@
         getLibraries().then((libs) => {
             const lib = libs.find((l) => l.id === libraryId);
             document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
-        });
+        }).catch(() => { });
 
         // --- Floor plan ----------------------------------------------------
 
@@ -440,11 +445,16 @@
         let planSeats = null;
         let planPortrait = null;
         let lastPaint = null;
-        const PORTRAIT_BELOW_PX = 700;
+        // Below this width the plan is turned on its side (long axis down the
+        // page): tablets in portrait included, or their seats shrink to ~12px.
+        const PORTRAIT_BELOW_PX = 1000;
 
         function drawPlan(layout) {
             const svg = document.getElementById("plan");
             svg.innerHTML = "";
+            // Taken seats are hatched as well as coloured, so free and taken
+            // differ by more than colour alone.
+            svg.insertAdjacentHTML("afterbegin", `<defs><pattern id="taken-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="hatch-bg"/><line x1="0" y1="0" x2="0" y2="6" class="hatch-line"/></pattern></defs>`);
             const [vx, vy, vw, vh] = layout.viewBox || [0, 0, 1000, 520];
             const portrait = document.getElementById("planWrap").clientWidth < PORTRAIT_BELOW_PX;
             planPortrait = portrait;
@@ -547,6 +557,13 @@
                 g.setAttribute("class", `plan-seat state-${state}` + (level ? ` staleness-${level}` : ""));
                 title.textContent = `Seat ${id}: ${STATE_WORDS[state] || "not set up"}`;
             }
+            // The drawing is one image to a screen reader: say what's free in words.
+            const free = seats.filter((x) => x.state === "AVAILABLE").map((x) => x.id);
+            const away = seats.filter((x) => x.state === "STEPPED_AWAY").map((x) => x.id);
+            const summary = free.length
+                ? `Free seats: ${free.join(", ")}.`
+                : "No seats are free.";
+            document.getElementById("planSummary").textContent = summary + (away.length ? ` Stepped away, held for someone: ${away.join(", ")}.` : "");
         }
 
         async function render() {
@@ -678,10 +695,13 @@
             const spot = planSeats && planSeats.get(spotSeat);
             if (spot && !spotScrolled) {
                 spotScrolled = true;
-                // Bring it into view inside the sideways-scrolling plan only.
+                // Bring it into view: sideways inside the plan (landscape), and
+                // down the page when the plan is tall (portrait phones).
                 const wrap = document.getElementById("planWrap");
                 const r = spot.g.getBoundingClientRect(), w = wrap.getBoundingClientRect();
                 wrap.scrollLeft += r.left + r.width / 2 - (w.left + w.width / 2);
+                const top = spot.g.getBoundingClientRect().top;
+                if (top > innerHeight - 80) window.scrollBy({ top: top - innerHeight * 0.55, behavior: "smooth" });
             }
         }
 

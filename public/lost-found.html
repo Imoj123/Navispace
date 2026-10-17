@@ -210,7 +210,7 @@
             padding: 10px 13px;
             border: 1px solid var(--line-strong);
             background: var(--panel);
-            font: 400 15px/1.4 var(--font-sans);
+            font: 400 15px/1.4 var(--font-body);
             overflow-wrap: anywhere;
         }
 
@@ -294,7 +294,7 @@
                 <p class="page-subtitle" style="margin-bottom:0;">Found something? Post it here. Missing something?
                     Check below.</p>
             </div>
-            <button class="btn btn-primary" id="reportToggle">+ Report item</button>
+            <button class="btn btn-primary" id="reportToggle" aria-expanded="false" aria-controls="reportForm">+ Report item</button>
         </div>
 
         <form class="lf-form" id="reportForm" style="display:none;">
@@ -310,9 +310,10 @@
 
             <p class="lf-note">Everyone can see the photo, description and place for up to 30 days. <a href="/privacy.html">Privacy</a></p>
             <button type="submit" class="btn btn-primary" style="margin-top:16px;">Post to board</button>
-            <div class="toast" id="reportToast"></div>
+            <div class="toast" id="reportToast" role="status" aria-live="polite"></div>
         </form>
 
+        <p class="toast" id="lfOffline" role="status" hidden>Lost &amp; found will appear once NaviSpace is reachable.</p>
         <div class="lf-grid" id="grid"></div>
         <div class="empty-state" id="empty" style="display:none;">
             <h2>Nothing lost, nothing found.</h2>
@@ -320,11 +321,11 @@
         </div>
     </main>
 
-    <div id="claimModal" class="modal-overlay">
+    <div id="claimModal" class="modal-overlay" aria-labelledby="claimTitle">
         <div class="modal-box">
-            <p>I think this is mine. Say how the finder can tell it's yours (a mark, what's inside). It starts a private
+            <p id="claimTitle">I think this is mine. Say how the finder can tell it's yours (a mark, what's inside). It starts a private
                 conversation with them to arrange the handover.</p>
-            <input type="text" id="claimNote" placeholder="e.g. Has a dent on the bottom-left corner" maxlength="200"
+            <input type="text" id="claimNote" aria-labelledby="claimTitle" placeholder="e.g. Has a dent on the bottom-left corner" maxlength="200"
                 style="width:100%; margin-bottom: 14px;" />
             <button class="btn btn-primary" id="claimSubmit">Send</button>
             <button class="btn" id="claimCancel">Cancel</button>
@@ -343,7 +344,7 @@
                     <button class="thread-close" id="threadClose" type="button" aria-label="Close">×</button>
                 </div>
             </div>
-            <div class="thread-list" id="threadList" aria-live="polite"></div>
+            <div class="thread-list" id="threadList" aria-live="polite" tabindex="0" aria-label="Messages"></div>
             <form class="thread-form" id="threadForm">
                 <p class="thread-tip" id="threadTip">Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.</p>
                 <div class="thread-row">
@@ -373,7 +374,7 @@
             document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
             // Cards drawn before the name arrived say "the library front desk".
             if (libraryName && lastItems.some((i) => i.atDesk)) render();
-        });
+        }).catch(() => { });
 
         function timeAgo(ms) {
             const mins = Math.round((Date.now() - ms) / 60000);
@@ -385,15 +386,37 @@
         }
 
         let lastItems = [];
+        let lastBoardKey = null;
         const BASE_TITLE = document.title;
+        // Drawn again every 20 seconds; if NaviSpace can't be reached, say so
+        // (and keep what's already on screen) rather than fail silently.
         async function render() {
+            try {
+                await drawBoard();
+                document.getElementById("lfOffline").hidden = true;
+            } catch {
+                document.getElementById("lfOffline").hidden = false;
+            }
+        }
+
+        async function drawBoard() {
             const items = await getLostFoundItems(libraryId);
+            if (!Array.isArray(items)) return; // an unknown library or an error: nothing to draw
             lastItems = items;
             // Unread messages show in the tab title too, for a tab left open on a computer.
             const unread = items.filter((i) => i.claim && roleFor(i) && hasUnread(i)).length;
             document.title = (unread ? `(${unread}) ` : "") + BASE_TITLE;
             const grid = document.getElementById("grid");
             const empty = document.getElementById("empty");
+            // Redrawn only when something on it changed (it refreshes every 20
+            // seconds): rebuilding regardless threw away keyboard focus.
+            const key = JSON.stringify(items.map((i) => [i, roleFor(i), hasUnread(i)])) + "|" + libraryName;
+            if (key === lastBoardKey) return;
+            lastBoardKey = key;
+            // Remember the focused button (by item and position) to put focus back.
+            const was = document.activeElement && grid.contains(document.activeElement) && document.activeElement.closest(".lf-card");
+            const wasIndex = was ? [...was.querySelectorAll("button")].indexOf(document.activeElement) : -1;
+            const wasItem = was && was.dataset.item;
             grid.innerHTML = "";
 
             if (!items.length) {
@@ -405,6 +428,14 @@
             for (const item of items) {
                 grid.appendChild(renderCard(item));
             }
+            if (wasItem) focusCardButton(wasItem, wasIndex);
+        }
+
+        function focusCardButton(itemId, index = 0) {
+            const card = [...document.querySelectorAll(".lf-card")].find((c) => c.dataset.item === itemId);
+            const buttons = card ? card.querySelectorAll("button") : [];
+            const target = buttons[Math.max(0, Math.min(index, buttons.length - 1))];
+            if (target) target.focus({ preventScroll: true });
         }
 
         // Which side of a claim this device is on, if any.
@@ -427,6 +458,7 @@
             const role = roleFor(item);
             const card = document.createElement("div");
             card.className = "lf-card" + (item.status === "claimed" && !role ? " is-claimed" : "");
+            card.dataset.item = item.id;
 
             const img = document.createElement("img");
             img.src = item.photoDataUrl;
@@ -468,7 +500,7 @@
             // The two people on a claim talk in its private thread.
             if (item.claim && role) {
                 const b = button(role === "finder" ? `Message ${item.claim.claimantNickname}` : "Message the finder", "btn-primary lf-thread-btn", () => openThread(item));
-                if (hasUnread(item)) b.insertAdjacentHTML("beforeend", '<span class="unread" aria-label="New messages"></span>');
+                if (hasUnread(item)) b.insertAdjacentHTML("beforeend", '<span class="unread"><span class="sr-only"> (new messages)</span></span>');
                 actions.appendChild(b);
             }
             if (role === "finder") {
@@ -491,19 +523,25 @@
             return card;
         }
 
+        let releaseClaim = null;
         function openClaimModal(itemId) {
             claimTargetId = itemId;
             document.getElementById("claimNote").value = "";
             document.getElementById("claimModal").style.display = "flex";
+            releaseClaim = holdDialog(document.getElementById("claimModal"), { initial: "#claimNote", onEscape: closeClaimModal });
         }
 
-        document.getElementById("claimCancel").onclick = () => {
+        function closeClaimModal({ returnFocus = true } = {}) {
             document.getElementById("claimModal").style.display = "none";
-        };
+            if (releaseClaim) releaseClaim({ returnFocus });
+            releaseClaim = null;
+        }
+
+        document.getElementById("claimCancel").onclick = () => closeClaimModal();
 
         document.getElementById("claimSubmit").onclick = async () => {
             const note = document.getElementById("claimNote").value;
-            document.getElementById("claimModal").style.display = "none";
+            closeClaimModal({ returnFocus: false });
             const result = await claimLostFoundItem(libraryId, claimTargetId, { identity, note });
             if (!result.ok) {
                 alert(result.reason === "slow_down" ? "You've claimed a lot of items. Try again later." : "That item was just claimed by someone else.");
@@ -540,6 +578,8 @@
             document.getElementById("threadList").innerHTML = '<p class="thread-empty">Loading…</p>';
             thread.hidden = false;
             document.documentElement.style.overflow = "hidden";
+            if (releaseThread) releaseThread({ returnFocus: false });
+            releaseThread = holdDialog(thread, { initial: "#threadInput", onEscape: closeThread });
             loadThread();
             clearInterval(threadTimer);
             threadTimer = setInterval(() => { if (!document.hidden) loadThread(); }, 5000);
@@ -550,10 +590,15 @@
             thread.hidden = true;
             document.documentElement.style.overflow = "";
             clearInterval(threadTimer);
+            const closedId = threadItem && threadItem.id;
             threadItem = null;
+            if (releaseThread) releaseThread({ returnFocus: false });
+            releaseThread = null;
             if (new URLSearchParams(location.search).has("thread")) history.replaceState(null, "", libraryUrl("/lost-found.html", libraryId));
-            render();
+            // Back to the card it was opened from (the board may redraw first).
+            render().then(() => { if (closedId) focusCardButton(closedId, 0); });
         }
+        let releaseThread = null;
 
         async function loadThread() {
             if (!threadItem) return;
@@ -570,6 +615,14 @@
             document.getElementById("threadWho").textContent = t.role === "finder" ? `With ${other}, who claimed it` : `With ${other}, who found it`;
             if (t.messages.length === threadCount) return;
             threadCount = t.messages.length;
+            // A full conversation (the server keeps 60 messages) can't take more:
+            // say so before anyone types, rather than after they press Send.
+            const full = t.messages.length >= 60;
+            document.getElementById("threadInput").disabled = full;
+            document.getElementById("threadSend").disabled = full;
+            document.getElementById("threadTip").textContent = full
+                ? "This conversation is full. Meet at the front desk to hand it over."
+                : "Only the two of you can see this. Text only, links are blocked. Meet somewhere public, like the front desk.";
             const list = document.getElementById("threadList");
             list.innerHTML = "";
             if (!t.messages.length) {
@@ -653,7 +706,7 @@
 
         document.getElementById("threadClose").onclick = closeThread;
         thread.addEventListener("click", (e) => { if (e.target === thread) closeThread(); });
-        document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !thread.hidden) closeThread(); });
+        // (Escape closes the conversation: see holdDialog in openThread.)
 
         document.getElementById("threadForm").onsubmit = async (e) => {
             e.preventDefault();
@@ -685,6 +738,9 @@
         const reportForm = document.getElementById("reportForm");
         document.getElementById("reportToggle").onclick = () => {
             reportForm.style.display = reportForm.style.display === "none" ? "block" : "none";
+            const opened = reportForm.style.display !== "none";
+            document.getElementById("reportToggle").setAttribute("aria-expanded", String(opened));
+            if (opened) reportForm.querySelector("input, button").focus();
         };
 
         let pendingPhoto = null;
@@ -737,6 +793,7 @@
                 document.getElementById("lfPreview").style.display = "none";
                 pendingPhoto = null;
                 reportForm.style.display = "none";
+                document.getElementById("reportToggle").setAttribute("aria-expanded", "false");
                 toast.textContent = "";
                 render();
             } else if (result.reason === "slow_down") {

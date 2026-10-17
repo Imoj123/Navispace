@@ -4,6 +4,7 @@ const { store } = require("./store");
 const { getSeat, saveSeat, resetToAvailable } = require("./scan");
 const { recordSitting } = require("./history");
 const config = require("./config");
+const { withLock, seatLock } = require("./lock");
 
 function reportKey(libraryId, seatId) {
     return `reports:${libraryId}:${seatId}`;
@@ -22,22 +23,37 @@ function reportKey(libraryId, seatId) {
  * Returns { corrected, reportCount, threshold } so the client can show
  * "2 of 3 reports needed" type feedback.
  */
-async function reportSeat(libraryId, seatId, reporterToken, now = Date.now()) {
+function reportSeat(libraryId, seatId, reporterToken, now = Date.now()) {
+    // Same turn-taking as check-ins (lock.js): reports arriving together
+    // all count, and a correction can't cross a check-in.
+    return withLock(seatLock(libraryId), () => applyReport(libraryId, seatId, reporterToken, now));
+}
+
+async function applyReport(libraryId, seatId, reporterToken, now) {
     const key = reportKey(libraryId, seatId);
     const existing = (await store.get(key)) || [];
+    const seat = await getSeat(libraryId, seatId);
+    // Reports are about whoever holds the seat now: ones made before this
+    // sitting began (e.g. while it was empty) don't count against it.
+    const since = seat.sessionStart || 0;
 
-    // Drop expired reports and any earlier report from this same
-    // device, then add the new one — one active report per device.
+    // Drop expired reports, ones from before this sitting and any earlier
+    // report from this same device, then add the new one.
     const active = existing
-        .filter((r) => now - r.time < config.REPORT_WINDOW_MS)
+        .filter((r) => now - r.time < config.REPORT_WINDOW_MS && r.time >= since)
         .filter((r) => r.token !== reporterToken);
     active.push({ token: reporterToken, time: now });
 
     const threshold = config.REPORT_THRESHOLD;
     let corrected = false;
 
+    if (seat.state === "AVAILABLE") {
+        // Already free: nothing to correct, and nothing to save up.
+        await store.delete(key);
+        return { corrected: false, reportCount: 0, threshold };
+    }
+
     if (active.length >= threshold) {
-        const seat = await getSeat(libraryId, seatId);
         // Reported empty: count the sitting up to its last confirmed moment.
         await recordSitting(libraryId, seat, seat.lastConfirmTime || now);
         resetToAvailable(seat);
