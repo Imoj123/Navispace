@@ -1,9 +1,13 @@
 "use strict";
 
 const { store } = require("./store");
-const { SeatState, seatKey, resetToAvailable, saveSeat } = require("./scan");
+const { SeatState, seatKey, resetToAvailable, saveSeat, creditSessionDay } = require("./scan");
 const { recordSitting } = require("./history");
-const { releaseDue, releasedAtToday } = require("./hours");
+const { releaseDue, releasedAtToday, releaseAtOn } = require("./hours");
+
+// How long a sitting must last to earn its day when it ends on its own.
+const CREDIT_MIN_MS = 15 * 60 * 1000;
+const { withLock, seatLock } = require("./lock");
 
 /**
  * Reclaims seats whose expiry has passed without a confirming scan —
@@ -21,7 +25,13 @@ const { releaseDue, releasedAtToday } = require("./hours");
  * seat after the sweep, which is how busy.js learns the busiest hours
  * without a second read.
  */
-async function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), { hours, observe } = {}) {
+function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), opts = {}) {
+  // Takes its turn with check-ins and the rest (see lock.js), so a seat
+  // confirmed a moment ago isn't freed from a stale read.
+  return withLock(seatLock(libraryId), () => sweepNow(libraryId, seatIds, now, opts));
+}
+
+async function sweepNow(libraryId, seatIds, now, { hours, observe } = {}) {
   const reclaimed = [];
   // A few minutes after the library closes (see closingGraceMinutes), every
   // seat is freed: nobody holds a desk overnight or over a weekend. Their
@@ -46,11 +56,25 @@ async function sweepExpiredSeats(libraryId, seatIds, now = Date.now(), { hours, 
 
     const heldAtClose = closed && (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY);
 
-    if (occupiedExpired || stepAwayExpired || heldAtClose) {
-      // The sitting ended when its hold ran out (or the library closed),
-      // not when the sweep noticed.
+    // Still held from an earlier day (the server slept through closing):
+    // that day's release has long passed.
+    const began = seat.lastConfirmTime || seat.sessionStart || now;
+    const dayRelease = hours && process.env.ALWAYS_OPEN !== "1" && (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY)
+      ? releaseAtOn(hours, began) : Infinity;
+    const heldPastDay = now > dayRelease;
+
+    if (occupiedExpired || stepAwayExpired || heldAtClose || heldPastDay) {
+      // The sitting ended when its hold ran out, or when its day's seats were
+      // released, whichever came first; not when the sweep noticed (a server
+      // asleep overnight would otherwise stretch it into the next morning).
       const expiry = seat.state === SeatState.OCCUPIED ? seat.checkInExpiry : seat.stepAwayExpiry;
-      await recordSitting(libraryId, seat, Math.min(expiry || now, closedAt || now, now));
+      const end = Math.min(expiry || now, closedAt || now, dayRelease, now);
+      await recordSitting(libraryId, seat, end);
+      // A real sitting earns its day on the study board even if nobody
+      // tapped Still here or Check out (15 minutes or more).
+      if (seat.holderToken && seat.sessionStart && end - seat.sessionStart >= CREDIT_MIN_MS) {
+        await creditSessionDay(libraryId, seat.holderToken, seat.holderNickname, seatId, seat.sessionStart);
+      }
       resetToAvailable(seat);
       await saveSeat(seat);
       reclaimed.push(seatId);

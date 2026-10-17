@@ -1,11 +1,17 @@
 "use strict";
 
-const { SeatState, getSeats, saveSeat } = require("./scan");
+const { SeatState, getSeats, getSeat, saveSeat } = require("./scan");
+const { withLock, seatLock } = require("./lock");
 // Imported as a module object (not destructured) so tests can
 // monkeypatch push.sendPush without a real VAPID/web-push round trip.
 const push = require("./push");
 const config = require("./config");
-const { closingSoon } = require("./hours");
+const { closingSoon, closingGraceMinutes } = require("./hours");
+
+/** What a closing notice was sent for: the day, the closing time and the sitting. */
+function closingNoticeKey(date, closes, sessionStart) {
+    return `${date} ${closes} ${sessionStart || 0}`;
+}
 
 // Minutes before closing that everyone holding a seat gets a heads-up.
 const CLOSING_NOTICE_MIN = 10;
@@ -37,7 +43,10 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now(), hours =
         const seatId = seat.id;
         if (!seat.holderToken) continue;
 
-        if (closingNotice && seat.closingNoticeDate !== closing.date &&
+        // Once per sitting and closing time: a new holder of the same seat, or
+        // an early close that was undone, still gets told.
+        const noticeKey = closing ? closingNoticeKey(closing.date, closing.closes, seat.sessionStart) : null;
+        if (closingNotice && seat.closingNoticeFor !== noticeKey &&
             (seat.state === SeatState.OCCUPIED || seat.state === SeatState.STEPPED_AWAY)) {
             const result = await push.sendPush(seat.holderToken, {
                 title: "NaviSpace",
@@ -45,8 +54,8 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now(), hours =
                 seatId: seat.id,
                 libraryId,
             });
-            seat.closingNoticeDate = closing.date; // once a day, sent or not
-            await saveSeat(seat);
+            // Once, sent or not.
+            await updateSameSitting(seat, (fresh) => { fresh.closingNoticeFor = noticeKey; });
             if (result.sent) reminded.push(seatId);
         }
 
@@ -60,11 +69,17 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now(), hours =
 
         const timeLeft = expiry - now;
         if (timeLeft <= 0) continue;
+        // A hold that runs past today's release: closing frees the seat first,
+        // and the closing notice says so. "Confirm you're still there" would be
+        // a promise confirming can't keep.
+        if (closing && expiry >= now + (closing.minutes + closingGraceMinutes()) * 60000 - 60000) continue;
+        // Within the closing notice's ten minutes, that notice is the one message.
+        if (closingNotice) continue;
         // How many lead times have passed; one reminder covers any that
         // were missed (e.g. the server was asleep at the 10-minute mark).
         const due = config.REMINDER_LEADS_MS.filter((lead) => timeLeft <= lead).length;
         if (due <= (seat.remindersSent || 0)) continue;
-        const mins = Math.max(1, Math.round(timeLeft / 60000));
+        const mins = Math.max(1, Math.ceil(timeLeft / 60000));
 
         const body =
             seat.state === SeatState.OCCUPIED
@@ -79,13 +94,29 @@ async function sendExpiryReminders(libraryId, seatIds, now = Date.now(), hours =
         });
 
         if (result.sent) {
-            seat.remindersSent = due;
-            await saveSeat(seat);
+            await updateSameSitting(seat, (fresh) => { fresh.remindersSent = due; });
             reminded.push(seatId);
         }
     }
 
     return reminded;
+}
+
+/**
+ * Saves a reminder's bookkeeping on the seat, re-read under the seat lock
+ * (lock.js): a push can take a while, and the student may have checked
+ * out, confirmed or stepped away meanwhile. Saving the copy read before
+ * the push would undo that, so only the same sitting, unchanged, is touched.
+ */
+async function updateSameSitting(seen, change) {
+    await withLock(seatLock(seen.libraryId), async () => {
+        const fresh = await getSeat(seen.libraryId, seen.id);
+        if (fresh.holderToken !== seen.holderToken || fresh.sessionStart !== seen.sessionStart ||
+            fresh.state !== seen.state || fresh.checkInExpiry !== seen.checkInExpiry ||
+            fresh.stepAwayExpiry !== seen.stepAwayExpiry) return;
+        change(fresh);
+        await saveSeat(fresh);
+    });
 }
 
 /**
@@ -117,4 +148,4 @@ function startReminderLoop(getLibrarySeatGroups, intervalMs, onReminder) {
     return () => clearInterval(handle);
 }
 
-module.exports = { sendExpiryReminders, startReminderLoop };
+module.exports = { sendExpiryReminders, startReminderLoop, closingNoticeKey };

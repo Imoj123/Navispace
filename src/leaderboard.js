@@ -1,7 +1,8 @@
 "use strict";
 
 const { store } = require("./store");
-const config = require("./config");
+const { weekStart } = require("./hours");
+const { studentWeek } = require("./scan");
 
 /**
  * Reads the top N students by weeklySessionDays, for one library.
@@ -14,7 +15,8 @@ const config = require("./config");
  * scale, not meant to scale past that.
  */
 async function getLeaderboard(libraryId, topN = 10, now = Date.now()) {
-  const windowMs = config.LEADERBOARD_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  // This calendar week only (Monday to Sunday, library time).
+  const week = weekStart(now);
   const entries = [];
 
   const studentKeys = await store.listKeys(`student:${libraryId}:`);
@@ -22,8 +24,7 @@ async function getLeaderboard(libraryId, topN = 10, now = Date.now()) {
   for (const student of students) {
     if (!student) continue;
 
-    const inWindow = now - student.windowStart <= windowMs;
-    const sessionDays = inWindow ? student.weeklySessionDays : 0;
+    const sessionDays = studentWeek(student) === week ? student.weeklySessionDays : 0;
     if (sessionDays <= 0) continue;
 
     entries.push({ nickname: student.nickname, sessionDays });

@@ -278,6 +278,8 @@
                 }
                 try {
                     Object.keys(localStorage).filter((k) => k.startsWith("navispace_")).forEach((k) => localStorage.removeItem(k));
+                    // Seat codes from scanned stickers too: a fresh start means scanning again.
+                    Object.keys(sessionStorage).filter((k) => k.startsWith("navispace_")).forEach((k) => sessionStorage.removeItem(k));
                 } catch { }
                 document.cookie = "ns_handoff=; path=/; max-age=0";
                 out.textContent = "Done. Everything kept under this device has been deleted. If you use NaviSpace again, it starts fresh.";

@@ -186,7 +186,7 @@
 
       <button id="enableReminders" class="btn btn-tinted" style="display:none;">Remind me before my seat runs out</button>
       <button id="reportLink" class="btn-quiet" style="display:none;">This looks wrong — report it</button>
-      <div id="toast" class="toast"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <div class="nickname-row">
         <input type="text" id="nicknameInput" placeholder="Your leaderboard nickname" maxlength="24" />
@@ -195,7 +195,7 @@
     </div>
   </main>
 
-  <div id="modal" class="modal-overlay">
+  <div id="modal" class="modal-overlay" aria-labelledby="modalMessage">
     <div class="modal-box">
       <p id="modalMessage"></p>
       <button class="btn btn-primary" id="modalKeepGoing">Keep going</button>
@@ -233,10 +233,11 @@
     getLibraries().then((libs) => {
       const lib = libs.find((l) => l.id === libraryId);
       document.getElementById("libraryName").textContent = lib ? lib.name : libraryId;
-    });
+    }).catch(() => { });
 
     const identity = getOrCreateIdentity();
     let promptTimer = null;
+    let heldHereBefore = false;
     let reminderEnabled = false;
 
     const nicknameInput = document.getElementById("nicknameInput");
@@ -280,12 +281,35 @@
       return note;
     }
 
+    // Opening hours: while the library is closed a free seat says so, rather
+    // than offering a Check in that can only be refused.
+    let hoursNow = null;
+    function closedMessage(h) {
+      const when = h.nextOpen === "today" ? `at ${h.opens}` : h.nextOpen ? `${h.nextOpen} at ${h.opens}` : "soon";
+      const what = h.closedFor === "Closed early today" ? "The library closed early today"
+        : h.closedFor === "Closed today" ? "The library is closed today"
+          : `The library is closed${h.closedFor && h.closedFor !== "Weekend" ? ` for ${h.closedFor}` : ""}`;
+      return `${what}. Check-ins open again ${when}.`;
+    }
+    async function refreshHours() {
+      try {
+        const h = await apiGet(`/api/library/${encodeURIComponent(libraryId)}/hours`);
+        if (!h || typeof h.open !== "boolean") return;
+        const changed = !hoursNow || hoursNow.open !== h.open;
+        hoursNow = h;
+        if (changed && lastSeat && lastSeat.state) render(lastSeat);
+      } catch { }
+    }
+
     function render(seat) {
       lastSeat = seat;
-      if (seat && seat.reason === "unknown_seat") {
+      if (seat && (seat.reason === "unknown_seat" || seat.reason === "unknown_library")) {
         renderUnknownSeat();
         return;
       }
+      // Anything that isn't a seat (an error answer) must never be drawn as
+      // one: the state would be missing and read as "stepped away".
+      if (!seat || !seat.state) throw new Error(seat && seat.reason || "no_seat");
       const statusEl = document.getElementById("status");
       statusEl.className = "status-band " + seat.state;
       statusEl.innerHTML = "";
@@ -303,13 +327,27 @@
       actions.innerHTML = "";
 
       const isHolder = isMine(seat.holderHash);
+      // Was this device's, isn't now: the hold ran out (or staff freed it) while away.
+      if (heldHereBefore && !isHolder && seat.state !== undefined) toast("Your hold on this seat has ended. Scan the code to check in again.");
+      heldHereBefore = isHolder && seat.state !== "AVAILABLE";
+      syncPrompt(seat);
 
       // The holder sees how long this sitting has lasted.
       focusSeat = isHolder && seat.state !== "AVAILABLE" && seat.sessionStart ? seat : null;
       document.getElementById("seatFocus").hidden = !focusSeat;
       tickSeatFocus();
 
-      if (seat.state === "AVAILABLE") {
+      const closedNow = hoursNow && !hoursNow.open;
+      if (seat.state === "AVAILABLE" && closedNow) {
+        label.textContent = "Library closed";
+        statusEl.className = "status-band";
+        dot.className = "signal-dot";
+        const note = document.createElement("div");
+        note.className = "scan-note";
+        note.innerHTML = `<strong></strong><span>Come back then and scan the code on this desk.</span>`;
+        note.querySelector("strong").textContent = closedMessage(hoursNow);
+        actions.appendChild(note);
+      } else if (seat.state === "AVAILABLE") {
         if (codeRequired && !seatCodeFor(libraryId, seatId)) actions.appendChild(scanNote());
         else actions.appendChild(makeButton("Check in", true, () => act("checkIn")));
       } else if (seat.state === "OCCUPIED" && isHolder) {
@@ -413,11 +451,13 @@
         toast(`That's a lot of taps. Try again in ${result.retryAfter || 30} seconds.`);
         return;
       }
+      // Offline or a server error: no seat came back. The button handler
+      // says "couldn't reach NaviSpace" and the status stays as it was.
+      if (!result.ok && !result.seat) throw new Error(result.reason || "failed");
       if (!result.ok) {
         if (result.reason === "library_closed") {
-          const h = result.hours || {};
-          const when = h.nextOpen === "today" ? `at ${h.opens}` : h.nextOpen ? `${h.nextOpen} at ${h.opens}` : "soon";
-          toast(`${h.closedFor === "Closed early today" ? "The library closed early today" : h.closedFor === "Closed today" ? "The library is closed today" : `The library is closed${h.closedFor && h.closedFor !== "Weekend" ? ` for ${h.closedFor}` : ""}`}. Check-ins open again ${when}.`);
+          hoursNow = result.hours || hoursNow;
+          toast(closedMessage(result.hours || {}));
         } else if (result.reason === "scan_required") {
           codeRequired = true;
           toast("Scan the code on the desk to check in.");
@@ -427,40 +467,74 @@
           toast("Couldn't do that — refreshing status.");
         }
       }
+      // Checking out yourself isn't "your hold has ended".
+      if (action === "leaving" && result.ok) heldHereBefore = false;
       render(result.seat);
-
-      if (action === "checkIn" || action === "imBack") {
-        scheduleNextPrompt();
-      }
-      if (action === "leaving") {
-        clearTimeout(promptTimer);
-      }
     }
 
-    function scheduleNextPrompt() {
+    // The "still studying?" prompt follows the seat itself, not this tab's
+    // taps: 50 minutes after the last confirmation (STILL_HERE_PROMPT_INTERVAL_MS
+    // in config.js), whether the page was just opened, reloaded or brought
+    // back. Only while checked in here; never while stepped away or after the
+    // seat has gone. The server owns the real expiry.
+    const PROMPT_AFTER_MS = 50 * 60 * 1000;
+    let promptDue = null;
+    function syncPrompt(seat) {
+      const mine = seat && seat.state === "OCCUPIED" && isMine(seat.holderHash);
+      const due = mine ? (seat.lastConfirmTime || seat.sessionStart || Date.now()) + PROMPT_AFTER_MS : null;
+      if (due === promptDue) return;
+      promptDue = due;
       clearTimeout(promptTimer);
-      // STILL_HERE_PROMPT_INTERVAL_MS in config.js. Just the client timer:
-      // the server owns the real expiry.
-      promptTimer = setTimeout(showStillStudyingPrompt, 50 * 60 * 1000);
+      if (!mine) {
+        if (document.getElementById("modal").style.display === "flex") hideModal();
+        return;
+      }
+      // Past due already (reopened late): ask now, unless the hold has run out.
+      const expired = seat.checkInExpiry && seat.checkInExpiry <= Date.now();
+      if (!expired) promptTimer = setTimeout(showStillStudyingPrompt, Math.max(0, due - Date.now()));
     }
 
+    // The "still studying?" prompt is a real dialog (holdDialog in client.js):
+    // announced, focus on Keep going, Escape counts as Keep going.
+    let releaseModal = null;
     function showStillStudyingPrompt() {
       document.getElementById("modalMessage").textContent = "Still studying? " + randomEncouragement();
-      document.getElementById("modal").style.display = "flex";
+      const modal = document.getElementById("modal");
+      modal.style.display = "flex";
+      if (releaseModal) releaseModal({ returnFocus: false });
+      releaseModal = holdDialog(modal, { initial: "#modalKeepGoing", onEscape: () => document.getElementById("modalKeepGoing").click() });
+    }
+
+    function hideModal() {
+      document.getElementById("modal").style.display = "none";
+      if (releaseModal) releaseModal();
+      releaseModal = null;
     }
 
     document.getElementById("modalKeepGoing").onclick = async () => {
-      document.getElementById("modal").style.display = "none";
-      const result = await postScan(libraryId, seatId, "stillHere", identity);
-      render(result.seat);
-      if (result.ok) {
-        toast(randomEncouragement());
-        scheduleNextPrompt();
+      hideModal();
+      let result;
+      try {
+        result = await postScan(libraryId, seatId, "stillHere", identity);
+      } catch {
+        result = {};
       }
+      if (!result.seat) {
+        toast("Couldn't reach NaviSpace — check your connection and try again.");
+        return;
+      }
+      render(result.seat);
+      if (result.ok) toast(randomEncouragement());
+      else if (result.seat.state === "STEPPED_AWAY") toast("You're stepped away. Tap I'm back when you're at your desk.");
+      else toast("This seat isn't held for you any more. Scan the code to check in again.");
     };
     document.getElementById("modalDone").onclick = async () => {
-      document.getElementById("modal").style.display = "none";
-      await act("leaving");
+      hideModal();
+      try {
+        await act("leaving");
+      } catch {
+        toast("Couldn't reach NaviSpace — check your connection and try again.");
+      }
     };
 
     document.getElementById("enableReminders").onclick = async () => {
@@ -499,6 +573,14 @@
     };
 
     refresh();
+    refreshHours();
+    // Keep the seat current: a hold can end, or be freed, while the page sits
+    // open or in the background.
+    setInterval(() => { if (!document.hidden) refresh(); }, 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+    window.addEventListener("pageshow", (e) => { if (e.persisted) refresh(); });
+    setInterval(() => { if (!document.hidden) refreshHours(); }, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshHours(); });
   </script>
 </body>
 </html>

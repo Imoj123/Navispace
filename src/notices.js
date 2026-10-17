@@ -81,7 +81,8 @@ function endOfDay(now) {
 }
 
 async function setNotice(lib, { text, days }, now = Date.now()) {
-  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (typeof text !== "string") return { ok: false, reason: "empty" };
+  const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return { ok: false, reason: "empty" };
   if (clean.length > MAX_TEXT) return { ok: false, reason: "too_long" };
   const n = Math.min(MAX_DAYS, Math.max(0, Math.floor(Number(days) || 0)));
@@ -105,7 +106,7 @@ async function clearNotice(lib) {
  * and held seats go after the usual grace from now.
  */
 async function setEarlyClose(lib, { time, reason }, now = Date.now()) {
-  if (!/^\d{1,2}:\d{2}$/.test(String(time || ""))) return { ok: false, reason: "bad_time" };
+  if (typeof time !== "string" || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)) return { ok: false, reason: "bad_time" };
   const p = localParts(now);
   // Compared with the usual hours, so a second early close can move the first.
   const layout = getLayout(lib);
@@ -117,7 +118,7 @@ async function setEarlyClose(lib, { time, reason }, now = Date.now()) {
   const early = {
     date: p.date,
     time: hhmm,
-    reason: String(reason || "").replace(/\s+/g, " ").trim().slice(0, MAX_REASON) || null,
+    reason: (typeof reason === "string" ? reason.replace(/\s+/g, " ").trim().slice(0, MAX_REASON) : "") || null,
     usual: status.closes,
     at: now,
   };

@@ -16,7 +16,7 @@ const { getSittings } = require("./history");
 const { openStatus } = require("./hours");
 const busy = require("./busy");
 const { reportSeat } = require("./reports");
-const { saveSubscription, removeSubscription, hasSubscription, sendPush, vapidPublicKey } = require("./push");
+const { saveSubscription, removeSubscription, hasSubscription, sendPush, vapidPublicKey, validSubscription } = require("./push");
 const { startReminderLoop } = require("./reminders");
 const { reportItem, listItems, claimItem, resolveItem, markAtDesk, getThread, sendMessage, reportThread } = require("./lostfound");
 const { seatCodeValid, seatCodesRequired } = require("./seatcode");
@@ -26,10 +26,40 @@ const { mountStaff } = require("./staff");
 const { forgetDevice } = require("./forget");
 const waitlist = require("./waitlist");
 const notices = require("./notices");
+const input = require("./input");
+
+/**
+ * Express 4 doesn't catch a rejected promise from an async route: the
+ * request just hangs. Wraps every route so a failure reaches the error
+ * handler at the end of createApp instead.
+ */
+function catchAsyncErrors(app) {
+  for (const method of ["get", "post", "use"]) {
+    const original = app[method].bind(app);
+    app[method] = (...args) => {
+      // app.get("setting") with one argument reads a setting: leave it be.
+      if (method === "get" && args.length === 1 && typeof args[0] === "string") return original(...args);
+      return original(...args.map((fn) => typeof fn === "function" && fn.length < 4 ? wrapAsync(fn) : fn));
+    };
+  }
+}
+
+function wrapAsync(fn) {
+  return function (req, res, next) {
+    try {
+      const result = fn.call(this, req, res, next);
+      if (result && typeof result.catch === "function") result.catch(next);
+      return result;
+    } catch (err) {
+      next(err);
+    }
+  };
+}
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const BASE_MANIFEST = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, "manifest.json"), "utf8"));
+const LOST_FOUND_PUBLIC_MAX = 120;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A device token is a bearer credential: anyone who has it can step
@@ -172,7 +202,18 @@ function createApp() {
   // first X-Forwarded-For entry (used for speed limits, see ratelimit.js).
   app.set("trust proxy", 1);
   app.use(compression());
+  catchAsyncErrors(app);
   app.use(express.json({ limit: "3mb" })); // lost & found photos ride in the JSON body
+
+  // Every request naming a device does it with a short string (see
+  // input.js); anything else (a number, an object, 10,000 characters) is
+  // turned away here rather than in every route.
+  app.use((req, res, next) => {
+    if (req.body && typeof req.body === "object" && "token" in req.body && !input.token(req.body.token)) {
+      return res.status(400).json({ ok: false, reason: "bad_token" });
+    }
+    next();
+  });
 
   // Uptime pings (cron-job.org / UptimeRobot) hit this to keep the
   // instance awake: cheap, touches no store, never cached.
@@ -322,7 +363,8 @@ function createApp() {
 
   app.post("/api/library/:libId/scan/:id", limit("scan"), async (req, res) => {
     const { libId } = req.params;
-    const { action, token, nickname, k } = req.body || {};
+    const { action, token, k } = req.body || {};
+    const nickname = input.nickname((req.body || {}).nickname);
 
     if (!isActiveLibrary(libId)) {
       return res.status(404).json({ ok: false, reason: "library_not_active" });
@@ -338,7 +380,10 @@ function createApp() {
     // Everything after that is limited to the device holding the seat.
     // Outside opening hours nobody can take a seat (and the sweep frees
     // every seat at closing time).
-    if (action === "checkIn") {
+    // After closing nothing extends a hold (Still here, I'm back): the seat
+    // is released a few minutes after closing whatever it says. Checking
+    // out and stepping away still work.
+    if (action === "checkIn" || action === "stillHere" || action === "imBack") {
       const hours = openStatus(libraryHours(libId));
       if (!hours.open) {
         const seat = await getSeat(libId, req.params.id);
@@ -455,7 +500,9 @@ function createApp() {
       return res.status(404).json({ ok: false, reason: "unknown_library" });
     }
     const items = await listItems(libId);
-    res.json(items.map(publicItem));
+    // Unclaimed first, newest first (listItems): a board flooded with posts
+    // stays a page a phone can draw. Staff see everything on their page.
+    res.json(items.slice(0, LOST_FOUND_PUBLIC_MAX).map(publicItem));
   });
 
   app.post("/api/library/:libId/lostfound", limit("lfPost"), async (req, res) => {
@@ -558,7 +605,11 @@ function createApp() {
     if (!token || !subscription) {
       return res.status(400).json({ ok: false, reason: "missing_fields" });
     }
-    await saveSubscription(token, subscription);
+    if (!validSubscription(subscription)) {
+      return res.status(400).json({ ok: false, reason: "bad_subscription" });
+    }
+    // Only what a subscription is made of, nothing else that came along.
+    await saveSubscription(token, { endpoint: subscription.endpoint, keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth } });
     // A quiet re-sync (the page refreshing an existing permission) skips the test.
     if (quiet) return res.json({ ok: true, testSent: false, testReason: "quiet" });
     // Send one right away so the student sees reminders work end to end
@@ -632,6 +683,18 @@ function createApp() {
     res.json(await forgetDevice(token));
   });
 
+  // A request that failed: a short JSON answer, never a hung request or a
+  // stack trace. Unreadable or oversized bodies are the sender's mistake.
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, _next) => {
+    if (err.type === "entity.parse.failed") return res.status(400).json({ ok: false, reason: "bad_json" });
+    if (err.type === "entity.too.large") return res.status(413).json({ ok: false, reason: "too_large" });
+    if (err instanceof URIError) return res.status(400).json({ ok: false, reason: "bad_request" });
+    console.error(`[server] ${req.method} ${req.path} failed: ${err && err.message}`);
+    if (res.headersSent) return;
+    res.status(500).json({ ok: false, reason: "server_error" });
+  });
+
   // Anything else: data requests get JSON, people get the not-found page.
   app.use((req, res) => {
     if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false, reason: "not_found" });
@@ -668,6 +731,15 @@ function start() {
     (libraryId, seats, now) => busy.observe(libraryId, seats, now, libraryHours(libraryId))
   );
 
+  // Once a library has closed, nobody is waiting for a seat there any more
+  // (waitlist.js), whether or not a seat happened to free up after closing.
+  const clearWaiting = setInterval(() => {
+    for (const { libraryId, hours } of activeLibrarySeatGroups()) {
+      if (!openStatus(hours).open) waitlist.clearWaitlist(libraryId).catch(() => { });
+    }
+  }, 60 * 1000);
+  if (clearWaiting.unref) clearWaiting.unref();
+
   const stopReminders = startReminderLoop(
     () => notices.noticesReady().then(activeLibrarySeatGroups),
     config.REMINDER_CHECK_INTERVAL_MS,
@@ -684,6 +756,7 @@ function start() {
     stopSweep();
     stopReminders();
     stopNotices();
+    clearInterval(clearWaiting);
     server.close(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);
