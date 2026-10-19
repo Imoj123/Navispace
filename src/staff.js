@@ -258,6 +258,7 @@ function mountStaff(app, { siteOrigin }) {
     if (!libId) return res.status(404).send("Unknown library");
     const origin = siteOrigin(req);
     const lib = getLibrary(libId);
+    if (req.query.size === "a4") return res.set("Cache-Control", "no-store").type("html").send(await seatSheets(origin, libId, lib));
     const stickers = await Promise.all(getSeatIds(libId).map(async (seatId) => {
       const svg = await QRCode.toString(seatLink(origin, libId, seatId), { type: "svg", margin: 1, errorCorrectionLevel: "M" });
       return `<figure class="sticker"><div class="qr">${svg}</div><figcaption><b>${escapeHtml(seatId)}</b><span>Scan to check in</span><small>${escapeHtml(lib.name)} · NaviSpace</small></figcaption></figure>`;
@@ -289,6 +290,83 @@ function mountStaff(app, { siteOrigin }) {
 <button onclick="print()">Print or save as PDF</button></header>${warning}
 <main class="sheet">${stickers.join("")}</main></body></html>`);
   });
+}
+
+/**
+ * One seat to an A4 page: a large signed QR code, the seat and its area,
+ * for a desk sign or a frame. The same look as the launch poster.
+ */
+async function seatSheets(origin, libId, lib) {
+  const zoneNames = (getLayout(libId) || {}).zoneNames || {};
+  const seatIds = getSeatIds(libId);
+  const pages = await Promise.all(seatIds.map(async (seatId) => {
+    const qr = await QRCode.toString(seatLink(origin, libId, seatId), { type: "svg", margin: 0, errorCorrectionLevel: "Q", color: { dark: "#121614", light: "#0000" } });
+    const area = zoneNames[waitlist.seatArea(seatId)];
+    return `<article class="page">
+  <div class="top"><span class="mark"><img src="/icons/favicon.svg" alt="">NaviSpace</span><span class="where">${escapeHtml(lib.name)}<br>Wits University</span></div>
+  <div class="seat"><span class="label">Seat</span><b>${escapeHtml(seatId)}</b>${area ? `<span class="area">${escapeHtml(area)}</span>` : ""}</div>
+  <div class="qr">${qr}</div>
+  <p class="cta">Scan to check in</p>
+  <section class="steps">
+    <div class="step"><span class="n">01</span><h2>Scan</h2><p>Open your camera, point it at the code, tap Check in.</p></div>
+    <div class="step"><span class="n">02</span><h2>Stay</h2><p>Tap Still here when asked. Step away for up to 1 h 15 min.</p></div>
+    <div class="step"><span class="n">03</span><h2>Leave</h2><p>Tap Check out, so the next person can sit down.</p></div>
+  </section>
+  <div class="foot"><span>No app, no sign-up</span><span>Seat ${escapeHtml(seatId)}</span></div>
+</article>`;
+  }));
+  const warning = seatCodesRequired() ? "" :
+    `<p class="warn">SEAT_SIGNING_SECRET isn't set on the server, so these pages carry no seat code. Set it first, then print.</p>`;
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Seat QR codes, A4 · ${escapeHtml(lib.name)}</title>
+<style>
+  @font-face { font-family: "Newsreader"; src: url("/fonts/newsreader.woff2") format("woff2"); font-weight: 200 800; }
+  @font-face { font-family: "Public Sans"; src: url("/fonts/public-sans.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Plex Mono"; src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2"); font-weight: 500; }
+  @page { size: A4; margin: 0; }
+  :root { --ink: #121614; --muted: #5b625c; --brass: #a8843f; --line: #d9d3c3; --paper: #fbf8f1; }
+  * { box-sizing: border-box; }
+  html { background: #e9e5da; }
+  body { margin: 0; color: var(--ink); font: 400 15px/1.5 "Public Sans", system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 210mm; margin: 0 auto; padding: 16px 0; font: 500 12px "Plex Mono", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .bar button { font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 10px 16px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
+  .warn { max-width: 210mm; margin: 0 auto 16px; padding: 10px; border: 1px solid #b00; color: #b00; }
+  .page { width: 210mm; height: 297mm; margin: 0 auto 24px; background: var(--paper); position: relative; overflow: hidden; padding: 18mm 18mm 14mm; display: grid; grid-template-rows: auto auto 1fr auto auto auto; justify-items: center; box-shadow: 0 10px 40px rgba(0,0,0,.12); break-after: page; }
+  .page::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 7mm; background: var(--ink); }
+  .page::after { content: ""; position: absolute; top: 7mm; left: 0; right: 0; height: 1.2mm; background: var(--brass); }
+  .top { justify-self: stretch; display: flex; justify-content: space-between; align-items: center; margin-top: 4mm; }
+  .mark { display: flex; align-items: center; gap: 3mm; font: 500 15px "Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; }
+  .mark img { width: 11mm; height: 11mm; }
+  .where { font: 500 11px "Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-align: right; }
+  .seat { display: grid; justify-items: center; margin-top: 8mm; }
+  .seat .label, .seat .area { font: 500 12px "Plex Mono", monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--brass); }
+  .seat .area { color: var(--muted); letter-spacing: .14em; }
+  .seat b { font: 400 34mm/1 "Newsreader", Georgia, serif; letter-spacing: -0.02em; margin: 1mm 0 2mm; }
+  .qr { align-self: center; width: 118mm; height: 118mm; padding: 6mm; border: 1.4mm solid var(--ink); background: #fff; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .cta { margin: 0 0 8mm; font: 400 30px/1.1 "Newsreader", Georgia, serif; }
+  .steps { justify-self: stretch; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.4mm solid var(--ink); }
+  .step { padding: 4mm 5mm 0 0; }
+  .step + .step { padding-left: 5mm; border-left: 0.3mm solid var(--line); }
+  .step .n { font: 500 12px "Plex Mono", monospace; letter-spacing: .14em; color: var(--brass); }
+  .step h2 { margin: 1mm 0 1mm; font: 400 22px/1.1 "Newsreader", Georgia, serif; }
+  .step p { margin: 0; font-size: 12.5px; line-height: 1.45; color: #3a403b; }
+  .foot { justify-self: stretch; display: flex; justify-content: space-between; gap: 8mm; margin-top: 7mm; padding-top: 3mm; border-top: 0.3mm solid var(--line); font: 500 10.5px/1.5 "Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  @media print { html { background: none; } .bar, .warn { display: none; } .page { margin: 0; box-shadow: none; } }
+  @media screen and (max-width: 820px) { .page { transform: scale(var(--fit, 1)); transform-origin: top left; margin: 0 0 calc(297mm * var(--fit, 1) - 297mm); } .bar { padding: 12px 16px; } }
+</style></head><body>
+<script>
+  function fit() {
+    const page = 210 * 96 / 25.4;
+    document.documentElement.style.setProperty("--fit", Math.min(1, document.documentElement.clientWidth / (page + 40)));
+  }
+  fit();
+  addEventListener("resize", fit);
+</script>
+<div class="bar"><span>${seatIds.length} seats · one per A4 page · ${escapeHtml(lib.name)}</span><button onclick="print()">Print or save as PDF</button></div>${warning}
+${pages.join("\n")}
+</body></html>`;
 }
 
 /** "Weekdays 08:00–20:00 · Fridays until 17:00", from a plan's hours. */
