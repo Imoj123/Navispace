@@ -95,6 +95,11 @@
             color: var(--faint);
         }
 
+        .room-day {
+            max-width: 240px;
+            margin-bottom: 6px;
+        }
+
         .field textarea {
             resize: vertical;
             min-height: 84px;
@@ -571,6 +576,19 @@
                 <p class="muted" style="margin-top:12px;font-size:14px">Free a seat when someone has clearly left without checking out. Their sitting ends now.</p>
             </section>
 
+            <section class="staff-section" id="roomsSection" aria-labelledby="roomsTitle" hidden>
+                <header>
+                    <h2 id="roomsTitle">Discussion rooms</h2>
+                    <p class="eyebrow" id="roomsCount"></p>
+                </header>
+                <label class="field room-day"><span>Day</span><select id="roomDay"></select></label>
+                <div class="rows" id="roomRows"></div>
+                <p class="muted" style="margin-top:12px;font-size:14px">Students book up to two hours a day, a week ahead. A
+                    booking not scanned at the door within 15 minutes of its start is released. Cancel one when a room
+                    is needed: the student is told.</p>
+                <a class="btn btn-tinted" id="signsLink" href="/staff/door-signs" target="_blank" rel="noopener" style="width:auto;display:inline-block">Door signs, one per A4 page</a>
+            </section>
+
             <section class="staff-section" aria-labelledby="lfTitle">
                 <header>
                     <h2 id="lfTitle">Lost &amp; found</h2>
@@ -667,6 +685,7 @@
             const r = await api(`/api/staff/overview?lib=${encodeURIComponent(libraryId)}`);
             if (r.status === 401) { location.reload(); return; }
             if (!r.ok) return;
+            refreshRooms().catch(() => { });
             // Unchanged since the last look (most 30-second refreshes): leave
             // the page alone, so focus, an open menu or a half-read list stay put.
             const key = JSON.stringify(r);
@@ -676,6 +695,42 @@
             paint();
         }
         let lastKey = null;
+
+        // Discussion rooms: the chosen day's bookings, repainted only on change.
+        let roomsKey = null, roomDay = "";
+        async function refreshRooms() {
+            const r = await api(`/api/staff/rooms?lib=${encodeURIComponent(libraryId)}&date=${encodeURIComponent(roomDay)}`);
+            if (!r.ok || !r.rooms.length) { $("roomsSection").hidden = true; return; }
+            $("roomsSection").hidden = false;
+            const key = JSON.stringify(r);
+            if (key === roomsKey) return;
+            roomsKey = key;
+            const sel = $("roomDay");
+            const want = r.days.map((d, i) => `${d.date}|${i === 0 ? "Today" : i === 1 ? "Tomorrow" : DAYS[d.weekday]} ${Number(d.date.slice(8))}${d.closedFor ? " (closed)" : ""}`).join(",");
+            if (sel.dataset.days !== want) {
+                sel.dataset.days = want;
+                sel.innerHTML = r.days.map((d, i) => `<option value="${esc(d.date)}"${d.closedFor ? " disabled" : ""}>${esc(want.split(",")[i].split("|")[1])}</option>`).join("");
+            }
+            sel.value = r.date;
+            const all = r.rooms.flatMap((room) => room.bookings.map((b) => ({ ...b, label: room.label })))
+                .sort((a, b) => a.start.localeCompare(b.start) || a.label.localeCompare(b.label));
+            $("roomsCount").textContent = `${all.length} booking${all.length === 1 ? "" : "s"}`;
+            $("roomRows").innerHTML = all.length ? "" : '<p class="empty">No bookings.</p>';
+            for (const b of all) {
+                const row = document.createElement("div");
+                row.className = "row";
+                row.innerHTML = `<b>${esc(b.label.replace(/^Room /, "R"))}</b><div><span class="who">${esc(b.nickname)}</span>
+                    <span class="meta">${esc(b.label)} · ${esc(b.start)}–${esc(b.end)} · ${b.claimed ? "Scanned in" : "Not scanned yet"}</span></div>
+                    <div class="actions"><button class="btn" type="button">Cancel booking</button></div>`;
+                row.querySelector("button").onclick = async () => {
+                    if (!confirm(`Cancel ${b.label}, ${b.start}–${b.end}? ${b.nickname} will be told.`)) return;
+                    await api("/api/staff/rooms/cancel", { id: b.id });
+                    refreshRooms();
+                };
+                $("roomRows").appendChild(row);
+            }
+        }
+        $("roomDay").onchange = () => { roomDay = $("roomDay").value; refreshRooms(); };
         const openThreads = new Set(); // conversations staff have open: kept open across refreshes
 
         function paint() {
@@ -780,6 +835,7 @@
             $("stLink").href = `/staff/stickers?lib=${encodeURIComponent(libraryId)}`;
             $("stA4Link").href = `/staff/stickers?lib=${encodeURIComponent(libraryId)}&size=a4`;
             $("poLink").href = `/staff/poster?lib=${encodeURIComponent(libraryId)}`;
+            $("signsLink").href = `/staff/door-signs?lib=${encodeURIComponent(libraryId)}`;
             $("stText").textContent = d.stickers.signed
                 ? "One sticker per seat on A4, each with its signed code. Print them (or save as a PDF) and stick each on its desk. Reprint after changing the floor plan or the signing secret."
                 : "SEAT_SIGNING_SECRET isn't set on the server, so stickers would carry no seat code. Set it first, then print.";
