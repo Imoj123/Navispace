@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+<radialGradient id="lamp" cx="50%" cy="8%" r="80%"><stop offset="0" stop-color="#e4c076" stop-opacity=".28"/><stop offset=".7" stop-color="#e4c076" stop-opacity="0"/></radialGradient>
+<linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b48f4c"/><stop offset="1" stop-color="#ecd296"/></linearGradient>
+</defs>
+<rect width="512" height="512" rx="112" fill="#121614"/><rect width="512" height="512" rx="112" fill="url(#lamp)"/>
+<path transform="translate(68.4 423.3) scale(0.22822 -0.22822)" d="M1183 262H1141L1479 1368L1299 1409L1305 1430H1724L1717 1409L1543 1369L1120 -16H1033L531 1322L559 1352L165 62L345 21L339 0H-80L-74 21L101 61L493 1346L323 1409L329 1430H750Z" fill="url(#ink)"/>
+</svg>
