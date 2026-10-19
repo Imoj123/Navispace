@@ -114,3 +114,29 @@ test("the launch poster is for signed-in staff, with a QR code to the home page 
     assert.match(html, new RegExp(`127\\.0\\.0\\.1:\\d+<`));
   });
 });
+
+test("discussion rooms for staff: a day's bookings with names, cancelling one, and door signs", async () => {
+  process.env.STAFF_PASSWORD = "desk-secret";
+  process.env.SEAT_SIGNING_SECRET = "sticker-secret";
+  await withServer(async (base) => {
+    assert.equal((await fetch(`${base}/api/staff/rooms`)).status, 401);
+    assert.equal((await fetch(`${base}/staff/door-signs`, { redirect: "manual" })).status, 302);
+    const login = await fetch(`${base}/api/staff/login`, json({ password: "desk-secret" }));
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const post = (p, body, headers = {}) => fetch(`${base}${p}`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }).then((r) => r.json());
+    const tomorrow = (await post("/api/library/engineering/rooms/view", {})).days[1].date;
+    const { booking } = await post("/api/library/engineering/rooms/book", { token: "tok-r", nickname: "Rami", room: "R2", date: tomorrow, start: 600, end: 660 });
+
+    const day = await (await fetch(`${base}/api/staff/rooms?date=${tomorrow}`, { headers: { Cookie: cookie } })).json();
+    assert.deepEqual(day.rooms[1].bookings.map((b) => [b.nickname, b.start, b.end]), [["Rami", "10:00", "11:00"]]);
+    assert.equal((await post("/api/staff/rooms/cancel", { id: booking.id }, { Cookie: cookie })).ok, true);
+    assert.deepEqual((await post("/api/library/engineering/rooms/mine", { token: "tok-r" })).bookings, []);
+
+    const signs = await (await fetch(`${base}/staff/door-signs`, { headers: { Cookie: cookie } })).text();
+    assert.equal((signs.match(/<article class="page">/g) || []).length, 3);
+    assert.match(signs, /Room 1[\s\S]*Room 2[\s\S]*Room 3/);
+    const { roomDoorLink } = require("../src/staff");
+    const { seatCode } = require("../src/seatcode");
+    assert.equal(roomDoorLink("https://x", "engineering", "R1"), `https://x/rooms.html?room=R1&k=${seatCode("engineering", "room:R1")}`);
+  });
+});

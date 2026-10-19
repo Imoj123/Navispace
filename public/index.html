@@ -758,6 +758,75 @@
             color: var(--brass);
         }
 
+        .room-tiles {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .room-tile {
+            display: grid;
+            gap: 8px;
+            padding: 16px 16px 14px;
+            border: 1px solid var(--line-strong);
+            text-decoration: none;
+            color: var(--text);
+            transition: border-color 0.2s ease;
+        }
+
+        .room-tile:hover {
+            border-color: var(--brass);
+        }
+
+        .room-tile b {
+            font: 400 22px/1.1 var(--font-serif);
+        }
+
+        .room-tile span {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font: 400 11.5px/1.3 var(--font-mono);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .room-tile span i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--faint);
+            flex-shrink: 0;
+        }
+
+        .room-tile[data-state="free"] span { color: var(--free); }
+        .room-tile[data-state="free"] span i { background: var(--free); }
+        .room-tile[data-state="inUse"] span,
+        .room-tile[data-state="booked"] span { color: var(--taken); }
+        .room-tile[data-state="inUse"] span i,
+        .room-tile[data-state="booked"] span i { background: var(--taken); }
+
+        .room-tile small {
+            font-size: 13px;
+            color: var(--brass-hi);
+        }
+
+        @media (max-width: 560px) {
+            .room-tiles {
+                grid-template-columns: 1fr;
+            }
+
+            .room-tile {
+                grid-template-columns: 1fr auto;
+                align-items: baseline;
+            }
+
+            .room-tile small {
+                grid-column: 1 / -1;
+            }
+        }
+
         .row .status-open {
             color: var(--free);
         }
@@ -798,6 +867,7 @@
         <nav class="topnav" aria-label="Sections">
             <a href="/" class="current" aria-current="page">Home</a>
             <a href="/library.html" data-path="/library.html">Map</a>
+            <a href="/rooms.html" data-path="/rooms.html">Rooms</a>
             <a href="/leaderboard.html" data-path="/leaderboard.html">Study board</a>
             <a href="/lost-found.html" data-path="/lost-found.html">Lost &amp; found</a>
         </nav>
@@ -864,6 +934,14 @@
                 </div>
                 <figure class="week-art" id="weekArt"></figure>
             </div>
+        </section>
+
+        <section class="section" id="roomsSection" aria-labelledby="roomsTitle" hidden>
+            <div class="section-head">
+                <h2 id="roomsTitle">Discussion rooms</h2>
+                <span class="eyebrow"><a id="roomsLink" href="/rooms.html">Book a room →</a></span>
+            </div>
+            <div class="room-tiles" id="roomTiles"></div>
         </section>
 
         <section class="section notify" id="notifications" aria-labelledby="notifyTitle">
@@ -1455,12 +1533,56 @@
             });
         }
 
+        // Discussion rooms: each one's state right now, and this device's next booking.
+        async function refreshRooms() {
+            if (!library || library.status !== "active") return;
+            try {
+                const res = await fetch(`/api/library/${encodeURIComponent(library.id)}/rooms/view`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ token: localStorage.getItem("navispace_token") || undefined }),
+                });
+                if (!res.ok) { $("roomsSection").hidden = true; return; }
+                const view = await res.json();
+                const box = $("roomTiles");
+                const sig = JSON.stringify(view.rooms);
+                if (box.dataset.sig === sig) return;
+                box.dataset.sig = sig;
+                box.innerHTML = "";
+                const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+                for (const r of view.rooms) {
+                    const a = document.createElement("a");
+                    a.className = "room-tile";
+                    a.href = libraryUrl("/rooms.html", library.id);
+                    const state = r.now ? r.now.state : "closed";
+                    a.dataset.state = state;
+                    a.innerHTML = "<b></b><span><i></i><em></em></span>";
+                    a.querySelector("b").textContent = r.label;
+                    const em = a.querySelector("em");
+                    em.style.fontStyle = "normal";
+                    em.textContent = {
+                        free: r.now && r.now.next ? `Free until ${r.now.until}` : "Free now",
+                        inUse: `In use until ${r.now && r.now.until}`,
+                        booked: `Booked until ${r.now && r.now.until}`,
+                    }[state] || "Closed now";
+                    const mine = r.bookings.find((b) => b.mine);
+                    if (mine) {
+                        const small = document.createElement("small");
+                        small.textContent = `Yours today, ${hm(mine.start)}–${hm(mine.end)}`;
+                        a.appendChild(small);
+                    }
+                    box.appendChild(a);
+                }
+                $("roomsSection").hidden = !view.rooms.length;
+            } catch { }
+        }
+
         function wireNav() {
             document.querySelectorAll(".topnav a[data-path]").forEach((a) => {
                 a.href = libraryUrl(a.dataset.path, library.id);
             });
             $("mapLink").href = libraryUrl("/library.html", library.id);
             $("boardLink").href = libraryUrl("/leaderboard.html", library.id);
+            $("roomsLink").href = libraryUrl("/rooms.html", library.id);
         }
 
         // --- Install -------------------------------------------------------------
@@ -1534,6 +1656,7 @@
             refreshHeld();
             refreshSittings();
             refreshBoard();
+            refreshRooms();
             layout = cachedLayout(library.id);
             if (layout) {
                 freshLayout.then((l) => {
@@ -1557,6 +1680,7 @@
             setInterval(() => { if (!document.hidden) refreshHours(); }, 10 * 60000);
             setInterval(() => { if (!document.hidden) refreshSittings(); }, 5 * 60000);
             setInterval(() => { if (!document.hidden) refreshHeld(); }, 60000);
+            setInterval(() => { if (!document.hidden) refreshRooms(); }, 60000);
             setInterval(tickFocus, 1000);
         }
 

@@ -22,6 +22,7 @@ const RULES = {
   push:        { token: [20, 3600],   ip: [60, 3600] },      // notification sign-ups and tests
   forget:      { token: [5, 3600],    ip: [20, 3600] },
   waitlist:    { token: [20, 600],    ip: [60, 600] },       // "tell me when a seat frees up"
+  rooms:       { token: [30, 600],    ip: [90, 600] },       // discussion room bookings, door scans
   staffLogin:  { ip: [10, 900] },                            // password guesses
 };
 
