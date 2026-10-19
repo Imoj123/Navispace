@@ -18,6 +18,7 @@ const { withLock, seatLock } = require("./lock");
 const { closingNoticeKey } = require("./reminders");
 const notices = require("./notices");
 const push = require("./push");
+const rooms = require("./rooms");
 
 /**
  * The staff page (/staff.html): one password, set as STAFF_PASSWORD on the
@@ -250,6 +251,28 @@ function mountStaff(app, { siteOrigin }) {
     res.json(await staffRemove(libId, req.params.itemId));
   });
 
+  // Discussion rooms: a day's bookings with who made them, and taking one off.
+  app.get("/api/staff/rooms", requireStaff, async (req, res) => {
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    res.set("Cache-Control", "no-store").json(await rooms.staffDay(libId, String(req.query.date || "")));
+  });
+
+  app.post("/api/staff/rooms/cancel", requireStaff, async (req, res) => {
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).json({ ok: false, reason: "unknown_library" });
+    const r = await rooms.staffCancel(libId, String((req.body || {}).id || ""));
+    res.status(r.ok ? 200 : 404).json(r);
+  });
+
+  // A sign for each discussion room's door, one per A4 page. Signed like the seat stickers.
+  app.get("/staff/door-signs", async (req, res) => {
+    if (!password() || !signedIn(req)) return res.redirect(302, "/staff.html");
+    const libId = libraryFrom(req);
+    if (!libId) return res.status(404).send("Unknown library");
+    res.set("Cache-Control", "no-store").type("html").send(await doorSigns(siteOrigin(req), libId, getLibrary(libId)));
+  });
+
   // Every seat's sticker on A4, ready to print (or save as a PDF). Made here
   // because the codes need SEAT_SIGNING_SECRET, which only the server knows.
   app.get("/staff/stickers", async (req, res) => {
@@ -299,27 +322,73 @@ function mountStaff(app, { siteOrigin }) {
 async function seatSheets(origin, libId, lib) {
   const zoneNames = (getLayout(libId) || {}).zoneNames || {};
   const seatIds = getSeatIds(libId);
-  const pages = await Promise.all(seatIds.map(async (seatId) => {
-    const qr = await QRCode.toString(seatLink(origin, libId, seatId), { type: "svg", margin: 0, errorCorrectionLevel: "Q", color: { dark: "#121614", light: "#0000" } });
-    const area = zoneNames[waitlist.seatArea(seatId)];
-    return `<article class="page">
+  const pages = await Promise.all(seatIds.map(async (seatId) => sheetPage(lib, {
+    link: seatLink(origin, libId, seatId),
+    label: "Seat",
+    name: seatId,
+    area: zoneNames[waitlist.seatArea(seatId)],
+    cta: "Scan to check in",
+    steps: [
+      ["Scan", "Open your camera, point it at the code, tap Check in."],
+      ["Stay", "Tap Still here when asked. Step away for up to 1 h 15 min."],
+      ["Leave", "Tap Check out, so the next person can sit down."],
+    ],
+    foot: ["No app, no sign-up", `Seat ${seatId}`],
+  })));
+  return a4Sheets(lib, { title: "Seat QR codes, A4", bar: `${seatIds.length} seats · one per A4 page`, pages });
+}
+
+/** The link on a discussion room's door: the rooms page, with the door's signed code. */
+function roomDoorLink(origin, libraryId, roomId) {
+  const q = new URLSearchParams();
+  if (libraryId !== "engineering") q.set("lib", libraryId);
+  q.set("room", roomId);
+  const code = seatCode(libraryId, `room:${roomId}`);
+  if (code) q.set("k", code);
+  return `${origin}/rooms.html?${q}`;
+}
+
+/** One A4 sign per discussion room, for its door. */
+async function doorSigns(origin, libId, lib) {
+  const list = rooms.bookableRooms(libId);
+  const pages = await Promise.all(list.map((r) => sheetPage(lib, {
+    link: roomDoorLink(origin, libId, r.id),
+    label: "Discussion room",
+    name: r.label,
+    cta: "Scan when you arrive",
+    steps: [
+      ["Book", "Up to two hours a day, a week ahead, on the Rooms page."],
+      ["Scan", "From 10 minutes before to 15 after the start, or it's released."],
+      ["Free now?", "Scan to take it on the spot. Leaving early? Tap Leave."],
+    ],
+    foot: ["No app, no sign-up", r.label],
+    small: true,
+  })));
+  return a4Sheets(lib, { title: "Discussion room door signs", bar: `${list.length} rooms · one per A4 page`, pages });
+}
+
+/** One sign's page: the big name, its QR code, three steps. */
+async function sheetPage(lib, { link, label, name, area, cta, steps, foot, small = false }) {
+  const qr = await QRCode.toString(link, { type: "svg", margin: 0, errorCorrectionLevel: "Q", color: { dark: "#121614", light: "#0000" } });
+  return `<article class="page">
   <div class="top"><span class="mark"><img src="/icons/favicon.svg" alt="">NaviSpace</span><span class="where">${escapeHtml(lib.name)}<br>Wits University</span></div>
-  <div class="seat"><span class="label">Seat</span><b>${escapeHtml(seatId)}</b>${area ? `<span class="area">${escapeHtml(area)}</span>` : ""}</div>
+  <div class="seat${small ? " long" : ""}"><span class="label">${escapeHtml(label)}</span><b>${escapeHtml(name)}</b>${area ? `<span class="area">${escapeHtml(area)}</span>` : ""}</div>
   <div class="qr">${qr}</div>
-  <p class="cta">Scan to check in</p>
+  <p class="cta">${escapeHtml(cta)}</p>
   <section class="steps">
-    <div class="step"><span class="n">01</span><h2>Scan</h2><p>Open your camera, point it at the code, tap Check in.</p></div>
-    <div class="step"><span class="n">02</span><h2>Stay</h2><p>Tap Still here when asked. Step away for up to 1 h 15 min.</p></div>
-    <div class="step"><span class="n">03</span><h2>Leave</h2><p>Tap Check out, so the next person can sit down.</p></div>
+${steps.map(([h, p], i) => `    <div class="step"><span class="n">0${i + 1}</span><h2>${escapeHtml(h)}</h2><p>${escapeHtml(p)}</p></div>`).join("\n")}
   </section>
-  <div class="foot"><span>No app, no sign-up</span><span>Seat ${escapeHtml(seatId)}</span></div>
+  <div class="foot"><span>${escapeHtml(foot[0])}</span><span>${escapeHtml(foot[1])}</span></div>
 </article>`;
-  }));
+}
+
+/** A printable stack of A4 signs, with a print button on screen. */
+function a4Sheets(lib, { title, bar, pages }) {
   const warning = seatCodesRequired() ? "" :
-    `<p class="warn">SEAT_SIGNING_SECRET isn't set on the server, so these pages carry no seat code. Set it first, then print.</p>`;
+    `<p class="warn">SEAT_SIGNING_SECRET isn't set on the server, so these codes aren't signed. Set it first, then print.</p>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>Seat QR codes, A4 · ${escapeHtml(lib.name)}</title>
+<meta name="robots" content="noindex"><title>${escapeHtml(title)} · ${escapeHtml(lib.name)}</title>
 <style>
   @font-face { font-family: "Newsreader"; src: url("/fonts/newsreader.woff2") format("woff2"); font-weight: 200 800; }
   @font-face { font-family: "Public Sans"; src: url("/fonts/public-sans.woff2") format("woff2"); font-weight: 100 900; }
@@ -343,6 +412,7 @@ async function seatSheets(origin, libId, lib) {
   .seat .label, .seat .area { font: 500 12px "Plex Mono", monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--brass); }
   .seat .area { color: var(--muted); letter-spacing: .14em; }
   .seat b { font: 400 34mm/1 "Newsreader", Georgia, serif; letter-spacing: -0.02em; margin: 1mm 0 2mm; }
+  .seat.long b { font-size: 24mm; margin: 3mm 0 3mm; }
   .qr { align-self: center; width: 118mm; height: 118mm; padding: 6mm; border: 1.4mm solid var(--ink); background: #fff; }
   .qr svg { width: 100%; height: 100%; display: block; }
   .cta { margin: 0 0 8mm; font: 400 30px/1.1 "Newsreader", Georgia, serif; }
@@ -364,7 +434,7 @@ async function seatSheets(origin, libId, lib) {
   fit();
   addEventListener("resize", fit);
 </script>
-<div class="bar"><span>${seatIds.length} seats · one per A4 page · ${escapeHtml(lib.name)}</span><button onclick="print()">Print or save as PDF</button></div>${warning}
+<div class="bar"><span>${escapeHtml(bar)} · ${escapeHtml(lib.name)}</span><button onclick="print()">Print or save as PDF</button></div>${warning}
 ${pages.join("\n")}
 </body></html>`;
 }
@@ -473,4 +543,4 @@ function mountPoster(app, { siteOrigin }) {
   });
 }
 
-module.exports = { mountStaff, mountPoster, seatLink, hoursLine };
+module.exports = { mountStaff, mountPoster, seatLink, roomDoorLink, hoursLine };

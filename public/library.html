@@ -323,6 +323,18 @@
         }
         .plan-floor { fill: rgba(236, 230, 214, 0.04); stroke: rgba(196, 163, 95, 0.65); stroke-width: 2.5; }
         .plan-room { fill: rgba(236, 230, 214, 0.03); stroke: rgba(236, 230, 214, 0.22); }
+        .plan-room.bookable { fill: rgba(196, 163, 95, 0.07); stroke: rgba(196, 163, 95, 0.6); stroke-dasharray: none; transition: fill 0.2s ease; }
+        .plan-bookable:hover .plan-room.bookable, .plan-bookable:focus-visible .plan-room.bookable { fill: rgba(196, 163, 95, 0.16); }
+        .plan-bookable:focus-visible { outline: none; }
+        .plan-bookable:focus-visible .plan-room.bookable { stroke: var(--brass-hi); stroke-width: 2.5; }
+        .plan-bookable[data-state="free"] .plan-room.bookable { fill: var(--free-dim); stroke: var(--free); }
+        .plan-bookable[data-state="inUse"] .plan-room.bookable,
+        .plan-bookable[data-state="booked"] .plan-room.bookable { fill: var(--taken-dim); stroke: rgba(227, 140, 112, 0.6); }
+        .plan-bookable .plan-label { fill: var(--text); }
+        .plan-room-state { fill: var(--brass-hi); font: 500 9.5px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+        .plan-bookable[data-state="free"] .plan-room-state { fill: var(--free); }
+        .plan-bookable[data-state="inUse"] .plan-room-state,
+        .plan-bookable[data-state="booked"] .plan-room-state { fill: var(--taken); }
         .plan-core { fill: rgba(0, 0, 0, 0.32); stroke: rgba(236, 230, 214, 0.18); }
         .plan-label { fill: var(--muted); font-family: var(--font-mono); font-weight: 500; }
         .plan-label.outside { fill: rgba(236, 230, 214, 0.28); }
@@ -403,6 +415,7 @@
             document.getElementById("topnav").innerHTML = `
       <a href="/">Home</a>
       <a href="${libraryUrl("/library.html", libraryId)}" class="current">Map</a>
+      <a href="${libraryUrl("/rooms.html", libraryId)}">Rooms</a>
       <a href="${libraryUrl("/leaderboard.html", libraryId)}">Study board</a>
       <a href="${libraryUrl("/lost-found.html", libraryId)}">Lost &amp; found</a>
     `;
@@ -482,12 +495,24 @@
                 svgEl("path", { d: layout.outline, class: "plan-floor" }, svg);
             }
 
+            planRooms = new Map();
             for (const r of layout.rooms || []) {
                 const b = box(r.x, r.y, r.w, r.h);
-                svgEl("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8, class: r.kind === "core" ? "plan-core" : "plan-room" }, svg);
-                const t = svgEl("text", { x: b.x + b.w / 2, y: b.y + b.h / 2, class: "plan-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg);
+                // Discussion rooms open the booking page, and say whether they're free.
+                const parent = r.bookable
+                    ? svgEl("a", { href: libraryUrl("/rooms.html", libraryId), class: "plan-bookable", "aria-label": `${r.label}: book a discussion room` }, svg)
+                    : svg;
+                svgEl("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8, class: r.kind === "core" ? "plan-core" : r.bookable ? "plan-room bookable" : "plan-room" }, parent);
+                const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+                const t = svgEl("text", { x: cx, y: r.bookable ? cy - 8 : cy, class: "plan-label", "text-anchor": "middle", "dominant-baseline": "central" }, parent);
                 t.textContent = r.label;
+                if (r.bookable) {
+                    const sub = svgEl("text", { x: cx, y: cy + 10, class: "plan-room-state", "text-anchor": "middle", "dominant-baseline": "central" }, parent);
+                    sub.textContent = "Book";
+                    planRooms.set(r.id, { a: parent, sub, label: r.label });
+                }
             }
+            roomsCheckedAt = 0;
 
             for (const st of layout.stacks || []) {
                 // Book stacks: shelf lines running the long way of the block.
@@ -566,6 +591,27 @@
             document.getElementById("planSummary").textContent = summary + (away.length ? ` Stepped away, held for someone: ${away.join(", ")}.` : "");
         }
 
+        // Discussion rooms on the plan: free or in use right now (every 30 s).
+        let planRooms = new Map(), roomsCheckedAt = 0;
+        async function paintRooms() {
+            if (!planRooms.size || Date.now() - roomsCheckedAt < 30000) return;
+            roomsCheckedAt = Date.now();
+            try {
+                const res = await fetch(`/api/library/${encodeURIComponent(libraryId)}/rooms/view`, {
+                    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+                });
+                const view = await res.json();
+                for (const r of view.rooms || []) {
+                    const spot = planRooms.get(r.id);
+                    if (!spot) continue;
+                    const state = r.now ? r.now.state : "closed";
+                    spot.a.dataset.state = state;
+                    spot.sub.textContent = { free: "Free", inUse: "In use", booked: "Booked" }[state] || "Book";
+                    spot.a.setAttribute("aria-label", `${spot.label}: ${{ free: "free now", inUse: `in use until ${r.now && r.now.until}`, booked: `booked until ${r.now && r.now.until}` }[state] || "closed now"}. Book a discussion room.`);
+                }
+            } catch { }
+        }
+
         async function render() {
             const [seats, config, libraries, layout] = await Promise.all([
                 getAllSeats(libraryId),
@@ -589,6 +635,7 @@
                     meta.textContent = layout.floor || "";
                 }
                 paintPlan(seats, config);
+                paintRooms();
                 paintSpot(seats);
                 paintWait(seats, layout);
                 document.getElementById("mrFree").textContent = seats.filter((s) => s.state === "AVAILABLE").length;
