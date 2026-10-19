@@ -127,7 +127,9 @@ Timings live in `src/config.js`.
   Lost & Found posts, the most-used seats, and how full the library is by hour.
   Students are counted by scrambled codes only.
 - **Seat stickers:** every seat's sticker on A4, signed with the server's
-  `SEAT_SIGNING_SECRET`. Print, or save as a PDF.
+  `SEAT_SIGNING_SECRET`. Print, or save as a PDF. **One per A4 page** prints
+  each seat's code large on its own page (`/staff/stickers?size=a4`), for a
+  desk sign or a frame.
 - **Launch poster:** an A4 poster for the entrance and the front desk: a QR code
   to the home page, the three steps (scan your desk, keep your seat, check out)
   and the opening hours. Print in colour if you can.
