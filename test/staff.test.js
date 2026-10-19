@@ -92,6 +92,9 @@ test("stickers: signed links for every seat, only for signed-in staff", async ()
     const { seatLink } = require("../src/staff");
     const { seatCode } = require("../src/seatcode");
     const [seat] = getSeatIds("engineering");
+    const a4 = await (await fetch(`${base}/staff/stickers?lib=engineering&size=a4`, { headers: { Cookie: login.headers.get("set-cookie").split(";")[0] } })).text();
+    assert.equal((a4.match(/<article class="page">/g) || []).length, getSeatIds("engineering").length);
+    assert.match(a4, /@page \{ size: A4/);
     assert.equal(seatLink("https://x", "engineering", seat), `https://x/seat.html?seat=${seat}&k=${seatCode("engineering", seat)}`);
   });
 });

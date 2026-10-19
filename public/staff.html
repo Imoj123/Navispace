@@ -461,6 +461,12 @@
             max-width: 60ch;
         }
 
+        .stickers .row-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
         .stickers .btn {
             width: auto;
             display: inline-block;
@@ -599,7 +605,8 @@
                     <p class="eyebrow" id="stCount"></p>
                 </header>
                 <p id="stText"></p>
-                <a class="btn btn-primary" id="stLink" href="/staff/stickers" target="_blank" rel="noopener">Open printable stickers</a>
+                <div class="row-actions"><a class="btn btn-primary" id="stLink" href="/staff/stickers" target="_blank" rel="noopener">Open printable stickers</a>
+                <a class="btn btn-tinted" id="stA4Link" href="/staff/stickers?size=a4" target="_blank" rel="noopener">One per A4 page</a></div>
             </section>
 
             <section class="staff-section stickers" aria-labelledby="poTitle">
@@ -771,6 +778,7 @@
             // Stickers
             $("stCount").textContent = `${d.stickers.count} seats`;
             $("stLink").href = `/staff/stickers?lib=${encodeURIComponent(libraryId)}`;
+            $("stA4Link").href = `/staff/stickers?lib=${encodeURIComponent(libraryId)}&size=a4`;
             $("poLink").href = `/staff/poster?lib=${encodeURIComponent(libraryId)}`;
             $("stText").textContent = d.stickers.signed
                 ? "One sticker per seat on A4, each with its signed code. Print them (or save as a PDF) and stick each on its desk. Reprint after changing the floor plan or the signing secret."
