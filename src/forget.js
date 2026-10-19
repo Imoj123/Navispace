@@ -8,6 +8,7 @@ const { removeSubscription } = require("./push");
 const { leaveWaitlist } = require("./waitlist");
 const config = require("./config");
 const { withLock, seatLock } = require("./lock");
+const { forgetRooms } = require("./rooms");
 
 /**
  * "Delete my data" (privacy page): removes everything NaviSpace keeps under
@@ -16,6 +17,7 @@ const { withLock, seatLock } = require("./lock");
  * - the seat it holds (freed now),
  * - its sittings ("Your week") and study-board record,
  * - its notification sign-up and any "tell me when a seat frees up",
+ * - its discussion room bookings,
  * - Lost & Found items it posted (with their conversations), and its
  *   claims on other people's items (the item goes back to unclaimed and
  *   the conversation is deleted).
@@ -24,13 +26,14 @@ const { withLock, seatLock } = require("./lock");
  * busy-hours averages hold no one at all, so neither needs touching.
  */
 async function forgetDevice(token) {
-  const removed = { seats: 0, items: 0, claims: 0 };
+  const removed = { seats: 0, items: 0, claims: 0, bookings: 0 };
   await store.delete(`history:${token}`);
   await removeSubscription(token);
 
   for (const lib of LIBRARIES) {
     await store.delete(studentKey(lib.id, token));
     await leaveWaitlist(lib.id, token);
+    removed.bookings += await forgetRooms(lib.id, token);
     for (const key of await store.listKeys(`credit:${lib.id}:${token}:`)) await store.delete(key);
 
     const seatIds = lib.status === "active" ? getSeatIds(lib.id) : [];

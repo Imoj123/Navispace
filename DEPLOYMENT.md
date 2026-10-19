@@ -14,6 +14,7 @@ database. Every merge to `main` redeploys it automatically.
 | ✅ | Keep-awake ping every 10 minutes | Reminders, seat releases and closing time keep running |
 | ☐ | `STAFF_PASSWORD` set | Turns on the staff page (front desk, usage, stickers) |
 | ☐ | Seat stickers printed from the staff page | Old stickers stop working once the secret is set |
+| ☐ | Door signs on the three discussion rooms | Bookings are claimed by scanning the door |
 | ☐ | Opening hours and closed days confirmed | Check-ins are refused outside them |
 
 ## Environment variables
@@ -97,6 +98,20 @@ history on cron-job.org first: failed pings mean the server was asleep.
   out, or a sitting of 15 minutes or more that ends on its own), however many
   seats they use that day. The board is a calendar week, Monday to Sunday, and
   starts fresh every Monday.
+- **Discussion rooms:** Rooms 1–3 are booked on `/rooms.html` (and from the
+  map, the home page and the nav) by the hour, from opening time, today and the
+  next six days. A device can book up to 2 hours a day, never two rooms at the
+  same time, and hold at most 3 bookings ahead. The booking is claimed by
+  scanning the room's door sign from 10 minutes before to 15 minutes after the
+  start; not scanned by then, it's released for someone else (with a
+  notification). A reminder goes out 10 minutes before the start. Scanning the
+  door of a room that's free right now books it on the spot, until the next
+  hour or the one after. **Leave** frees the rest of the time. Closing early
+  cancels bookings that start after the new time (their bookers are told) and
+  shortens one running into it. Other students only see "Booked"; staff see
+  the nickname. Which rooms are bookable is set in the floor plan
+  (`book="R1"` in `scripts/build-engineering-plan.py`); the rules are at the
+  top of `src/rooms.js`.
 - **Busiest hours** on the home page are learned from how full the library is.
   Until each open hour has about three days of data, the plan's estimate
   (`hours.busiest`) shows.
@@ -121,6 +136,10 @@ Timings live in `src/config.js`.
     normal. For a whole closed day, use `CLOSED_DAYS` instead.
 - **Seats in use:** who holds which seat and until when, with **Free this seat**
   for someone who left without checking out.
+- **Discussion rooms:** a day's bookings (today or up to a week ahead) with
+  each student's nickname and whether they've scanned in. **Cancel booking**
+  when a room is needed; the student is told. **Door signs, one per A4 page**
+  prints a signed QR sign for each room's door.
 - **Lost & found:** every item, reported conversations first, then items at the
   desk. Read a conversation, mark an item **Collected: remove**, or take it down.
 - **Usage, last 14 days:** check-ins, different students, a weekday on average,
@@ -151,6 +170,7 @@ Timings live in `src/config.js`.
 To stop one person flooding the floor or the board, each device and each
 network is limited (per minute or hour): seat actions, seat reports, Lost &
 Found posts, claims, messages and reports, notification sign-ups, "Notify me",
+room bookings and door scans,
 data deletion, and staff sign-in attempts. Over a limit, the page says to wait a
 moment. The numbers are in `src/ratelimit.js`.
 
@@ -158,8 +178,9 @@ moment. The numbers are in `src/ratelimit.js`.
 
 `/privacy.html` says, in plain language, what's kept, why and for how long
 (POPIA), and has **Delete my data**: it frees the device's seat and deletes its
-sittings, study board record, notification sign-up, any wait for a seat, Lost &
-Found posts and claims (with their conversations). It's linked from the home page footer, the
+sittings, study board record, notification sign-up, any wait for a seat,
+discussion room bookings, Lost & Found posts and claims (with their
+conversations). It's linked from the home page footer, the
 nickname card and the Lost & Found form. **Keep it true:** if what NaviSpace
 stores changes, update the page.
 
@@ -203,6 +224,10 @@ BASE_URL=https://navispace-1.onrender.com SEAT_SIGNING_SECRET=... npm run qr
 which writes one PNG per seat to `qr-codes/`. Changing the secret retires every
 printed sticker at once. Regenerate stickers whenever seats are added, removed
 or renamed in the floor plan (`scripts/build-engineering-plan.py`).
+
+The discussion rooms' door signs work the same way (`/rooms.html?room=R1&k=…`,
+signed as `room:R1`): print them from the staff page, and reprint them when the
+secret changes.
 
 ## Logs worth knowing
 
