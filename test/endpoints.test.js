@@ -380,3 +380,19 @@ test("delete my data: frees the seat and removes history, sign-up, posts, claims
     assert.equal(board.some((i) => i.id === mine.id), false);
   });
 });
+
+test("the student guide: four A4 pages covering every feature, open to everyone", async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/guide`);
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.equal((html.match(/<article class="page">/g) || []).length, 4);
+    assert.match(html, /@page \{ size: A4/);
+    assert.match(html, /<svg[^>]*>/); // the QR code to the home page
+    for (const words of ["Check in", "Step away", "Focus session", "Pomodoro", "Your week", "Study board", "Discussion rooms", "Room 1, Room 2 and Room 3", "Lost &amp; Found", "Notify me", "Delete my data", "Add to Home Screen"]) {
+      assert.ok(html.includes(words), `mentions ${words}`);
+    }
+    assert.ok(html.includes("2 h"), "the hold time comes from config");
+    assert.ok(html.includes("1 h 15 min"));
+  });
+});

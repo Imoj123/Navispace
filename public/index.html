@@ -969,7 +969,7 @@
         <section class="section" aria-labelledby="howTitle">
             <div class="section-head">
                 <h2 id="howTitle">How a session works</h2>
-                <span class="eyebrow">Three steps, no sign-up</span>
+                <span class="eyebrow"><a id="guideLink" href="/guide">The full guide →</a></span>
             </div>
             <div class="steps">
                 <div class="step"><span class="n">01</span>
@@ -1008,7 +1008,7 @@
 
     <footer class="sitefoot">
         <span>NaviSpace · Wits study spaces</span>
-        <span><a href="/privacy.html">Privacy</a> · Quiet hours begin when you sit down</span>
+        <span><a href="/guide">How it works</a> · <a href="/privacy.html">Privacy</a> · Quiet hours begin when you sit down</span>
     </footer>
 
     <script src="/client.js"></script>
@@ -1583,6 +1583,7 @@
             $("mapLink").href = libraryUrl("/library.html", library.id);
             $("boardLink").href = libraryUrl("/leaderboard.html", library.id);
             $("roomsLink").href = libraryUrl("/rooms.html", library.id);
+            $("guideLink").href = libraryUrl("/guide", library.id);
         }
 
         // --- Install -------------------------------------------------------------
