@@ -23,6 +23,7 @@ const { seatCodeValid, seatCodesRequired } = require("./seatcode");
 const { limit } = require("./ratelimit");
 const usage = require("./usage");
 const { mountStaff } = require("./staff");
+const { mountGuide } = require("./guide");
 const { forgetDevice } = require("./forget");
 const waitlist = require("./waitlist");
 const notices = require("./notices");
@@ -286,6 +287,8 @@ function createApp() {
 
   // The staff page and its API (password in STAFF_PASSWORD; see staff.js).
   mountStaff(app, { siteOrigin });
+  // The student guide: every feature in plain steps, printable (guide.js).
+  mountGuide(app, { siteOrigin });
 
   // Pages, with their stylesheet and script stamped by version.
   app.get(/^\/(?:[\w-]+\.html)?$/, (req, res, next) => {
