@@ -14,6 +14,7 @@ PNGs from `public/icons/favicon.svg` if the logo ever changes.
 | `logo-n-brass-transparent-1024.png` | The N alone, brass, transparent. On dark backgrounds. |
 | `logo-n-dark-transparent-1024.png` | The N alone, dark, transparent. On white or light paper. |
 | `logo.svg` | Vector master. Scales to any size. |
+| `NaviSpace-student-guide.pdf` | The student guide, 4 × A4: every feature in plain steps. Print it for the desk or share it. Always current at `/guide` (also linked from the home page and the staff page). |
 | `qr-navispace-home.png` | QR code to the home page (navispace-1.onrender.com). Slides, the Evidence Pack, the pitch table. |
 
 ## Seat QR codes, one per A4 page
