@@ -107,6 +107,23 @@
             max-width: 40ch;
         }
 
+        /* The guide: a card beside the headline on wide screens; on phones (where
+           the 3D floor comes first) a strip right under the nav instead. */
+        .guide-top {
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            .guide-top {
+                display: flex;
+                margin: 16px 0 6px;
+            }
+
+            .guide-card {
+                display: none;
+            }
+        }
+
         .hero-actions {
             display: flex;
             flex-wrap: wrap;
@@ -883,12 +900,18 @@
     </div>
 
     <main class="home-wrap">
+        <a class="guide-chip guide-top" id="guideTop" href="/guide"><span class="guide-eyebrow"><i></i></span><span><b id="guideTopLead">New here?</b> See how NaviSpace works</span><span aria-hidden="true">→</span></a>
         <section class="hero" aria-labelledby="heroTitle">
             <div class="hero-copy">
                 <h1 id="heroTitle"><span id="heroLine1"><span class="free" id="freeCount">—</span> seats
                         free.</span><br><span id="heroLine2">One is yours.</span></h1>
                 <p class="lede" id="lede">The Engineering Library, live. Check in at your desk, and the library keeps
                     your seat while you work.</p>
+                <a class="guide-card" id="guideCard" href="/guide">
+                    <span class="guide-seats" aria-hidden="true"><i></i><i class="f"></i><i></i><i class="f"></i><i></i><i></i></span>
+                    <span class="guide-text"><span class="guide-eyebrow" id="guideEyebrow"><i></i>New here?</span><b>See how NaviSpace works</b><small>Seats, focus sessions, rooms and more, in two minutes.</small></span>
+                    <span class="guide-arrow" aria-hidden="true">→</span>
+                </a>
                 <div class="readout" aria-live="polite">
                     <span><b id="seatTotal">—</b>Seats</span>
                     <span><b id="inUse">—</b>In use</span>
@@ -1584,6 +1607,8 @@
             $("boardLink").href = libraryUrl("/leaderboard.html", library.id);
             $("roomsLink").href = libraryUrl("/rooms.html", library.id);
             $("guideLink").href = libraryUrl("/guide", library.id);
+            $("guideCard").href = libraryUrl("/guide", library.id);
+            $("guideTop").href = libraryUrl("/guide", library.id);
         }
 
         // --- Install -------------------------------------------------------------
@@ -1690,6 +1715,14 @@
             const w = document.querySelector(".stage").clientWidth;
             if (Math.abs(w - lastW) > 40) { lastW = w; buildFloor(); }
         });
+
+        // Been through the guide already: still there, a little calmer.
+        if (guideSeen()) {
+            $("guideCard").classList.add("seen");
+            $("guideEyebrow").lastChild.textContent = "Quick guide";
+            $("guideTop").classList.add("seen");
+            $("guideTopLead").textContent = "Quick guide:";
+        }
 
         boot();
     </script>
