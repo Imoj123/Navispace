@@ -643,6 +643,13 @@ function getLibraries() {
   return _librariesPromise;
 }
 
+/* --- The guide (/guide) ------------------------------------------------------
+ * Whether this device has opened the student guide (the guide page notes it),
+ * so its invitation can be bold for newcomers and calmer after. */
+function guideSeen() {
+  try { return localStorage.getItem("navispace_guide_seen") === "1"; } catch { return false; }
+}
+
 /* --- Seat codes -------------------------------------------------------------
  * A seat's QR sticker carries a code (?k=...) that checking in needs, so only
  * someone who scanned the desk can claim it (see src/seatcode.js). The code is

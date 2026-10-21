@@ -137,6 +137,7 @@ function mountGuide(app, { siteOrigin }) {
     .foot span:nth-child(2) { display: none; }
   }
 </style></head><body>
+<script>try { localStorage.setItem("navispace_guide_seen", "1"); } catch { }</script>
 <div class="bar"><a href="/">← NaviSpace</a><button onclick="print()">Print or save as PDF</button></div>
 
 <article class="page">
