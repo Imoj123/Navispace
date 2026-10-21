@@ -5,7 +5,6 @@ const config = require("./config");
 const { getLibrary } = require("./libraries");
 const { getLayout } = require("./seats");
 const { hoursLine } = require("./staff");
-const rooms = require("./rooms");
 
 /**
  * The student guide (/guide): everything NaviSpace does, in plain steps.
@@ -43,14 +42,12 @@ function mountGuide(app, { siteOrigin }) {
     const hold = span(config.CHECK_IN_DURATION_MS);
     const away = span(config.STEP_AWAY_DURATION_MS);
     const prompt = minutes(config.STILL_HERE_PROMPT_INTERVAL_MS);
-    const roomList = rooms.bookableRooms(libId);
-    const roomNames = roomList.map((r) => r.label).join(", ").replace(/, ([^,]*)$/, " and $1");
     const foot = (n) => `<div class="foot"><span>NaviSpace · ${esc(lib.name)}</span><span>${esc(shown)}</span><span>${n} / 4</span></div>`;
 
     res.set("Cache-Control", "no-cache").type("html").send(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>How NaviSpace works · ${esc(lib.name)}</title>
-<meta name="description" content="A short guide to NaviSpace: finding and keeping a seat, focus sessions, your week, the study board, discussion rooms and Lost &amp; Found.">
+<meta name="description" content="A short guide to NaviSpace: finding and keeping a seat, focus sessions, your week, the study board and Lost &amp; Found.">
 <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
 <meta property="og:image" content="${esc(siteOrigin(req))}/icons/icon-512.png">
 <style>
@@ -152,7 +149,7 @@ function mountGuide(app, { siteOrigin }) {
   <div class="contents">
     <div><b>02</b><span>Get a seat<small>Find, check in, keep it, step away, check out</small></span></div>
     <div><b>03</b><span>Study better<small>Focus sessions, your week, the study board</small></span></div>
-    <div><b>04</b><span>Rooms and more<small>Discussion rooms, Lost &amp; Found, notifications</small></span></div>
+    <div><b>04</b><span>Lost &amp; Found and more<small>Lost &amp; Found, notifications, your privacy</small></span></div>
     <div><b>04</b><span>Quick answers<small>When something doesn't work</small></span></div>
   </div>
   <div class="home-screen">
@@ -214,16 +211,13 @@ function mountGuide(app, { siteOrigin }) {
 </article>
 
 <article class="page">
-  <div class="top"><span class="mark"><img src="/icons/favicon.svg" alt="">NaviSpace</span><span class="where">Rooms and more</span></div>
+  <div class="top"><span class="mark"><img src="/icons/favicon.svg" alt="">NaviSpace</span><span class="where">Lost &amp; Found and more</span></div>
   <p class="kicker">Everything else</p>
-  <h2>Rooms, lost things <em>and more.</em></h2>
-  ${roomList.length ? `<div class="feature"><div class="label">Discussion rooms<b>Book a room for your group</b></div><div>
-    <p>Open <span class="tap">Rooms</span> to book ${esc(roomNames)} by the hour: today or up to a week ahead, up to two hours a day. Tap a time, then the next one for two hours, then <span class="tap">Book</span>.</p>
-    <p>When you arrive, <b>scan the code on the door</b> between 10 minutes before and 15 minutes after your start, or the room goes to someone else. Room free right now? Scan its door to take it on the spot. Finished early? Tap <span class="tap">Leave</span>.</p></div></div>` : ""}
+  <h2>Lost things <em>and more.</em></h2>
   <div class="feature"><div class="label">Lost &amp; Found<b>Lost something?</b></div><div>
     <p>Found something? Post a photo and where it was. Lost something? Spot it on the board and claim it: you and the finder chat privately to arrange handing it back, or the finder hands it in at the front desk for you to collect.</p></div></div>
   <div class="feature"><div class="label">Notifications<b>Reminders that matter</b></div><div>
-    <p>Turn them on from the home page (<i>Notifications</i>) for: your seat about to run out, a free seat when you asked to be told, your room booking, and replies about a lost item. Each device is turned on separately. On iPhone, add NaviSpace to your Home Screen first.</p></div></div>
+    <p>Turn them on from the home page (<i>Notifications</i>) for: your seat about to run out, a free seat when you asked to be told, and replies about a lost item. Each device is turned on separately. On iPhone, add NaviSpace to your Home Screen first.</p></div></div>
   <div class="feature"><div class="label">Your privacy<b>Only a nickname</b></div><div>
     <p>No account, no email. The Privacy page lists what's kept and for how long, and <span class="tap">Delete my data</span> removes everything NaviSpace keeps for your phone in one tap.</p></div></div>
   <h3 style="margin:7mm 0 0;font:400 22px/1.2 'Newsreader',Georgia,serif">Quick answers</h3>

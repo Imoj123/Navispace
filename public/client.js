@@ -654,13 +654,12 @@ function guideSeen() {
  * A seat's QR sticker carries a code (?k=...) that checking in needs, so only
  * someone who scanned the desk can claim it (see src/seatcode.js). The code is
  * kept for this tab and taken out of the address bar, so a seat link copied
- * from the browser doesn't carry it. Discussion room doors work the same way. */
+ * from the browser doesn't carry it. */
 const seatCodeKey = (libraryId, seatId) => `navispace_k_${libraryId}_${seatId}`;
 
 (function rememberSeatCode() {
   const params = new URLSearchParams(location.search);
-  // A room's door code is kept the same way, as "room:R2".
-  const seatId = params.get("seat") || (params.get("room") && `room:${params.get("room")}`);
+  const seatId = params.get("seat");
   const code = params.get("k");
   if (!seatId || !code) return;
   try { sessionStorage.setItem(seatCodeKey(getLibraryIdFromUrl(), seatId), code); } catch { }

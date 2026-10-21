@@ -209,4 +209,4 @@ function releaseAtOn(hours, ms) {
   return ms - (ms % 60000) + (close + closingGraceMinutes() - p.minutes) * 60000;
 }
 
-module.exports = { weekStart, releaseAtOn, TIME_ZONE, localParts, toMinutes, closesOn, closedDayReason, publicHolidays, openStatus, closedAtToday, closingGraceMinutes, releaseDue, releasedAtToday, closingSoon };
+module.exports = { weekStart, releaseAtOn, TIME_ZONE, localParts, toMinutes, publicHolidays, openStatus, closedAtToday, closingGraceMinutes, releaseDue, releasedAtToday, closingSoon };
