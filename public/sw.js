@@ -20,7 +20,7 @@
 // name, so this is what actually forces previously-installed devices
 // to pick up the new version instead of serving stale cached HTML
 // forever under a cache-first strategy.
-const CACHE_NAME = "navispace-shell-v23";
+const CACHE_NAME = "navispace-shell-v24";
 const SHELL_FILES = [
     "/",
     "/index.html",
@@ -30,7 +30,6 @@ const SHELL_FILES = [
     "/leaderboard.html",
     "/lost-found.html",
     "/libraries.html",
-    "/rooms.html",
     "/fonts/newsreader.woff2",
     "/fonts/newsreader-italic.woff2",
     "/fonts/public-sans.woff2",
