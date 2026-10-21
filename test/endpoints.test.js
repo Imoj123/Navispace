@@ -263,7 +263,7 @@ test("search engines: only the home page and the map are listed", async () => {
       assert.ok(!noindex(html), `${page} is indexable`);
       assert.ok(html.includes(`<link rel="canonical" href="${base}${page}"`), `${page} has an absolute canonical`);
     }
-    for (const page of ["/seat.html", "/focus.html", "/leaderboard.html", "/lost-found.html", "/rooms.html"]) {
+    for (const page of ["/seat.html", "/focus.html", "/leaderboard.html", "/lost-found.html"]) {
       assert.ok(noindex(await (await fetch(base + page)).text()), `${page} is kept out`);
     }
     const api = await fetch(`${base}/api/libraries`);
@@ -355,7 +355,7 @@ test("speed limits: a device that keeps scanning is told to slow down", async ()
   });
 });
 
-test("delete my data: frees the seat and removes history, sign-up, posts, claims and room bookings", async () => {
+test("delete my data: frees the seat and removes history, sign-up, posts and claims", async () => {
   await withServer(async (base) => {
     const post = (p, body) => fetch(`${base}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
     const me = "tok-forget-me";
@@ -366,12 +366,9 @@ test("delete my data: frees the seat and removes history, sign-up, posts, claims
     const mine = (await post("/api/library/engineering/lostfound", { description: "Mine", photoDataUrl: "data:image/jpeg;base64,AAAA", token: me, nickname: "Gone" })).item;
     const theirs = (await post("/api/library/engineering/lostfound", { description: "Theirs", photoDataUrl: "data:image/jpeg;base64,BBBB", token: "tok-other", nickname: "Other" })).item;
     await post(`/api/library/engineering/lostfound/${theirs.id}/claim`, { token: me, nickname: "Gone", note: "mine!" });
-    const tomorrow = (await post("/api/library/engineering/rooms/view", {})).days[1].date;
-    assert.equal((await post("/api/library/engineering/rooms/book", { token: me, nickname: "Gone", room: "R1", date: tomorrow, start: 600, end: 660 })).ok, true);
 
     const r = await post("/api/me/forget", { token: me });
-    assert.deepEqual(r.removed, { seats: 1, items: 1, claims: 1, bookings: 1 });
-    assert.deepEqual((await post("/api/library/engineering/rooms/mine", { token: me })).bookings, []);
+    assert.deepEqual(r.removed, { seats: 1, items: 1, claims: 1 });
     assert.equal((await post("/api/held", { token: me })).seatId, null);
     assert.equal(await store.get(`history:${me}`), null);
     assert.equal(await store.get(`push:${me}`), null);
@@ -389,7 +386,7 @@ test("the student guide: four A4 pages covering every feature, open to everyone"
     assert.equal((html.match(/<article class="page">/g) || []).length, 4);
     assert.match(html, /@page \{ size: A4/);
     assert.match(html, /<svg[^>]*>/); // the QR code to the home page
-    for (const words of ["Check in", "Step away", "Focus session", "Pomodoro", "Your week", "Study board", "Discussion rooms", "Room 1, Room 2 and Room 3", "Lost &amp; Found", "Notify me", "Delete my data", "Add to Home Screen"]) {
+    for (const words of ["Check in", "Step away", "Focus session", "Pomodoro", "Your week", "Study board", "Lost &amp; Found", "Notify me", "Delete my data", "Add to Home Screen"]) {
       assert.ok(html.includes(words), `mentions ${words}`);
     }
     assert.ok(html.includes("2 h"), "the hold time comes from config");

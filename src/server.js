@@ -28,7 +28,6 @@ const { forgetDevice } = require("./forget");
 const waitlist = require("./waitlist");
 const notices = require("./notices");
 const input = require("./input");
-const rooms = require("./rooms");
 
 /**
  * Express 4 doesn't catch a rejected promise from an async route: the
@@ -522,65 +521,6 @@ function createApp() {
     res.json({ ok: true, ...(await waitlist.waitStatus(libId, token)) });
   });
 
-  // --- Discussion rooms (rooms.js) ------------------------------------------
-  // Booked by the hour on /rooms.html; claimed by scanning the door's code.
-
-  const roomsRoute = (handler) => async (req, res) => {
-    const { libId } = req.params;
-    if (!isActiveLibrary(libId) || !rooms.bookableRooms(libId).length) {
-      return res.status(404).json({ ok: false, reason: "no_rooms" });
-    }
-    res.set("Cache-Control", "no-store");
-    return handler(req, res, libId, req.body || {});
-  };
-  const roomStatus = (r) => (r.ok ? 200 : r.reason === "not_found" ? 404 : 409);
-
-  // Body: { token, date } (token optional: it marks this device's own bookings).
-  app.post("/api/library/:libId/rooms/view", roomsRoute(async (req, res, libId, { token, date }) => {
-    res.json(await rooms.viewDay(libId, typeof date === "string" ? date : "", token || null));
-  }));
-
-  app.post("/api/library/:libId/rooms/mine", roomsRoute(async (req, res, libId, { token }) => {
-    if (!token) return res.status(400).json({ ok: false, reason: "missing_identity" });
-    res.json({ ok: true, bookings: await rooms.myBookings(libId, token) });
-  }));
-
-  // Body: { token, nickname, room, date, start, end } (minutes after midnight).
-  app.post("/api/library/:libId/rooms/book", limit("rooms"), roomsRoute(async (req, res, libId, body) => {
-    const nickname = input.nickname(body.nickname);
-    if (!body.token || !nickname) return res.status(400).json({ ok: false, reason: "missing_identity" });
-    const r = await rooms.book(libId, { token: body.token, nickname, room: String(body.room || ""), date: String(body.date || ""), start: body.start, end: body.end });
-    res.status(roomStatus(r)).json(r);
-  }));
-
-  // At the door. Body: { token, room, k }: claims this device's booking,
-  // or says until when the room can be taken right now.
-  app.post("/api/library/:libId/rooms/door", limit("rooms"), roomsRoute(async (req, res, libId, { token, room, k }) => {
-    if (!token) return res.status(400).json({ ok: false, reason: "missing_identity" });
-    room = String(room || "");
-    if (!rooms.bookableRooms(libId).some((r) => r.id === room)) return res.status(404).json({ ok: false, reason: "unknown_room" });
-    if (!seatCodeValid(libId, `room:${room}`, k)) return res.status(403).json({ ok: false, reason: "scan_required" });
-    const r = await rooms.claim(libId, token, room);
-    res.status(r.ok || r.reason === "no_booking" ? 200 : 409).json(r);
-  }));
-
-  // From the door, a free room right now. Body: { token, nickname, room, end, k }.
-  app.post("/api/library/:libId/rooms/walkin", limit("rooms"), roomsRoute(async (req, res, libId, body) => {
-    const nickname = input.nickname(body.nickname);
-    if (!body.token || !nickname) return res.status(400).json({ ok: false, reason: "missing_identity" });
-    const room = String(body.room || "");
-    if (!seatCodeValid(libId, `room:${room}`, body.k)) return res.status(403).json({ ok: false, reason: "scan_required" });
-    const r = await rooms.book(libId, { token: body.token, nickname, room, end: body.end, walkIn: true });
-    res.status(roomStatus(r)).json(r);
-  }));
-
-  // Body: { token, id }: cancels before the start, or ends a booking in use.
-  app.post("/api/library/:libId/rooms/cancel", limit("rooms"), roomsRoute(async (req, res, libId, { token, id }) => {
-    if (!token) return res.status(400).json({ ok: false, reason: "missing_identity" });
-    const r = await rooms.cancel(libId, token, String(id || ""));
-    res.status(roomStatus(r)).json(r);
-  }));
-
   // --- Lost & Found --------------------------------------------------------
   // Body (report): { description, location, photoDataUrl, token, nickname }
 
@@ -830,16 +770,6 @@ function start() {
   }, 60 * 1000);
   if (clearWaiting.unref) clearWaiting.unref();
 
-  // Discussion rooms: reminders, unclaimed rooms released, early closes.
-  const roomTicks = setInterval(() => {
-    notices.noticesReady().then(() => {
-      for (const lib of LIBRARIES) {
-        if (isActiveLibrary(lib.id) && rooms.bookableRooms(lib.id).length) rooms.tick(lib.id);
-      }
-    }).catch(() => { });
-  }, 60 * 1000);
-  if (roomTicks.unref) roomTicks.unref();
-
   const stopReminders = startReminderLoop(
     () => notices.noticesReady().then(activeLibrarySeatGroups),
     config.REMINDER_CHECK_INTERVAL_MS,
@@ -857,7 +787,6 @@ function start() {
     stopReminders();
     stopNotices();
     clearInterval(clearWaiting);
-    clearInterval(roomTicks);
     server.close(() => process.exit(0));
   };
   process.on("SIGINT", shutdown);

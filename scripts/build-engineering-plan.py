@@ -36,12 +36,8 @@ def shelf(x, y, w, h):
     stacks.append({"x": x, "y": y, "w": w, "h": h})
 
 
-def room(label, x, y, w, h, kind="room", book=None):
-    r = {"label": label, "x": x, "y": y, "w": w, "h": h, "kind": kind}
-    if book:                                            # a discussion room students can book (src/rooms.js)
-        r["id"] = book
-        r["bookable"] = True
-    rooms.append(r)
+def room(label, x, y, w, h, kind="room"):
+    rooms.append({"label": label, "x": x, "y": y, "w": w, "h": h, "kind": kind})
 
 
 def row_table(zone, x, y, n, side="above"):
@@ -109,9 +105,9 @@ LOUNGE_END = x
 # ---- Entrance, reception, discussion rooms --------------------------------
 ENTRANCE_X = 838
 room("Reception", 905, 182, 184, 112, kind="desk")
-room("Room 1", 1180, 12, 92, 100, book="R1")
-room("Room 2", 1276, 12, 62, 100, book="R2")
-room("Room 3", 1342, 12, 62, 100, book="R3")
+room("Room 1", 1180, 12, 92, 100)
+room("Room 2", 1276, 12, 62, 100)
+room("Room 3", 1342, 12, 62, 100)
 
 # ---- The floor, east side ---------------------------------------------------
 shelf(1150, 210, 10, 120)

@@ -245,8 +245,8 @@ button {
     }
 }
 
-/* Phones: all five sections still fit on one line. */
-@media (max-width: 440px) {
+/* Small phones (iPhone SE and narrower): all four sections still fit on one line. */
+@media (max-width: 380px) {
     .topnav {
         gap: 16px;
     }
@@ -254,17 +254,6 @@ button {
     .topnav a {
         font-size: 11px;
         letter-spacing: 0.06em;
-    }
-}
-
-/* The narrowest phones (320 px). */
-@media (max-width: 359px) {
-    .topnav {
-        gap: 9px;
-    }
-
-    .topnav a {
-        letter-spacing: 0.02em;
     }
 }
 
