@@ -657,6 +657,160 @@ input[type="text"]::placeholder {
     color: var(--faint);
 }
 
+/* --- "How NaviSpace works": the way into the guide (/guide) -------------------
+ * A card near the top of the home page, and a small chip on the seat page for
+ * someone who's never opened it. A light sweeps across now and then to catch
+ * the eye; it stays still for anyone who asks for less motion. */
+.guide-card {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 18px;
+    margin: 0 0 26px;
+    border: 1px solid var(--brass);
+    background: linear-gradient(110deg, rgba(196, 163, 95, 0.16), rgba(196, 163, 95, 0.04) 60%), var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    transition: background 0.25s ease, transform 0.2s ease;
+}
+
+.guide-top {
+    position: relative;
+    overflow: hidden;
+}
+
+.guide-card::after,
+.guide-top::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(236, 210, 150, 0.22) 50%, transparent 70%);
+    transform: translateX(-100%);
+    animation: guide-sweep 7s ease-in-out 1.2s infinite;
+    pointer-events: none;
+}
+
+@keyframes guide-sweep {
+    0%, 70% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.guide-card:hover {
+    background: linear-gradient(110deg, rgba(196, 163, 95, 0.24), rgba(196, 163, 95, 0.08) 60%), var(--surface);
+}
+
+.guide-card:active {
+    transform: scale(0.99);
+}
+
+.guide-seats {
+    display: grid;
+    grid-template-columns: repeat(3, 9px);
+    gap: 4px;
+}
+
+.guide-seats i {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: rgba(236, 230, 214, 0.18);
+}
+
+.guide-seats i.f {
+    background: var(--free);
+    box-shadow: 0 0 8px rgba(140, 197, 164, 0.7);
+}
+
+.guide-text {
+    display: grid;
+    gap: 3px;
+}
+
+.guide-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: 500 11px/1.2 var(--font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-hi);
+}
+
+.guide-eyebrow i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--free);
+    animation: guide-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes guide-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(140, 197, 164, 0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(140, 197, 164, 0); }
+}
+
+.guide-text b {
+    font: 400 clamp(20px, 2.4vw, 24px)/1.15 var(--font-serif);
+}
+
+.guide-text small {
+    font-size: 13.5px;
+    color: var(--muted);
+}
+
+.guide-arrow {
+    font: 400 26px/1 var(--font-serif);
+    color: var(--brass-hi);
+    transition: transform 0.2s ease;
+}
+
+.guide-card:hover .guide-arrow {
+    transform: translateX(4px);
+}
+
+.guide-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--brass);
+    background: rgba(196, 163, 95, 0.1);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14.5px;
+}
+
+.guide-chip[hidden] {
+    display: none;
+}
+
+.guide-chip b {
+    font-weight: 500;
+}
+
+.guide-chip span:last-child {
+    margin-left: auto;
+    color: var(--brass-hi);
+}
+
+.guide-card.seen .guide-eyebrow i,
+.guide-chip.seen .guide-eyebrow i {
+    animation: none;
+    background: var(--brass);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .guide-top::after,
+    .guide-card::after,
+    .guide-eyebrow i {
+        animation: none;
+    }
+}
+
 /* --- Toast ------------------------------------------------------------------- */
 
 .toast {

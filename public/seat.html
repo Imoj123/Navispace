@@ -24,7 +24,8 @@
 <meta property="og:image" content="https://navispace-1.onrender.com/icons/icon-512.png" />
 <meta name="twitter:card" content="summary" />
 <style>
-  main { display: flex; justify-content: center; }
+  main { display: flex; flex-direction: column; align-items: center; }
+  .guide-chip { width: 100%; max-width: 420px; }
 
   .seat-card {
     width: 100%;
@@ -176,6 +177,7 @@
   </div>
 
   <main>
+    <a class="guide-chip" id="guideChip" href="/guide" hidden><span aria-hidden="true">✦</span><span><b>New here?</b> See how NaviSpace works</span><span aria-hidden="true">→</span></a>
     <div class="seat-card">
       <div class="seat-card-label">Seat</div>
       <h1 class="seat-card-id" id="seatId">…</h1>
@@ -572,6 +574,13 @@
         toast(`Report recorded (${result.reportCount}/${result.threshold} needed).`);
       }
     };
+
+    // First time here (most people arrive by scanning a desk): offer the guide.
+    if (!guideSeen()) {
+      const chip = document.getElementById("guideChip");
+      chip.href = libraryUrl("/guide", libraryId);
+      chip.hidden = false;
+    }
 
     refresh();
     refreshHours();
