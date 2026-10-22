@@ -25,7 +25,7 @@ holds, so print them from the live site:
 1. Open `https://navispace-1.onrender.com/staff.html` and sign in with the staff password.
 2. Under **Seat stickers**, tap **One per A4 page**.
 3. **Print or save as PDF**: paper A4, margins none, background graphics on.
-   One page per seat (65 pages).
+   One page per seat (63 pages).
 
 The small three-to-a-page stickers are still under **Open printable stickers**.
 Reprint whenever the secret changes or seats are renamed.
