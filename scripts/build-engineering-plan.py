@@ -111,10 +111,12 @@ room("Room 3", 1342, 12, 62, 100)
 
 # ---- The floor, east side ---------------------------------------------------
 shelf(1150, 210, 10, 120)
+# Three tables for one, named by hand (see "ids" below): C12 at the top, then C11, C10.
+SOLO = {(1278, 141): "C12", (1205, 221): "C11", (1205, 293): "C10"}
 round_table(1205, 248, 15); seats["C"].append((1205, 221))
 round_table(1205, 320, 15); seats["C"].append((1205, 293))
 round_table(1278, 168, 15); seats["C"].append((1278, 141))
-for y in (222, 290, 358):                               # three tables for two, one column
+for y in (290, 358):                                    # two tables for two, one column (C13-C16)
     row_table("C", 1314, y, 2)
 
 # ---- East wall: corner table, then two wall tables in one line ------------
@@ -136,8 +138,24 @@ for zone, pts in seats.items():
         pts.sort(key=lambda p: (p[0] // 60, p[1], p[0]))
     else:                # left to right
         pts.sort(key=lambda p: (p[0], p[1]))
-    for i, (x, y) in enumerate(pts, 1):
-        out_seats.append({"id": f"{zone}{i}", "x": round(x), "y": round(y)})
+    if zone == "C":      # the lounge row C1-C7, the solo tables by name, then C13 on
+        ids, n, after = [], 0, 12
+        for p in pts:
+            if p in SOLO:
+                ids.append(SOLO[p])
+            elif p[0] < ENTRANCE_X:
+                n += 1
+                ids.append(f"C{n}")
+            else:
+                after += 1
+                ids.append(f"C{after}")
+        assert n == 7, "the lounge row has seven seats, C1-C7"
+    else:
+        ids = [f"{zone}{i}" for i in range(1, len(pts) + 1)]
+    for sid, (x, y) in sorted(zip(ids, pts), key=lambda e: int(e[0][1:])):
+        out_seats.append({"id": sid, "x": round(x), "y": round(y)})
+
+assert len({s["id"] for s in out_seats}) == len(out_seats), "seat ids must be unique"
 
 # Every seat badge needs its own space.
 close = [(a["id"], b["id"]) for a, b in itertools.combinations(out_seats, 2)

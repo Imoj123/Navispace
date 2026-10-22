@@ -7,7 +7,7 @@
     1570,
     470
   ],
-  "note": "The Engineering Library floor, drawn from the hand sketch on a clean grid, with 65 seats. Built by scripts/build-engineering-plan.py: edit positions there and rebuild, then regenerate QR codes (npm run qr) if seats change. The map turns this plan to portrait on narrow screens.",
+  "note": "The Engineering Library floor, drawn from the hand sketch on a clean grid, with 63 seats. Built by scripts/build-engineering-plan.py: edit positions there and rebuild, then regenerate QR codes (npm run qr) if seats change. The map turns this plan to portrait on narrow screens.",
   "outline": [
     [
       0,
@@ -304,13 +304,6 @@
     {
       "shape": "rect",
       "x": 1314,
-      "y": 222,
-      "w": 72,
-      "h": 18
-    },
-    {
-      "shape": "rect",
-      "x": 1314,
       "y": 290,
       "w": 72,
       "h": 18
@@ -556,29 +549,19 @@
       "y": 273
     },
     {
-      "id": "C8",
-      "x": 1205,
-      "y": 221
-    },
-    {
-      "id": "C9",
+      "id": "C10",
       "x": 1205,
       "y": 293
     },
     {
-      "id": "C10",
-      "x": 1278,
-      "y": 141
-    },
-    {
       "id": "C11",
-      "x": 1332,
-      "y": 204
+      "x": 1205,
+      "y": 221
     },
     {
       "id": "C12",
-      "x": 1368,
-      "y": 204
+      "x": 1278,
+      "y": 141
     },
     {
       "id": "C13",
