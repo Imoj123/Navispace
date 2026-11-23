@@ -1,0 +1,4 @@
+# Tool and agent folders, not NaviSpace code
+.agents/
+.adal/
+.claude/
